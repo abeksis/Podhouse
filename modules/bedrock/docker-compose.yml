@@ -26,7 +26,7 @@ x-homebox:
     BEDROCK_SERVER_NAME:
       label: "Server name"
       type: "text"
-      default: "HomeBox"
+      default: "Podhouse"
     BEDROCK_GAMEMODE:
       label: "Game mode"
       type: "text"
@@ -53,7 +53,7 @@ services:
       # Running the server at all is accepting it; stating it here is honest
       # rather than hidden in a file the image writes for you.
       - EULA=TRUE
-      - SERVER_NAME=${BEDROCK_SERVER_NAME:-HomeBox}
+      - SERVER_NAME=${BEDROCK_SERVER_NAME:-Podhouse}
       - GAMEMODE=${BEDROCK_GAMEMODE:-survival}
       - DIFFICULTY=${BEDROCK_DIFFICULTY:-normal}
       - ALLOW_CHEATS=false

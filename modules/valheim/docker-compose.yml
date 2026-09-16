@@ -26,7 +26,7 @@ x-homebox:
     VALHEIM_SERVER_NAME:
       label: "Server name"
       type: "text"
-      default: "HomeBox"
+      default: "Podhouse"
     VALHEIM_WORLD_NAME:
       label: "World name"
       type: "text"
@@ -51,7 +51,7 @@ services:
       - TZ=${TZ:-UTC}
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
-      - SERVER_NAME=${VALHEIM_SERVER_NAME:-HomeBox}
+      - SERVER_NAME=${VALHEIM_SERVER_NAME:-Podhouse}
       - WORLD_NAME=${VALHEIM_WORLD_NAME:-Dedicated}
       - SERVER_PASS=${VALHEIM_PASSWORD:-}
       - SERVER_PUBLIC=false

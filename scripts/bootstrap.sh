@@ -210,7 +210,11 @@ else
   if [ -d "$HB_ROOT" ] && [ -n "$(ls -A "$HB_ROOT" 2>/dev/null)" ]; then
     die "$HB_ROOT already has files in it. Move it aside first:  sudo mv $HB_ROOT ${HB_ROOT}.old"
   fi
-  git clone --quiet --depth 1 --branch "$HB_REF" "https://github.com/${HB_REPO}.git" "$HB_ROOT" \
+  # advice.detachedHead=false: a release is a TAG, so a plain clone greets the
+  # person installing with fifteen lines about detached HEAD and `git switch`,
+  # which is advice for somebody working on the repository, not for somebody
+  # installing it. Nothing about the clone changes, only git's chattiness.
+  git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$HB_REF" "https://github.com/${HB_REPO}.git" "$HB_ROOT" \
     || die "could not clone https://github.com/${HB_REPO}.git ($HB_REF)
 Check the repository and branch exist and are reachable from here."
   FROM_TARBALL=0

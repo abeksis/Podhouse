@@ -25,7 +25,7 @@ x-homebox:
     ZOMBOID_SERVER_NAME:
       label: "Server name"
       type: "text"
-      default: "HomeBox"
+      default: "Podhouse"
     ZOMBOID_ADMIN_PASSWORD:
       label: "Admin password"
       type: "secret"
@@ -43,7 +43,7 @@ services:
     container_name: zomboid
     environment:
       - TZ=${TZ:-UTC}
-      - SERVER_NAME=${ZOMBOID_SERVER_NAME:-HomeBox}
+      - SERVER_NAME=${ZOMBOID_SERVER_NAME:-Podhouse}
       - ADMIN_PASSWORD=${ZOMBOID_ADMIN_PASSWORD:-}
       - MAX_PLAYERS=8
       - PAUSE_ON_EMPTY=true

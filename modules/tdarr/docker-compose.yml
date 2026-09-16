@@ -46,7 +46,7 @@ services:
       - webUIPort=8265
       - internalNode=true
       - inContainer=true
-      - nodeName=HomeBox
+      - nodeName=Podhouse
     ports:
       - "8265:8265"
       - "8266:8266"
