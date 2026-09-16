@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "channels": {
-    "stable": "0.7.0"
+    "stable": "0.7.1"
   },
-  "freeze": true,
-  "freeze_reason": "0.7.0 asks the box to be claimed again on boxes whose files belong to the install user. Fix on the way in 0.7.1 — please wait.",
+  "freeze": false,
+  "freeze_reason": null,
   "min_from_version": "0.1.0",
   "frontend_only": false
 }
