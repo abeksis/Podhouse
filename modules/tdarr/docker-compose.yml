@@ -35,6 +35,8 @@ x-homebox:
 services:
   tdarr:
     image: ghcr.io/haveagitgat/tdarr:2.47.01
+    security_opt:
+      - no-new-privileges:true
     container_name: tdarr
     environment:
       - PUID=${PUID:-1000}

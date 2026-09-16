@@ -40,6 +40,8 @@ x-homebox:
 services:
   backup:
     image: linuxserver/duplicati:2.3.0
+    security_opt:
+      - no-new-privileges:true
     container_name: duplicati
     environment:
       - PUID=${PUID:-1000}

@@ -40,6 +40,8 @@ x-homebox:
 services:
   zomboid:
     image: renegademaster/zomboid-dedicated-server:2.5.0
+    security_opt:
+      - no-new-privileges:true
     container_name: zomboid
     environment:
       - TZ=${TZ:-UTC}

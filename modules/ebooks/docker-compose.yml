@@ -44,6 +44,8 @@ x-homebox:
 services:
   calibre-web:
     image: linuxserver/calibre-web:0.6.27
+    security_opt:
+      - no-new-privileges:true
     container_name: calibre-web
     environment:
       - PUID=${PUID:-1000}
@@ -70,6 +72,8 @@ services:
 
   kavita:
     image: jvmilazz0/kavita:0.9.1
+    security_opt:
+      - no-new-privileges:true
     container_name: kavita
     environment:
       - TZ=${TZ:-UTC}

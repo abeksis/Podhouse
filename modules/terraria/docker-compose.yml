@@ -32,6 +32,8 @@ x-homebox:
 services:
   terraria:
     image: ryshe/terraria:vanilla-1.4.5.6
+    security_opt:
+      - no-new-privileges:true
     container_name: terraria
     environment:
       - TZ=${TZ:-UTC}

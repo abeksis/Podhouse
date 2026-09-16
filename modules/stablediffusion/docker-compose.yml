@@ -35,6 +35,8 @@ services:
   stablediffusion:
     # No version tags upstream, so the digest is the only real identifier.
     image: ghcr.io/ashleykleynhans/stable-diffusion-webui:latest@sha256:ceb9e7b93144a9264271f1812c84dbfdb9b9510ec4ca29918763951968c0adc4
+    security_opt:
+      - no-new-privileges:true
     container_name: stablediffusion
     environment:
       - TZ=${TZ:-UTC}

@@ -36,6 +36,8 @@ x-homebox:
 services:
   games:
     image: arcadiatechnology/crafty-4:4.10.8
+    security_opt:
+      - no-new-privileges:true
     container_name: crafty
     environment:
       - TZ=${TZ:-UTC}

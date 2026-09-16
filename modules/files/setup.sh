@@ -13,6 +13,12 @@ CONFIG="$CONFIG_DIR/config.yaml"
 
 mkdir -p "$CONFIG_DIR/data"
 
+# The container runs as PUID:PGID, and a bind directory created here (or by
+# Docker) belongs to root. File Browser then dies on its first start with
+# "could not open database: permission denied" and restarts forever — which is
+# exactly what a fresh install did until this line existed.
+chown -R "${PUID:-1000}:${PGID:-1000}" "$CONFIG_DIR" 2>/dev/null || true
+
 if [ -f "$CONFIG" ]; then
   echo "files: config.yaml already present, leaving it alone"
   exit 0
@@ -25,7 +31,7 @@ server:
   # /folder is the whole Podhouse data pool, bind-mounted by the compose file.
   sources:
     - path: "/folder"
-      name: "HomeBox"
+      name: "Podhouse"
       config:
         defaultEnabled: true
         createUserDir: false

@@ -42,6 +42,8 @@ x-homebox:
 services:
   changedetection:
     image: ghcr.io/dgtlmoon/changedetection.io:0.55.8
+    security_opt:
+      - no-new-privileges:true
     container_name: changedetection
     environment:
       - TZ=${TZ:-UTC}
@@ -74,6 +76,8 @@ services:
     # Digest-pinned upstream because this image publishes no version tags.
     # A digest is the only thing here that actually names a build.
     image: dgtlmoon/sockpuppetbrowser:latest@sha256:7116c61ef9cfce3d48a7efd9355d2fbe19f593ea3cfb52a5ded40ecbcb0a3f9d
+    security_opt:
+      - no-new-privileges:true
     container_name: changedetection-browser
     environment:
       - TZ=${TZ:-UTC}

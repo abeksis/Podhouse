@@ -59,6 +59,8 @@ x-homebox:
 services:
   paperless:
     image: ghcr.io/paperless-ngx/paperless-ngx:3.1.1
+    security_opt:
+      - no-new-privileges:true
     container_name: paperless
     environment:
       - TZ=${TZ:-UTC}
@@ -104,6 +106,8 @@ services:
 
   paperless-db:
     image: postgres:16-alpine
+    security_opt:
+      - no-new-privileges:true
     container_name: paperless-db
     environment:
       - TZ=${TZ:-UTC}

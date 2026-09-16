@@ -49,6 +49,8 @@ services:
   searxng:
     # No version tags upstream; the digest is the only real identifier.
     image: searxng/searxng:latest@sha256:0bbe85fb9bebe413a26c0e385c76309d15c91fdb9dc8a6bf01b35b714d0ece43
+    security_opt:
+      - no-new-privileges:true
     container_name: searxng
     environment:
       - TZ=${TZ:-UTC}

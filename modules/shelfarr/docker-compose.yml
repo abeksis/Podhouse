@@ -40,6 +40,8 @@ x-homebox:
 services:
   shelfarr:
     image: ghcr.io/pedro-revez-silva/shelfarr:2026.08.31.1
+    security_opt:
+      - no-new-privileges:true
     container_name: shelfarr
     environment:
       - TZ=${TZ:-UTC}

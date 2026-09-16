@@ -31,6 +31,8 @@ x-homebox:
 services:
   factorio:
     image: factoriotools/factorio:stable-2.0.77
+    security_opt:
+      - no-new-privileges:true
     container_name: factorio
     environment:
       - TZ=${TZ:-UTC}

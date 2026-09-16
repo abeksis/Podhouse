@@ -35,6 +35,8 @@ x-homebox:
 services:
   emby:
     image: emby/embyserver:4.8.10.0
+    security_opt:
+      - no-new-privileges:true
     container_name: emby
     environment:
       - UID=${PUID:-1000}

@@ -47,6 +47,8 @@ x-homebox:
 services:
   bedrock:
     image: itzg/minecraft-bedrock-server:2026.8.2
+    security_opt:
+      - no-new-privileges:true
     container_name: bedrock
     environment:
       - TZ=${TZ:-UTC}

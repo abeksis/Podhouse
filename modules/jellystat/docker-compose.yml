@@ -84,6 +84,8 @@ services:
 
   jellystat-db:
     image: postgres:16-alpine
+    security_opt:
+      - no-new-privileges:true
     container_name: jellystat-db
     environment:
       - TZ=${TZ:-UTC}

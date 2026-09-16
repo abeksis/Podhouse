@@ -36,6 +36,8 @@ x-homebox:
 services:
   adguard:
     image: adguard/adguardhome:v0.107.79
+    security_opt:
+      - no-new-privileges:true
     container_name: adguard
     ports:
       - "53:53/tcp"

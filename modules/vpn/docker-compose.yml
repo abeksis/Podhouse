@@ -43,6 +43,8 @@ x-homebox:
 services:
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:14
+    security_opt:
+      - no-new-privileges:true
     container_name: wg-easy
     environment:
       - TZ=${TZ:-UTC}

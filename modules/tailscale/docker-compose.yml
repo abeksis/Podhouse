@@ -45,6 +45,8 @@ x-homebox:
 services:
   tailscale:
     image: tailscale/tailscale:v1.102.3
+    security_opt:
+      - no-new-privileges:true
     container_name: tailscale
     hostname: homebox
     # Host networking is not a shortcut here. A mesh VPN whose interface lives

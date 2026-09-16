@@ -49,6 +49,8 @@ x-homebox:
 services:
   nextcloud:
     image: lscr.io/linuxserver/nextcloud:30.0.4
+    security_opt:
+      - no-new-privileges:true
     container_name: nextcloud
     environment:
       - PUID=${PUID:-1000}
@@ -79,6 +81,8 @@ services:
 
   nextcloud-db:
     image: mariadb:11.6
+    security_opt:
+      - no-new-privileges:true
     container_name: nextcloud-db
     command: --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW
     environment:

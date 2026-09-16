@@ -34,6 +34,8 @@ x-homebox:
 services:
   syncthing:
     image: lscr.io/linuxserver/syncthing:2.1.2
+    security_opt:
+      - no-new-privileges:true
     container_name: syncthing
     hostname: homebox
     environment:

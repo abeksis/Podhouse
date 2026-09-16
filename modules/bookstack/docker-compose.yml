@@ -48,6 +48,8 @@ x-homebox:
 services:
   bookstack:
     image: linuxserver/bookstack:26.05.20260608
+    security_opt:
+      - no-new-privileges:true
     container_name: bookstack
     environment:
       - PUID=${PUID:-1000}
@@ -84,6 +86,8 @@ services:
 
   bookstack-db:
     image: linuxserver/mariadb:10.11.8
+    security_opt:
+      - no-new-privileges:true
     container_name: bookstack-db
     environment:
       - PUID=${PUID:-1000}

@@ -54,6 +54,8 @@ services:
   # one-way, so a bump here is a decision, not a convenience.
   headscale:
     image: headscale/headscale:0.29.3
+    security_opt:
+      - no-new-privileges:true
     container_name: headscale
     command: serve
     environment:
@@ -77,6 +79,8 @@ services:
 
   headscale-ui:
     image: ghcr.io/gurucomputing/headscale-ui:2026.03.17
+    security_opt:
+      - no-new-privileges:true
     container_name: headscale-ui
     environment:
       - TZ=${TZ:-UTC}
@@ -99,6 +103,8 @@ services:
   # them one origin, which is what a Tailscale client and a browser both need.
   headscale-proxy:
     image: nginx:1.31.3-alpine
+    security_opt:
+      - no-new-privileges:true
     container_name: headscale-proxy
     environment:
       - TZ=${TZ:-UTC}

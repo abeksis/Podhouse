@@ -47,6 +47,8 @@ x-homebox:
 services:
   ghost:
     image: ghost:6.57.1-alpine
+    security_opt:
+      - no-new-privileges:true
     container_name: ghost
     environment:
       - TZ=${TZ:-UTC}
@@ -82,6 +84,8 @@ services:
 
   ghost-db:
     image: mysql:8.4.11
+    security_opt:
+      - no-new-privileges:true
     container_name: ghost-db
     environment:
       - TZ=${TZ:-UTC}

@@ -36,6 +36,8 @@ services:
     # Upstream publishes no version tags on this image, so a digest is the
     # only thing that actually names a build.
     image: coolercontrol/coolercontrold:latest@sha256:a67707b8ec9c222349af1971d055c53571d0d30db2fe98c0b9e00a9d5e96b4f1
+    security_opt:
+      - no-new-privileges:true
     container_name: coolercontrol
     # Writing a fan speed is writing to a kernel hwmon device. There is no
     # capability that grants just that, so this is the one module here that

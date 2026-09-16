@@ -45,6 +45,8 @@ x-homebox:
 services:
   wordpress:
     image: wordpress:6.9.4
+    security_opt:
+      - no-new-privileges:true
     container_name: wordpress
     environment:
       - TZ=${TZ:-UTC}
@@ -75,6 +77,8 @@ services:
 
   wordpress-db:
     image: mariadb:11.8.9
+    security_opt:
+      - no-new-privileges:true
     container_name: wordpress-db
     environment:
       - TZ=${TZ:-UTC}

@@ -46,6 +46,8 @@ x-homebox:
 services:
   valheim:
     image: lloesche/valheim-server:latest@sha256:20fde516ce311e6084f82f295c9eb6934af57b357c657937a04f62bdf5946149
+    security_opt:
+      - no-new-privileges:true
     container_name: valheim
     environment:
       - TZ=${TZ:-UTC}

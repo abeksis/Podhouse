@@ -44,6 +44,8 @@ x-homebox:
 services:
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:12.0ubu2604-ls48
+    security_opt:
+      - no-new-privileges:true
     container_name: jellyfin
     environment:
       - PUID=${PUID:-1000}

@@ -40,6 +40,8 @@ x-homebox:
 services:
   plex:
     image: lscr.io/linuxserver/plex:1.43.3
+    security_opt:
+      - no-new-privileges:true
     container_name: plex
     environment:
       - PUID=${PUID:-1000}

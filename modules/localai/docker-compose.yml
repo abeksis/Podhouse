@@ -41,6 +41,8 @@ x-homebox:
 services:
   localai:
     image: ghcr.io/open-webui/open-webui:v0.10.2
+    security_opt:
+      - no-new-privileges:true
     container_name: open-webui
     environment:
       - TZ=${TZ:-UTC}
@@ -73,6 +75,8 @@ services:
 
   ollama:
     image: ollama/ollama:0.33.3
+    security_opt:
+      - no-new-privileges:true
     container_name: ollama
     environment:
       - TZ=${TZ:-UTC}

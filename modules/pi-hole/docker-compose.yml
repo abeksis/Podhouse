@@ -45,6 +45,8 @@ x-homebox:
 services:
   pihole:
     image: pihole/pihole:2026.07.2
+    security_opt:
+      - no-new-privileges:true
     container_name: pihole
     ports:
       # Bound to the LAN address rather than 0.0.0.0 on purpose: systemd-resolved

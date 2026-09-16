@@ -337,10 +337,18 @@ cmd_install() {
   # "Image ... Built" and the container lines, which is what an install is.
   # `docker compose build` on its own still shows the full log when a build
   # actually fails, because the failure text is not in these shapes.
+  #
+  # PIPESTATUS, not the pipeline's own status: the exit code that matters is
+  # compose's, and the last command in the pipe is a `sed` that succeeds at
+  # printing whatever compose said, including an error. With `|| true` on the
+  # end this printed "X is installed." over a container-name conflict and a
+  # module that had started nothing — the install said yes and the box had no
+  # app. A failure here stops before the module is marked enabled.
   compose "$id" up -d --build --quiet-pull --remove-orphans 2>&1 \
     | grep -vE '^\s*(=>|#[0-9]+)|^\s*$|^\[\+\]|^time=' \
-    | sed 's/^ */  /' \
-    || true
+    | sed 's/^ */  /'
+  local up_rc="${PIPESTATUS[0]}"
+  [ "$up_rc" -eq 0 ] || die "compose could not start $id (exit $up_rc) — see the lines above; nothing was marked installed"
 
   mark_enabled "$id"
 
