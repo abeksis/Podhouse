@@ -3,8 +3,8 @@
   "channels": {
     "stable": "0.7.0"
   },
-  "freeze": false,
-  "freeze_reason": null,
+  "freeze": true,
+  "freeze_reason": "0.7.0 asks the box to be claimed again on boxes whose files belong to the install user. Fix on the way in 0.7.1 — please wait.",
   "min_from_version": "0.1.0",
   "frontend_only": false
 }
