@@ -52,9 +52,10 @@ const RUNNER = /^(curl|wget|libfetch|httpie|fetch|powershell|go-http-client)/i;
 
 const KINDS = ['install', 'install_read', 'uninstall', 'uninstall_read'];
 
-// The first day the run/read split existed. Earlier days hold one number that
-// is both, and the page says so instead of showing them as zero reads.
-const SPLIT_FROM = '2026-09-16';
+// The first FULL day of the run/read split. Earlier days hold one number that
+// is both — including the deploy day itself, which is mixed — and the page says
+// so instead of showing them as zero reads.
+const SPLIT_FROM = '2026-09-17';
 
 export default {
   async fetch(request, env, ctx) {
