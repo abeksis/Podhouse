@@ -37,6 +37,8 @@ services:
       context: ${HB_ROOT:-/opt/podhouse}/dashboard
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     image: homebox-dashboard:${HB_VERSION:-local}
     container_name: dashboard
     ports:

@@ -38,10 +38,23 @@ services:
     image: adguard/adguardhome:v0.107.79
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # The AdGuardHome binary carries file capabilities, and exec of such a
+      # file fails outright when they are outside the container's bounding set:
+      # "exec /opt/adguardhome/AdGuardHome: operation not permitted", before a
+      # single line of its own logging. NET_RAW is for its DHCP server.
+      - NET_BIND_SERVICE
+      - NET_RAW
     container_name: adguard
     ports:
-      - "53:53/tcp"
-      - "53:53/udp"
+      # Bound to the LAN address rather than 0.0.0.0: systemd-resolved holds
+      # 127.0.0.53:53 on a stock Debian, and a wildcard bind collides with it —
+      # every install on such a box failed with "address already in use".
+      # Pi-hole binds the same way for the same reason.
+      - "${HB_HOST_ADDRESS:-0.0.0.0}:53:53/tcp"
+      - "${HB_HOST_ADDRESS:-0.0.0.0}:53:53/udp"
       - "3054:3000/tcp"
       - "3053:80/tcp"
     environment:

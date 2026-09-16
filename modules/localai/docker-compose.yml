@@ -43,6 +43,8 @@ services:
     image: ghcr.io/open-webui/open-webui:v0.10.2
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: open-webui
     environment:
       - TZ=${TZ:-UTC}
@@ -77,6 +79,8 @@ services:
     image: ollama/ollama:0.33.3
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: ollama
     environment:
       - TZ=${TZ:-UTC}

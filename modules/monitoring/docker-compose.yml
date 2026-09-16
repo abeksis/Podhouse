@@ -50,6 +50,8 @@ services:
           cpus: '0.50'
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3001/api/entry-page').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
       interval: 30s

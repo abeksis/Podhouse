@@ -42,6 +42,8 @@ services:
     image: renegademaster/zomboid-dedicated-server:2.5.0
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: zomboid
     environment:
       - TZ=${TZ:-UTC}

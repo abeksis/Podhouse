@@ -42,6 +42,8 @@ services:
     image: docker.n8n.io/n8nio/n8n:1.72.1
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: n8n
     environment:
       - TZ=${TZ:-UTC}

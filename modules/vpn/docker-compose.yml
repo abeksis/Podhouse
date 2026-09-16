@@ -75,9 +75,14 @@ services:
       - ${HB_ROOT:-/opt/podhouse}/modules/vpn/config/wg-easy:/etc/wireguard
     # WireGuard is a kernel network interface: it needs to create one and
     # write routing rules, which no unprivileged container can do.
+    cap_drop:
+      - ALL
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
+      # wg-quick writes nat rules, and iptables cannot open that table with
+      # NET_ADMIN alone — it fails as "you must be root" while already root.
+      - NET_RAW
     sysctls:
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.src_valid_mark=1

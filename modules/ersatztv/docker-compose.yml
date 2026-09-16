@@ -36,6 +36,8 @@ services:
     image: jasongdove/ersatztv:v26.3.0
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: ersatztv
     environment:
       - TZ=${TZ:-UTC}

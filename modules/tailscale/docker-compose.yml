@@ -54,6 +54,8 @@ services:
     # which makes the subnet-router feature — the main reason to run this on a
     # server rather than a laptop — impossible.
     network_mode: host
+    cap_drop:
+      - ALL
     cap_add:
       - NET_ADMIN
       - NET_RAW

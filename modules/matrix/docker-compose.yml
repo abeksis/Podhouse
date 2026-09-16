@@ -60,6 +60,8 @@ services:
     image: matrixdotorg/synapse:v1.156.0
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: matrix-synapse
     environment:
       - TZ=${TZ:-UTC}
@@ -107,6 +109,8 @@ services:
           cpus: '0.50'
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging:
       driver: json-file
       options:
@@ -118,6 +122,8 @@ services:
     image: postgres:16-alpine
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: matrix-db
     environment:
       - TZ=${TZ:-UTC}

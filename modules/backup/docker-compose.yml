@@ -42,6 +42,8 @@ services:
     image: linuxserver/duplicati:2.3.0
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: duplicati
     environment:
       - PUID=${PUID:-1000}

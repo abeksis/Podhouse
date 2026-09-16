@@ -76,6 +76,20 @@ services:
           cpus: '0.50'
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # The proxy is the one module that MUST come up, and it does two
+      # privileged-looking things on first boot: it creates its own user
+      # (useradd writes /etc/shadow) and it listens on 80 and 443. With a
+      # bare cap_drop it failed both, s6 gave up on the service, and the box
+      # had no proxy and no dashboard behind it.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:81/api/"]
       interval: 30s
@@ -112,6 +126,8 @@ services:
           cpus: '0.50'
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     # No healthcheck: the image is distroless, with no shell and no HTTP
     # client to run a probe with.
     logging:

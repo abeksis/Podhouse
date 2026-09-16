@@ -47,6 +47,18 @@ services:
     image: wordpress:6.9.4
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Starts as root, takes ownership of its data directory and drops to its
+      # own user. Without these five it either dies on chown or stays root.
+      # NET_BIND_SERVICE: Apache listens on 80 inside the container.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
     container_name: wordpress
     environment:
       - TZ=${TZ:-UTC}
@@ -79,6 +91,18 @@ services:
     image: mariadb:11.8.9
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Starts as root, takes ownership of its data directory and drops to its
+      # own user. Without these five it either dies on chown or stays root.
+      # NET_BIND_SERVICE: Apache listens on 80 inside the container.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
     container_name: wordpress-db
     environment:
       - TZ=${TZ:-UTC}

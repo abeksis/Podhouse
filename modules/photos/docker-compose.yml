@@ -56,6 +56,16 @@ services:
     image: ghcr.io/immich-app/immich-server:v3.1.0
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Starts as root, takes ownership of its data directory and drops to its
+      # own user. Without these five it either dies on chown or stays root.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     container_name: immich-server
     environment:
       - TZ=${TZ:-UTC}
@@ -94,6 +104,16 @@ services:
     image: ghcr.io/immich-app/immich-machine-learning:v3.1.0
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Starts as root, takes ownership of its data directory and drops to its
+      # own user. Without these five it either dies on chown or stays root.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     container_name: immich-ml
     environment:
       - TZ=${TZ:-UTC}
@@ -117,6 +137,16 @@ services:
     image: docker.io/valkey/valkey:8-bookworm
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Starts as root, takes ownership of its data directory and drops to its
+      # own user. Without these five it either dies on chown or stays root.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     container_name: immich-redis
     environment:
       - TZ=${TZ:-UTC}
@@ -143,6 +173,16 @@ services:
     image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Starts as root, takes ownership of its data directory and drops to its
+      # own user. Without these five it either dies on chown or stays root.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     container_name: immich-postgres
     environment:
       - TZ=${TZ:-UTC}

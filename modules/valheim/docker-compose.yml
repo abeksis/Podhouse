@@ -65,8 +65,17 @@ services:
     volumes:
       - ${HB_ROOT:-/opt/podhouse}/modules/valheim/config/data:/config
       - ${HB_ROOT:-/opt/podhouse}/modules/valheim/config/server:/opt/valheim
+    cap_drop:
+      - ALL
     cap_add:
       - sys_nice
+      # supervisord chowns its own socket to the server user on start, and
+      # without CHOWN it exits before the server is ever launched.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     stop_grace_period: 2m
     networks:
       - homebox_proxy

@@ -615,6 +615,43 @@ cmd_validate() {
     ' "$HB_ROOT" "$file" "$id" 2>&1 >/dev/null)" || {
       printf '%sx %-14s %s%s\n' "$RED" "$id" "$err" "$RESET"; failed=1; continue
     }
+    # Every service states what it may do, or this is not a module yet.
+    #
+    # This check exists because the hardening drifted once already: it was on
+    # 26 modules of 63, not by decision but because nobody was counting. A
+    # module added next year should fail here rather than quietly ship with
+    # Docker's default capability set.
+    local unhardened
+    unhardened="$(node -e '
+      const fs = require("fs");
+      const text = fs.readFileSync(process.argv[1], "utf8");
+      const lines = text.split("\n");
+      const at = lines.findIndex((l) => /^services:\s*$/.test(l));
+      if (at < 0) { console.log("no services block"); process.exit(0); }
+      const starts = [];
+      for (let i = at + 1; i < lines.length; i += 1) {
+        if (/^\S/.test(lines[i]) && lines[i].trim() !== "") break;
+        if (/^ {2}[A-Za-z0-9_.-]+:\s*$/.test(lines[i])) starts.push(i);
+      }
+      const missing = [];
+      starts.forEach((start, n) => {
+        const end = (starts[n + 1] ?? lines.length);
+        const body = lines.slice(start, end);
+        const name = lines[start].trim().replace(/:$/, "");
+        const has = (re) => body.some((l) => re.test(l));
+        const gaps = [];
+        if (!has(/^ {4}security_opt:/)) gaps.push("security_opt");
+        // privileged: true is its own declaration — a module that needs the
+        // host says so out loud instead of pretending to drop capabilities.
+        if (!has(/^ {4}cap_drop:/) && !has(/^ {4}privileged:\s*true/)) gaps.push("cap_drop");
+        if (gaps.length) missing.push(name + " (" + gaps.join(", ") + ")");
+      });
+      if (missing.length) console.log(missing.join("; "));
+    ' "$file" 2>/dev/null)"
+    if [ -n "$unhardened" ]; then
+      printf '%sx %-14s not hardened: %s%s\n' "$RED" "$id" "$unhardened" "$RESET"; failed=1; continue
+    fi
+
     # Compose has to agree it is a valid file, not just our metadata reader.
     if have_docker && ! compose "$id" config -q >/dev/null 2>&1; then
       printf '%sx %-14s compose rejects this file%s\n' "$RED" "$id" "$RESET"; failed=1; continue

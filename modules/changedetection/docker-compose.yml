@@ -44,6 +44,8 @@ services:
     image: ghcr.io/dgtlmoon/changedetection.io:0.55.8
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: changedetection
     environment:
       - TZ=${TZ:-UTC}
@@ -88,6 +90,8 @@ services:
     # Chrome needs more than the default 64MB of shared memory or tabs crash
     # in ways that look like the site blocking you.
     shm_size: 2gb
+    cap_drop:
+      - ALL
     cap_add:
       - SYS_ADMIN
     networks:

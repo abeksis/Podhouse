@@ -37,6 +37,16 @@ services:
     image: gitea/gitea:1.24.6
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Starts as root, takes ownership of its data directory and drops to its
+      # own user. Without these five it either dies on chown or stays root.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     container_name: gitea
     environment:
       - TZ=${TZ:-UTC}

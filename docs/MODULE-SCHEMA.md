@@ -198,6 +198,47 @@ container is the difference between "an app is slow" and "the box is gone".
 Without the logging cap a chatty container fills the disk in a month, and a
 full disk breaks every other app in ways that look unrelated.
 
+## Every service says what it may do
+
+`homebox validate` fails a module whose service is missing either of these, so
+this is not a style preference:
+
+```yaml
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+```
+
+Docker's default is about fourteen capabilities per container, most of which no
+app here uses. `no-new-privileges` additionally stops a process inside the
+container from gaining any it was not given.
+
+**Adding one back is allowed, with a reason next to it.** Many images start as
+root, take ownership of their data directory and drop to their own user; that
+needs `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETGID`, `SETUID` and nothing more.
+An app that listens below port 1024 inside its container adds
+`NET_BIND_SERVICE`. WireGuard and Tailscale add `NET_ADMIN`. Write the reason
+as a comment — the next person should not have to rediscover it:
+
+```yaml
+    cap_drop:
+      - ALL
+    cap_add:
+      # pihole-FTL sets file capabilities on itself before dropping to the
+      # pihole user, and refuses to run as anything else without SETFCAP.
+      - SETFCAP
+```
+
+A module that genuinely needs the host says `privileged: true` instead, which
+validate accepts in place of `cap_drop` — out loud, rather than pretending.
+
+**Test it before it ships.** `scripts/try-modules.sh <id> …` on a throwaway box
+installs each module, waits for its containers, reports whether they are
+running or looping and whether their logs are full of refused operations, then
+removes it. That run is what produced the capability lists above, and it found
+three apps that had never started at all on a clean install.
+
 ## Only the supported YAML subset
 
 The `x-homebox` block is read by a small parser (`dashboard/lib/yaml.js`), not

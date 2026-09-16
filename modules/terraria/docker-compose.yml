@@ -34,6 +34,8 @@ services:
     image: ryshe/terraria:vanilla-1.4.5.6
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: terraria
     environment:
       - TZ=${TZ:-UTC}
