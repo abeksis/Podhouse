@@ -11,8 +11,13 @@
  * how many installs start, and how many boxes are running which version. Both
  * are counted without keeping anything that identifies a person or a box:
  *
- * - An install is one increment of a (day, script, country) counter. No IP, no
- *   user agent, nothing per request is stored.
+ * - An install is one increment of a (day, script, country) counter. The script
+ *   counters carry one more bit: whether the request came from curl/wget, which
+ *   means the script is being RUN, or from a browser, which means somebody is
+ *   reading it before running it. After a launch post most of the traffic is
+ *   reading, so counting them as one number says nothing. Only that bit is
+ *   taken from the user agent; the agent itself is not stored, and neither is
+ *   the IP or anything else about the request.
  * - A running box is recognised within ONE day by a hash of its IP, the date
  *   and a secret salt, so its 96 update checks a day count once. The hash
  *   cannot be reversed without the salt, cannot be linked to the same box on
@@ -39,6 +44,17 @@ const KEEP_RAW_DAYS = 2;
 
 const today = () => new Date().toISOString().slice(0, 10);
 const VERSION = /^\d+\.\d+\.\d+$/;
+
+// A client that fetches a shell script to run it, as opposed to a browser
+// opening the URL to read it. Anything unrecognised counts as reading, so an
+// odd agent understates runs rather than inventing them.
+const RUNNER = /^(curl|wget|libfetch|httpie|fetch|powershell|go-http-client)/i;
+
+const KINDS = ['install', 'install_read', 'uninstall', 'uninstall_read'];
+
+// The first day the run/read split existed. Earlier days hold one number that
+// is both, and the page says so instead of showing them as zero reads.
+const SPLIT_FROM = '2026-09-16';
 
 export default {
   async fetch(request, env, ctx) {
@@ -98,10 +114,12 @@ async function count(kind, request, env) {
   const cc = country(request);
 
   if (kind !== 'check') {
+    // install / uninstall for a run, install_read / uninstall_read for a read.
+    const what = RUNNER.test(request.headers.get('user-agent') || '') ? kind : `${kind}_read`;
     await env.DB.prepare(
       `INSERT INTO events (day, kind, country, n) VALUES (?1, ?2, ?3, 1)
        ON CONFLICT (day, kind, country) DO UPDATE SET n = n + 1`,
-    ).bind(day, kind, cc).run();
+    ).bind(day, what, cc).run();
     return;
   }
 
@@ -158,6 +176,12 @@ async function stats(request, env, url) {
   const days = Math.min(Math.max(Number(url.searchParams.get('days')) || 30, 1), 365);
   const since = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
 
+  // ?hide=IL,NL leaves those countries out of every number — the way to read
+  // the page without your own boxes and your own testing in it. Nothing is
+  // hidden unless it is asked for, and the page says what it dropped.
+  const hidden = new Set((url.searchParams.get('hide') || '')
+    .split(',').map((c) => c.trim().toUpperCase()).filter((c) => /^[A-Z]{2}$/.test(c)));
+
   // Live rows for the last two days, folded totals before that.
   const boxesSql = `
     SELECT day, version, country, n FROM box_days WHERE day >= ?1
@@ -170,28 +194,66 @@ async function stats(request, env, url) {
   ]);
 
   const byDay = {};
-  const row = (d) => (byDay[d] ||= { day: d, install: 0, uninstall: 0, boxes: 0, versions: {} });
-  const countries = {};
+  const row = (d) => (byDay[d] ||= {
+    day: d, install: 0, install_read: 0, uninstall: 0, uninstall_read: 0, boxes: 0, versions: {},
+  });
+
+  // Where the script was fetched from, runs and reads kept apart.
+  const scripts = {};
   for (const e of events.results) {
+    if (hidden.has(e.country)) continue;
+    if (!KINDS.includes(e.kind)) continue;
     row(e.day)[e.kind] += e.n;
-    if (e.kind === 'install') countries[e.country] = (countries[e.country] || 0) + e.n;
+    if (e.kind === 'install' || e.kind === 'install_read') {
+      const s = (scripts[e.country] ||= { runs: 0, reads: 0 });
+      if (e.kind === 'install') s.runs += e.n;
+      else s.reads += e.n;
+    }
   }
-  for (const b of boxes.results) {
+
+  const liveBoxes = boxes.results.filter((b) => !hidden.has(b.country));
+  for (const b of liveBoxes) {
     const r = row(b.day);
     r.boxes += b.n;
     r.versions[b.version] = (r.versions[b.version] || 0) + b.n;
   }
+
+  // Today is a few hours of UTC, so it is never the headline: the cards report
+  // the last day that is over, and today is shown next to it as a partial.
+  const now = today();
   const daysList = Object.values(byDay).sort((a, b) => a.day.localeCompare(b.day));
-  const latest = daysList.filter((d) => d.boxes > 0).pop() || null;
+  const lastFull = daysList.filter((d) => d.day < now && d.boxes > 0).pop() || null;
+  const todayRow = byDay[now] || null;
+
+  const boxCountries = {};
+  if (lastFull) {
+    for (const b of liveBoxes) {
+      if (b.day === lastFull.day) boxCountries[b.country] = (boxCountries[b.country] || 0) + b.n;
+    }
+  }
+
+  const versions = lastFull ? lastFull.versions : {};
+  const top = Object.entries(versions).sort((a, b) => b[1] - a[1])[0] || null;
+  const total = (k) => daysList.reduce((s, d) => s + d[k], 0);
   const summary = {
     days,
     since,
-    installs: daysList.reduce((s, d) => s + d.install, 0),
-    uninstalls: daysList.reduce((s, d) => s + d.uninstall, 0),
-    active_boxes_latest_day: latest ? latest.boxes : 0,
-    latest_day: latest ? latest.day : null,
-    versions_latest_day: latest ? latest.versions : {},
-    install_countries: countries,
+    today: now,
+    split_from: SPLIT_FROM,
+    hidden: [...hidden],
+    installs: total('install'),
+    install_reads: total('install_read'),
+    uninstalls: total('uninstall'),
+    uninstall_reads: total('uninstall_read'),
+    boxes_last_full_day: lastFull ? lastFull.boxes : 0,
+    last_full_day: lastFull ? lastFull.day : null,
+    boxes_today: todayRow ? todayRow.boxes : 0,
+    versions_last_full_day: versions,
+    top_version: top && lastFull
+      ? { version: top[0], boxes: top[1], share: Math.round((top[1] / lastFull.boxes) * 100) }
+      : null,
+    box_countries: boxCountries,
+    script_countries: scripts,
     by_day: daysList,
   };
 
@@ -211,35 +273,87 @@ async function sameSecret(a, b) {
 const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function statsHtml(s) {
-  const max = Math.max(1, ...s.by_day.map((d) => Math.max(d.install, d.boxes)));
-  const bars = s.by_day.map((d) => `
-    <tr><td>${esc(d.day)}</td>
+  const vlist = (v) => Object.entries(v).sort((a, b) => b[1] - a[1]).map(([n, c]) => `${esc(n)}×${c}`).join(' ') || '—';
+  const max = Math.max(1, ...s.by_day.map((d) => Math.max(d.install, d.install_read, d.boxes)));
+  const rows = s.by_day.map((d) => {
+    const partial = d.day === s.today;
+    // Reads only exist from the day the split shipped; before it the one number
+    // was both, and saying "0 reads" would be a lie the page can avoid.
+    const reads = d.day < s.split_from ? '<span class="q">לא מופרד</span>' : String(d.install_read);
+    return `
+    <tr class="${partial ? 'now' : ''}"><td>${esc(d.day)}${partial ? ' <span class="q">(היום, חלקי)</span>' : ''}</td>
       <td><span class="bar i" style="width:${(d.install / max) * 100}%"></span>${d.install}</td>
+      <td>${reads}</td>
       <td><span class="bar b" style="width:${(d.boxes / max) * 100}%"></span>${d.boxes}</td>
       <td>${d.uninstall}</td>
-      <td class="v">${Object.entries(d.versions).sort((a, b) => b[1] - a[1]).map(([v, n]) => `${esc(v)}×${n}`).join(' ')}</td></tr>`).reverse().join('');
-  const list = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<li><span>${esc(k)}</span><b>${n}</b></li>`).join('') || '<li><span>—</span></li>';
+      <td class="v">${vlist(d.versions)}</td></tr>`;
+  }).reverse().join('');
+
+  const countryList = (obj, fmt) => Object.entries(obj)
+    .sort((a, b) => fmt.weigh(b[1]) - fmt.weigh(a[1]))
+    // dir="ltr" on the value: a number next to a number in an RTL line gets
+    // reordered by the browser, and "40 / 3" came out as "3 / 40".
+    .map(([k, v]) => `<li><span>${esc(k)}</span><b dir="ltr">${fmt.show(v)}</b></li>`).join('')
+    || '<li><span>—</span><b></b></li>';
+
+  const hideLink = s.hidden.length
+    ? `<a href="?days=${s.days}">הצג את הכול</a>`
+    : `<a href="?days=${s.days}&amp;hide=IL">בלי ישראל</a>`;
+
   return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Podhouse · סטטיסטיקה</title><meta name="robots" content="noindex">
 <style>
-body{margin:0;background:#0b0b10;color:#f8fafc;font:15px/1.5 system-ui,Segoe UI,Arial,sans-serif;padding:32px 20px}
-.w{max-width:1000px;margin:auto}h1{margin:0 0 4px;font-size:28px}.m{color:#94a3b8;margin:0 0 24px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:24px}
-.c{background:#20202b;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:16px}.c b{display:block;font-size:30px}.c span{color:#94a3b8;font-size:13px}
-.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:24px}
-ul{list-style:none;margin:0;padding:0}li{display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.08);padding:4px 0}
-h2{font-size:15px;color:#a78bfa;margin:0 0 8px}.t{overflow-x:auto}table{width:100%;border-collapse:collapse;background:#20202b;border-radius:12px;overflow:hidden}
-th,td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.08);text-align:start;white-space:nowrap;font-size:13.5px}th{color:#94a3b8;font-weight:500}
-td{position:relative}.bar{position:absolute;inset-block:5px;inset-inline-start:0;opacity:.28;border-radius:3px}.bar.i{background:#a78bfa}.bar.b{background:#4ade80}.v{color:#94a3b8;direction:ltr;text-align:right}
+body{margin:0;background:#12151b;color:#e6e9ef;font:15px/1.55 system-ui,Segoe UI,Arial,sans-serif;padding:28px 18px}
+.w{max-width:1000px;margin:auto}h1{margin:0 0 4px;font-size:26px}
+.m{color:#8e96a4;margin:0 0 6px;font-size:13.5px}
+.m a{color:#f97316}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:18px 0 22px}
+.c{background:#262c36;border:1px solid rgba(203,213,225,.12);border-radius:12px;padding:14px 15px}
+.cards .c b{display:block;font-size:30px;line-height:1.2}.cards .c b.s{font-size:22px}
+.cards .c span{display:block;color:#bfc5d0;font-size:13.5px;margin-top:2px}
+.cards .c small{display:block;color:#8e96a4;font-size:12.5px;margin-top:5px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:22px}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid rgba(203,213,225,.08);padding:5px 0;font-size:13.5px}
+li b{font-weight:600}
+h2{font-size:14px;color:#f97316;margin:0 0 8px;font-weight:600}
+h2 + p{margin:-4px 0 8px;color:#8e96a4;font-size:12.5px}
+.t{overflow-x:auto}table{width:100%;border-collapse:collapse;background:#262c36;border-radius:12px;overflow:hidden}
+th,td{padding:7px 10px;border-bottom:1px solid rgba(203,213,225,.08);text-align:start;white-space:nowrap;font-size:13.5px}
+th{color:#8e96a4;font-weight:500}
+td{position:relative}tr.now td{background:rgba(255,255,255,.03)}
+.bar{position:absolute;inset-block:5px;inset-inline-start:0;opacity:.3;border-radius:3px}
+.bar.i{background:#f97316}.bar.b{background:#22c55e}
+tr.now .bar{opacity:.15}
+.q{color:#8e96a4;font-size:12.5px}
+.v{color:#8e96a4;direction:ltr;text-align:right}
+.note{color:#8e96a4;font-size:12.5px;margin-top:16px}
 </style></head><body><div class="w">
-<h1>סטטיסטיקת Podhouse</h1><p class="m">${s.days} ימים אחרונים, מ-${esc(s.since)} · ספירה אנונימית, בלי כתובות IP</p>
+<h1>סטטיסטיקת Podhouse</h1>
+<p class="m">${s.days} ימים אחרונים, מ-<span dir="ltr">${esc(s.since)}</span>. הכול לפי שעון UTC, ולכן היום הנוכחי תמיד חלקי.</p>
+<p class="m">${s.hidden.length ? `לא נספרות: ${esc(s.hidden.join(', '))} · ` : ''}${hideLink}</p>
+
 <div class="cards">
-<div class="c"><b>${s.installs}</b><span>הרצות של install.sh</span></div>
-<div class="c"><b>${s.active_boxes_latest_day}</b><span>מערכות פעילות${s.latest_day ? ` (${esc(s.latest_day)})` : ''}</span></div>
-<div class="c"><b>${s.uninstalls}</b><span>הרצות של uninstall.sh</span></div>
+<div class="c"><b>${s.boxes_last_full_day}</b><span>קופסאות שדיווחו</span>
+  <small>${s.last_full_day ? `ביום המלא האחרון <span dir="ltr">${esc(s.last_full_day)}</span>` : 'אין עדיין יום מלא'}<br>היום עד כה ${s.boxes_today}</small></div>
+<div class="c"><b>${s.installs}</b><span>הרצות של install.sh</span>
+  <small>ועוד ${s.install_reads} פתיחות בדפדפן, של אנשים שקראו את הסקריפט</small></div>
+<div class="c"><b>${s.uninstalls}</b><span>הרצות של uninstall.sh</span>
+  <small>${s.installs ? `${Math.round((s.uninstalls / s.installs) * 100)}% מכמות ההתקנות` : 'אין התקנות בטווח'}</small></div>
+<div class="c"><b class="s">${s.top_version ? esc(s.top_version.version) : '—'}</b><span>הגרסה הנפוצה</span>
+  <small>${s.top_version ? `${s.top_version.boxes} קופסאות, ${s.top_version.share}% מהן` : 'אף קופסה לא דיווחה'}</small></div>
 </div>
-<div class="cols"><div class="c"><h2>גרסאות (יום אחרון)</h2><ul>${list(s.versions_latest_day)}</ul></div>
-<div class="c"><h2>התקנות לפי מדינה</h2><ul>${list(s.install_countries)}</ul></div></div>
-<div class="t"><table><thead><tr><th>יום</th><th>התקנות</th><th>מערכות פעילות</th><th>הסרות</th><th>גרסאות</th></tr></thead><tbody>${bars}</tbody></table></div>
+
+<div class="cols">
+<div class="c"><h2>איפה רצות קופסאות</h2><p>${s.last_full_day ? `ביום <span dir="ltr">${esc(s.last_full_day)}</span>` : 'אין נתונים'}</p>
+  <ul>${countryList(s.box_countries, { weigh: (n) => n, show: (n) => n })}</ul></div>
+<div class="c"><h2>מאיפה הורידו את הסקריפט</h2><p>הרצות / קריאות בדפדפן</p>
+  <ul>${countryList(s.script_countries, { weigh: (v) => v.runs * 1000 + v.reads, show: (v) => `${v.runs} / ${v.reads}` })}</ul></div>
+<div class="c"><h2>גרסאות</h2><p>${s.last_full_day ? `ביום <span dir="ltr">${esc(s.last_full_day)}</span>` : 'אין נתונים'}</p>
+  <ul>${Object.entries(s.versions_last_full_day).sort((a, b) => b[1] - a[1]).map(([v, n]) => `<li><span>${esc(v)}</span><b>${n}</b></li>`).join('') || '<li><span>—</span><b></b></li>'}</ul></div>
+</div>
+
+<div class="t"><table><thead><tr><th>יום</th><th>הרצות</th><th>קריאות</th><th>קופסאות</th><th>הסרות</th><th>גרסאות</th></tr></thead><tbody>${rows}</tbody></table></div>
+<p class="note">ספירה אנונימית: בלי כתובות IP, בלי חשבונות ובלי מעקב בין ימים. "הרצות" הן בקשות של curl או wget, "קריאות" הן פתיחה של הקובץ בדפדפן. קופסה נספרת פעם ביום לפי בדיקת העדכונים שלה.</p>
 </div></body></html>`;
 }

@@ -1,9 +1,11 @@
 -- get.podhouse.dev counters. Nothing here identifies a person or a box.
 
 -- Installs and uninstalls: one counter per day, script and country.
+-- kind separates a run from a read: install/uninstall come from curl or wget,
+-- install_read/uninstall_read from a browser opening the file to look at it.
 CREATE TABLE IF NOT EXISTS events (
   day     TEXT    NOT NULL,          -- YYYY-MM-DD, UTC
-  kind    TEXT    NOT NULL,          -- install | uninstall
+  kind    TEXT    NOT NULL,          -- install | install_read | uninstall | uninstall_read
   country TEXT    NOT NULL,          -- ISO code from Cloudflare, XX if unknown
   n       INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, kind, country)
