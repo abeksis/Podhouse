@@ -39,6 +39,15 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      # The dashboard runs as root inside the container and reads and writes
+      # /opt/podhouse, which belongs to the BOX's user, not to root. Root does
+      # not ignore file permissions by itself — that is DAC_OVERRIDE — so
+      # without it the dashboard could not read state/auth.json and every box
+      # that updated was asked to claim itself again.
+      - DAC_OVERRIDE
+      - CHOWN
+      - FOWNER
     image: homebox-dashboard:${HB_VERSION:-local}
     container_name: dashboard
     ports:

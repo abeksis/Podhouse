@@ -157,7 +157,13 @@ button { font: inherit; color: inherit; }
 .nav-item.is-current { background: var(--accent-soft); color: var(--accent-text); }
 :root[data-theme="light"] .nav-item.is-current { color: var(--accent); }
 .nav-dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.nav-dot.is-platform { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 25%, transparent); }
+.nav-dot.is-platform { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 25%, transparent); position: relative; }
+/* A Podhouse update waiting is the one dot worth looking at, so it is the one
+   that moves — the same ring the running-app dots use. */
+.nav-dot.is-platform::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: var(--bad); animation: dot-pulse 2s ease-out infinite;
+}
 
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 0.9rem; padding: 0 0.3rem; }
 .side-meters { display: flex; flex-direction: column; gap: 0.55rem; }

@@ -61,6 +61,13 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      # DAC_OVERRIDE: this container runs as root inside, and the files it
+      # reads and writes under /opt/podhouse belong to the BOX's user. Root
+      # does not ignore file modes on its own, so without this the app
+      # cannot open its own database or config on any box installed the
+      # normal way.
+      - DAC_OVERRIDE
     logging:
       driver: json-file
       options:
