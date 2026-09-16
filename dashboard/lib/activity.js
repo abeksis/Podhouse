@@ -63,8 +63,10 @@ class Activity {
    * intent behind them, and "you installed Monitoring" is the line a person
    * actually wants to read afterwards.
    */
-  note({ name, action, level = 'info' }) {
-    this.push({ time: Date.now(), action, name, image: null, exitCode: null, level, source: 'homebox' });
+  note({ name, action, level = 'info', module = null }) {
+    this.push({
+      time: Date.now(), action, name, module, image: null, exitCode: null, level, source: 'homebox',
+    });
   }
 
   handleRaw(event) {
@@ -79,10 +81,18 @@ class Activity {
     if (/^[0-9a-f]{12}_/.test(raw)) return;
     const name = raw;
     const exitCode = attrs.exitCode != null ? Number(attrs.exitCode) : null;
+    // Which app this container belongs to, from compose's own project label.
+    // Without it the feed reads as six unrelated lines whenever one app with
+    // four containers is updated, and the person is left to work out that
+    // immich-server, immich-redis, immich-ml and immich-postgres are one
+    // thing that happened once.
+    const project = attrs['com.docker.compose.project'] || '';
+    const module = project.startsWith('homebox-') ? project.slice('homebox-'.length) : null;
     this.push({
       time: event.timeNano ? Math.floor(event.timeNano / 1e6) : (event.time || 0) * 1000,
       action,
       name,
+      module,
       image: attrs.image || null,
       exitCode,
       // A container that exits 0 was asked to stop; anything else fell over.

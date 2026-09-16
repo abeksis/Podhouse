@@ -12,10 +12,10 @@ const http = require('http');
 
 const SOCKET = process.env.DOCKER_SOCKET || '/var/run/docker.sock';
 
-function request(path, { raw = false, timeout = 15000 } = {}) {
+function request(path, { raw = false, timeout = 15000, method = 'GET' } = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request(
-      { socketPath: SOCKET, path, method: 'GET', headers: { Host: 'docker' } },
+      { socketPath: SOCKET, path, method, headers: { Host: 'docker' } },
       (res) => {
         const chunks = [];
         res.on('data', (c) => chunks.push(c));
@@ -138,6 +138,34 @@ async function imageExists(idOrName) {
   }
 }
 
+/**
+ * Layers left behind by rebuilds: images with no tag and no container.
+ *
+ * Deliberately NOT "everything unused". An image with a tag and no running
+ * container is usually an app that is installed and stopped, or the previous
+ * version an update can roll back to, and deleting those to save a gigabyte
+ * is how a rollback stops working. Dangling images are the ones nothing can
+ * ever refer to again.
+ */
+async function danglingImages() {
+  const filters = encodeURIComponent(JSON.stringify({ dangling: ['true'] }));
+  const raw = await request(`/v1.43/images/json?filters=${filters}`);
+  return {
+    count: raw.length,
+    bytes: raw.reduce((sum, i) => sum + (i.Size || 0), 0),
+  };
+}
+
+/** Delete those layers. Anything tagged, and anything in use, is untouched. */
+async function pruneDangling() {
+  const filters = encodeURIComponent(JSON.stringify({ dangling: ['true'] }));
+  const out = await request(`/v1.43/images/prune?filters=${filters}`, { method: 'POST' });
+  return {
+    removed: Array.isArray(out.ImagesDeleted) ? out.ImagesDeleted.length : 0,
+    bytes: out.SpaceReclaimed || 0,
+  };
+}
+
 /** Every image the daemon holds, with the tags it answers to. */
 async function listImages() {
   const raw = await request('/v1.43/images/json');
@@ -234,5 +262,5 @@ async function reachable() {
 
 module.exports = {
   listContainers, listNetworks, logs, version, reachable, normalizeState, imageDigests,
-  imageExists, listImages,
+  imageExists, listImages, danglingImages, pruneDangling,
 };

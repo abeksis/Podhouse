@@ -36,7 +36,7 @@ const state = {
   // Mirrors DEFAULT_PREFS in server.js. Only ever seen for the moment before
   // /api/prefs answers, but a mismatch here is a visible flash of the wrong
   // background on every load.
-  prefs: { theme: 'dim', accent: 'orange' },
+  prefs: { theme: 'dark', accent: 'orange' },
 };
 
 /* ------------------------------------------------------------- utilities */
@@ -324,15 +324,75 @@ function renderBoxFacts(m) {
     else delete $(id).dataset.level;
   };
   $('#val-uptime').textContent = duration(m.uptime);
-  $('#sub-uptime').textContent = 'since the last boot';
+  $('#sub-uptime').textContent = 'awake';
   $('#val-load').textContent = m.load[0].toFixed(2);
-  $('#sub-load').textContent = `${m.cores} cores`;
-  $('#val-ram').textContent = bytes(m.memory.used);
-  $('#sub-ram').textContent = `of ${bytes(m.memory.total)}`;
+  $('#sub-load').textContent = `load, ${m.cores} cores`;
+  $('#val-ram').textContent = `${bytes(m.memory.used)} / ${bytes(m.memory.total)}`;
+  $('#sub-ram').textContent = 'memory';
   $('#val-disk').textContent = m.disk.total ? bytes(m.disk.free) : '--';
-  $('#sub-disk').textContent = m.disk.total ? `of ${bytes(m.disk.total)}` : '';
+  $('#sub-disk').textContent = m.disk.total ? 'disk free' : '';
   mark('#fact-ram', m.memory.percent);
   mark('#fact-disk', m.disk.percent);
+}
+
+/**
+ * Clear the layers rebuilds left behind.
+ *
+ * The only task in the list that acts from here rather than opening a page,
+ * because there is nothing to decide: these layers have no tag and no
+ * container, so nothing can ever refer to them again.
+ */
+async function pruneImages(button) {
+  const was = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Clearing…';
+  try {
+    const res = await fetch('api/prune-images', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    toast(data.bytes ? `Freed ${bytes(data.bytes)}.` : 'Nothing left to clear.', 'success');
+    // The row has nothing left to offer; the next summary confirms it.
+    const row = button.closest('.need');
+    if (row) row.remove();
+    if (!$('#needs').querySelector('.need')) renderNeeds([]);
+  } catch (err) {
+    button.disabled = false;
+    button.textContent = was;
+    toast(`Could not clear: ${err.message}`, 'error');
+  }
+}
+
+/**
+ * The tasks waiting for the person reading the page.
+ *
+ * The server decides what is on this list; here it becomes rows with a verb.
+ * An empty list is the good case and says so in one line rather than showing
+ * an empty container — "nothing needs you" is information.
+ */
+function renderNeeds(items) {
+  const box = $('#needs');
+  const note = $('#host-state');
+  if (note) note.textContent = !items || !items.length ? 'all clear' : `${items.length} thing${items.length === 1 ? '' : 's'}`;
+  if (!items || !items.length) {
+    box.innerHTML = `<div class="needs-clear">
+      <span class="needs-ok" aria-hidden="true"></span>
+      <p>Nothing needs you. Every app is running, backups are current and there is room to spare.</p>
+    </div>`;
+    return;
+  }
+  box.innerHTML = items.map((n) => {
+    const attr = n.action === 'page' ? `data-need-page="${escapeHtml(n.target)}"`
+      : n.action === 'logs' ? `data-log-for="${escapeHtml(n.target || '')}"`
+        : 'data-need-prune="1"';
+    return `<div class="need" data-level="${escapeHtml(n.level)}">
+      <span class="need-mark" aria-hidden="true"></span>
+      <div class="need-text">
+        <b>${escapeHtml(n.title)}</b>
+        <span>${escapeHtml(n.detail)}</span>
+      </div>
+      <button type="button" class="need-go" ${attr}>${escapeHtml(n.verb)}</button>
+    </div>`;
+  }).join('');
 }
 
 function renderHealth(summary) {
@@ -656,19 +716,78 @@ function factHtml(label, value) {
     </div>`;
 }
 
+/**
+ * Docker events, told as things that happened to APPS.
+ *
+ * Raw, one update of Immich is six lines: four containers destroyed, four
+ * created, four started, in an order nobody can read. All six describe one
+ * act. Entries are grouped by app and by a short window, and the group is
+ * summarised by what it amounts to — updated, restarted, installed, crashed.
+ *
+ * The container-level detail is not lost: it is what Live logs and the
+ * activity API still hold. This is the overview.
+ */
+const GROUP_WINDOW_MS = 3 * 60 * 1000;
+
+function groupActivity(entries) {
+  const groups = [];
+  for (const e of entries) {
+    const key = e.module || e.name;
+    const last = groups[groups.length - 1];
+    if (last && last.key === key && Math.abs(last.time - e.time) < GROUP_WINDOW_MS) {
+      last.entries.push(e);
+      last.time = Math.max(last.time, e.time);
+      continue;
+    }
+    groups.push({ key, time: e.time, entries: [e] });
+  }
+  return groups;
+}
+
+function groupSummary(group) {
+  const actions = group.entries.map((e) => e.action);
+  const has = (a) => actions.includes(a);
+  const names = new Set(group.entries.map((e) => e.name));
+  const many = names.size > 1 ? ` — ${names.size} containers` : '';
+  const crash = group.entries.find((e) => e.action === 'die' && e.exitCode);
+
+  if (has('install')) return { text: 'was installed', level: 'info' };
+  if (has('remove') || (has('destroy') && !has('create'))) return { text: 'was removed', level: 'info' };
+  if (has('update')) return { text: `was updated${many}`, level: 'info' };
+  if (crash) {
+    return has('start')
+      ? { text: `restarted after exiting with code ${crash.exitCode}`, level: 'warn' }
+      : { text: `stopped unexpectedly (code ${crash.exitCode})`, level: 'error' };
+  }
+  if (has('oom')) return { text: 'ran out of memory', level: 'error' };
+  if (has('create') && has('start')) return { text: `was recreated${many}`, level: 'info' };
+  if (has('start') && has('die')) return { text: `restarted${many}`, level: 'info' };
+  if (has('start')) return { text: names.size > 1 ? `started${many}` : 'started', level: 'info' };
+  if (has('stop') || has('die')) return { text: 'was stopped', level: 'info' };
+  return { text: actionText(group.entries[0]), level: group.entries[0].level };
+}
+
 function renderActivity(entries) {
   const list = $('#feed-list');
   if (!entries.length) {
-    list.innerHTML = '<li class="empty">No events yet. Installs and container starts and stops appear here.</li>';
+    list.innerHTML = '<li class="empty">Nothing yet. Installs, updates and apps stopping appear here.</li>';
     return;
   }
-  list.innerHTML = entries.map((e) => `
-    <li class="feed-item" data-level="${escapeHtml(e.level)}">
-      <span class="feed-mark" data-action="${escapeHtml(e.action)}"></span>
-      <span class="feed-who">${escapeHtml(e.name)}</span>
-      <span class="feed-what">${escapeHtml(actionText(e))}</span>
-      <span class="feed-when">${escapeHtml(ago(e.time))}</span>
-    </li>`).join('');
+  const groups = groupActivity(entries).slice(0, 12);
+  list.innerHTML = groups.map((g) => {
+    const summary = groupSummary(g);
+    // state.modules is a LIST, so the module's own title comes from a lookup
+    // by id; a container that belongs to no module keeps its own name.
+    const mod = state.modules.find((m) => m.id === g.key);
+    const title = mod ? mod.title : g.key;
+    return `
+    <li class="feed-item" data-level="${escapeHtml(summary.level)}">
+      <span class="feed-mark" data-action="${escapeHtml(g.entries[0].action)}"></span>
+      <span class="feed-who">${escapeHtml(title)}</span>
+      <span class="feed-what">${escapeHtml(summary.text)}</span>
+      <span class="feed-when">${escapeHtml(ago(g.time))}</span>
+    </li>`;
+  }).join('');
 }
 
 function actionText(entry) {
@@ -1138,42 +1257,6 @@ function actionsFor(mod) {
 
 /* ------------------------------------------------------- system actions */
 
-/**
- * Restart or update everything installed, one module at a time.
- *
- * The dashboard is skipped on purpose: restarting the container serving this
- * page kills the request mid-flight, and from the outside the button looks
- * like it did nothing. Restart that one from a shell.
- */
-async function bulkAction(action, label) {
-  const targets = state.modules.filter((m) => m.installed && m.id !== 'dashboard');
-  if (!targets.length) return;
-  const plural = targets.length === 1 ? '' : 's';
-  const ok = await confirmDialog({
-    title: `${label} ${targets.length} installed app${plural}?`,
-    body: 'The dashboard itself is left alone so this page survives.',
-    confirmLabel: label,
-  });
-  if (!ok) return;
-
-  const button = $(action === 'restart' ? '#restart-all' : '#update-all');
-  const labelEl = button ? $('.shortcut-text', button) : null;
-  const original = labelEl ? labelEl.textContent : '';
-  let done = 0;
-  for (const mod of targets) {
-    if (labelEl) labelEl.textContent = `${done}/${targets.length}`;
-    try {
-      await fetch(`api/modules/${encodeURIComponent(mod.id)}/${action}`, { method: 'POST' });
-    } catch {
-      /* one module failing should not abandon the rest */
-    }
-    done++;
-  }
-  if (labelEl) labelEl.textContent = original;
-  await loadModules(true);
-}
-
-/** The Portainer tile opens it when installed, and offers it when not. */
 function updatePortainerAction() {
   const link = $('#open-portainer');
   if (!link) return;
@@ -2471,6 +2554,7 @@ function applySummary(summary) {
   state.busy = new Set(summary.busy || []);
   renderSideMeters(summary);
   renderHealth(summary);
+  renderNeeds(summary.needs);
   renderBoxFacts(summary.metrics);
   if (state.modules.length) renderStoreStats();
   renderSettings();
@@ -2501,7 +2585,7 @@ function connect() {
   source.addEventListener('activity', () => {
     // The feed is small and the server keeps the tail; re-fetching is simpler
     // than merging one event into a list that may have scrolled.
-    fetch('api/activity?limit=25').then((r) => r.json()).then((d) => renderActivity(d.entries)).catch(() => {});
+    fetch('api/activity?limit=80').then((r) => r.json()).then((d) => renderActivity(d.entries)).catch(() => {});
   });
 
   source.onerror = () => {
@@ -2515,8 +2599,8 @@ function connect() {
 /* The Appearance choices. Each id has a matching [data-theme] or
    [data-accent] block in css/homebox.css, and server.js accepts only these. */
 const THEMES = [
-  { id: 'dim', label: 'Dim' },
   { id: 'dark', label: 'Dark' },
+  { id: 'dim', label: 'Dim' },
   { id: 'light', label: 'Light' },
 ];
 
@@ -4242,6 +4326,18 @@ document.addEventListener('click', async (event) => {
     openLogs(logBtn.dataset.logFor);
     return;
   }
+  // "Needs you" rows: a page to open, or the one action that runs from here.
+  const needPage = event.target.closest('[data-need-page]');
+  if (needPage) {
+    location.hash = `#${needPage.dataset.needPage}`;
+    show(needPage.dataset.needPage);
+    return;
+  }
+  const needPrune = event.target.closest('[data-need-prune]');
+  if (needPrune) {
+    pruneImages(needPrune);
+    return;
+  }
   const moduleBtn = event.target.closest('[data-module]');
   if (moduleBtn) return openModule(moduleBtn.dataset.module);
 
@@ -4417,8 +4513,6 @@ document.addEventListener('click', async (event) => {
     return catalogCall('app/delete', id, `${id} deleted.`);
   }
 
-  if (event.target.closest('#restart-all')) return bulkAction('restart', 'Restart');
-  if (event.target.closest('#update-all')) return bulkAction('update', 'Update');
 
   const stab = event.target.closest('[data-stab]');
   if (stab) return showSettingsTab(stab.dataset.stab);
@@ -4537,7 +4631,7 @@ async function init() {
   $('#store-order').value = state.appSort;
   show(currentPage());
   await loadModules(true);
-  fetch('api/activity?limit=25').then((r) => r.json()).then((d) => renderActivity(d.entries)).catch(() => {});
+  fetch('api/activity?limit=80').then((r) => r.json()).then((d) => renderActivity(d.entries)).catch(() => {});
   // The nav dot, from the cached answer only. Boot must never wait on a
   // dozen registry round-trips, and it must never set them off either.
   refreshUpdateBadge();

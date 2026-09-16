@@ -390,6 +390,54 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .dock-tile.is-down .dock-open { opacity: 0.6; }
 .dock-tile.is-down .dock-art { filter: grayscale(0.8); }
 
+/* Needs you — one row per thing waiting, each with the verb that clears it. */
+.needs { display: flex; flex-direction: column; }
+.need {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.1rem 0.6rem; align-items: center;
+  padding: 0.6rem 0; border-bottom: 1px solid var(--line);
+}
+.need:last-child { border-bottom: 0; }
+.need-mark { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.need[data-level="warn"] .need-mark { background: var(--warn); }
+.need[data-level="bad"] .need-mark { background: var(--bad); }
+.need-text { min-width: 0; }
+.need-text b { display: block; font-size: 0.88rem; font-weight: 600; }
+.need-text span { display: block; color: var(--muted); font-size: 0.79rem; }
+.need-go {
+  font: inherit; font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer;
+  border-radius: var(--radius-s); border: 1px solid var(--line);
+  background: var(--bg-raised); color: var(--text-2); white-space: nowrap;
+}
+.need-go:hover { border-color: var(--line-strong); color: var(--text); }
+/* The most serious row is the only one with a filled button: two competing
+   primaries is the same as none. */
+.need[data-level="bad"] .need-go,
+.need[data-level="warn"]:first-child .need-go {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--text);
+}
+.need-go[disabled] { opacity: 0.6; cursor: default; }
+.needs-clear { display: flex; align-items: center; gap: 0.6rem; padding: 0.15rem 0 0.35rem; }
+.needs-clear p { margin: 0; font-size: 0.85rem; color: var(--text-2); }
+.needs-ok { width: 9px; height: 9px; border-radius: 50%; background: var(--good); flex: none; }
+
+/* The numbers, after the tasks have had their say: one quiet strip. */
+.vitals {
+  display: flex; justify-content: space-between; gap: 0.6rem;
+  margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px solid var(--line);
+}
+.vitals div { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
+.vital-top { display: flex; align-items: center; gap: 0.3rem; }
+/* Line glyphs, drawn at text size and in the muted colour: they label the
+   number without competing with it. */
+.vital-ic { width: 13px; height: 13px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.vitals b { font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+.vitals span { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+.vitals [data-level="warn"] b { color: var(--warn); }
+.vitals [data-level="bad"] b { color: var(--bad); }
+
 /* This server */
 .box-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
 .box-fact { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; background: var(--surface-2); border-radius: var(--radius); padding: 0.5rem 0.65rem; }

@@ -85,7 +85,7 @@ const VERSION = readVersion();
 
 // Appearance. These lists are the contract with public/css/homebox.css — a
 // name here must have a matching [data-theme=...] or [data-accent=...] block.
-const THEMES = ['dim', 'dark', 'light'];
+const THEMES = ['dark', 'dim', 'light'];
 const ACCENTS = ['orange', 'blue', 'violet', 'teal', 'green', 'amber', 'rose'];
 
 // Which parts the "Right now" panel shows. Defaults to on: the panel hides
@@ -93,7 +93,7 @@ const ACCENTS = ['orange', 'blue', 'violet', 'teal', 'green', 'amber', 'rose'];
 // it and a box with them gets the numbers without looking for a switch.
 const INSIGHT_PANELS = ['transfers', 'queues', 'upcoming'];
 const DEFAULT_PREFS = {
-  theme: 'dim',
+  theme: 'dark',
   accent: 'orange',
   insights: { enabled: true, transfers: true, queues: true, upcoming: true },
 };
@@ -367,6 +367,102 @@ async function backupInfo(modules, metrics) {
  * rest of $HB_ROOT, a reinstall necessarily produces a new one.
  */
 let cachedInstallId = null;
+/**
+ * What is actually waiting for the person reading the page.
+ *
+ * The Overview used to open with four numbers — uptime, load, memory, disk —
+ * which are true and which nobody acts on. This answers the question they
+ * came with instead: is anything wrong, and what should I press. Each item is
+ * a fact with a verb attached, and an empty list is a real answer.
+ *
+ * Built here rather than in the browser so the page, the CLI and anything
+ * later agree on what "needs you" means, and so a slow check (the image
+ * sweep) cannot stall the paint.
+ */
+async function needsAttention({ metrics, backups, health }) {
+  const items = [];
+  const [platformState, updateState, dangling] = await Promise.all([
+    platform.status().catch(() => null),
+    updates.status().catch(() => null),
+    docker.danglingImages().catch(() => ({ count: 0, bytes: 0 })),
+  ]);
+
+  // An app that fell over outranks anything else here: everything below is
+  // housekeeping, and this is the box not doing its job.
+  if (health && health.level !== 'good' && health.names && health.names.length) {
+    items.push({
+      id: 'down', level: 'bad',
+      title: health.names.length === 1 ? `${health.names[0]} is not running` : `${health.names.length} apps are not running`,
+      detail: health.sub || 'Read its logs to see why it stopped.',
+      action: 'logs', target: health.names[0], verb: 'Logs',
+    });
+  }
+
+  if (platformState && platformState.updateAvailable && platformState.latest) {
+    items.push({
+      id: 'platform', level: 'warn',
+      title: `Podhouse ${platformState.latest} is available`,
+      detail: 'Takes about a minute. Your apps keep running, and the box puts the old version back if the new one does not start.',
+      action: 'page', target: 'updates', verb: 'Update',
+    });
+  }
+
+  const appUpdates = updateState && Array.isArray(updateState.newVersions) ? updateState.newVersions : [];
+  if (appUpdates.length) {
+    const names = [...new Set(appUpdates.map((u) => u.title || u.container))];
+    items.push({
+      id: 'apps', level: 'warn',
+      title: appUpdates.length === 1 ? `${names[0]} has a new version` : `${appUpdates.length} apps have new versions`,
+      detail: `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''} — each is backed up first and put back if it does not come up healthy.`,
+      action: 'page', target: 'updates', verb: 'Review',
+    });
+  }
+
+  // Backups: the one thing whose absence costs nothing until the day it costs
+  // everything, so it is stated plainly rather than left to a card nobody
+  // opens. Ages, not dates: "9 days ago" is the part that matters.
+  if (backups) {
+    const lastAt = backups.latest && backups.latest.created ? new Date(backups.latest.created).getTime() : null;
+    const days = lastAt ? Math.floor((Date.now() - lastAt) / 86400000) : null;
+    if (!backups.configured) {
+      items.push({
+        id: 'backup-none', level: 'warn',
+        title: 'No backup has ever been taken',
+        detail: 'One archive holds every app\'s settings and the passwords this box generated.',
+        action: 'page', target: 'backups', verb: 'Set up',
+      });
+    } else if (days !== null && days >= 7) {
+      items.push({
+        id: 'backup-old', level: days >= 30 ? 'bad' : 'warn',
+        title: `The last backup was ${days} days ago`,
+        detail: backups.scheduled ? 'The schedule is on, so something is failing.' : 'There is no schedule — backups only happen when you ask.',
+        action: 'page', target: 'backups', verb: 'Back up',
+      });
+    }
+  }
+
+  if (metrics && metrics.disk && metrics.disk.percent != null && metrics.disk.percent >= 85) {
+    items.push({
+      id: 'disk', level: metrics.disk.percent >= 95 ? 'bad' : 'warn',
+      title: `The disk is ${Math.round(metrics.disk.percent)}% full`,
+      detail: 'Apps that cannot write stop in ways that look like other problems.',
+      action: 'page', target: 'storage', verb: 'Storage',
+    });
+  }
+
+  // Half a gigabyte is the point where clearing it is worth a click.
+  if (dangling.bytes > 512 * 1024 * 1024) {
+    items.push({
+      id: 'dangling', level: 'info',
+      title: `${(dangling.bytes / 1024 ** 3).toFixed(1)}GB of leftover image layers`,
+      detail: 'Left behind by rebuilds. Nothing uses them, and clearing them touches no app.',
+      action: 'prune', target: null, verb: 'Clear',
+    });
+  }
+
+  return items;
+}
+
 async function installId() {
   if (cachedInstallId) return cachedInstallId;
   const saved = await state.readJson('install.json', null);
@@ -388,6 +484,10 @@ async function apiSummary() {
     docker.listNetworks(),
   ]);
   const { modules: withState, unclaimed } = modulesLib.withContainers(modules, containers, HOST_ADDRESS);
+  // Both feed the "needs you" list as well as the response, so they are
+  // computed once here rather than inline in the object below.
+  const health = healthVerdict(containers, metrics, dockerVersion != null);
+  const backups = await backupInfo(withState, metrics);
   return {
     // What install.sh wrote, so Settings can show it without reading .env —
     // that file holds every secret and the dashboard has no business in it.
@@ -399,7 +499,7 @@ async function apiSummary() {
       port: PORT,
     },
     network: networkInfo(withState, networks),
-    backups: await backupInfo(withState, metrics),
+    backups,
     version: VERSION,
     // Identifies THIS install, so anything a browser remembers about the box
     // can be tied to it. Uninstall takes state/ with it, so a reinstall is a
@@ -410,7 +510,9 @@ async function apiSummary() {
     host: { address: HOST_ADDRESS, name: metrics.hostname },
     docker: dockerVersion,
     metrics,
-    health: healthVerdict(containers, metrics, dockerVersion != null),
+    health,
+    // What is waiting for you, in the order it matters.
+    needs: await needsAttention({ metrics, backups, health }),
     counts: {
       modules: modules.length,
       installed: withState.filter((m) => m.installed).length,
@@ -561,10 +663,10 @@ async function runAction(id, action, onLine = null) {
   try {
     const result = await fn(id, { onLine });
     const output = typeof result === 'string' ? result : `${result.stdout || ''}${result.stderr || ''}`;
-    activity.note({ name: id, action, level: 'info' });
+    activity.note({ name: id, action, level: 'info', module: id });
     return { status: 200, body: { ok: true, id, action, seconds: Math.round((Date.now() - started) / 1000), output } };
   } catch (err) {
-    activity.note({ name: id, action: `${action} failed`, level: 'error' });
+    activity.note({ name: id, action: `${action} failed`, level: 'error', module: id });
     return {
       status: 500,
       body: { ok: false, id, action, error: err.message, output: `${err.stdout || ''}${err.stderr || ''}` },
@@ -882,6 +984,24 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { error: err.message });
       }
       return sendJson(res, 404, { error: 'no such platform route' });
+    }
+
+    // --- Housekeeping ---
+    //
+    // POST /api/prune-images   delete layers left behind by rebuilds.
+    //
+    // Dangling images only — see docker.pruneDangling(). A tagged image that
+    // no container currently uses is an app you stopped, or the version an
+    // update would roll back to, and this must never be the button that
+    // deletes those.
+    if (route === '/api/prune-images' && req.method === 'POST') {
+      try {
+        const result = await docker.pruneDangling();
+        activity.note({ name: 'dashboard', action: 'cleared leftover image layers', level: 'info' });
+        return sendJson(res, 200, { ok: true, ...result });
+      } catch (err) {
+        return sendJson(res, 500, { ok: false, error: err.message });
+      }
     }
 
     // --- Updates ---
