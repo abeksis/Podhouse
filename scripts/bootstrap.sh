@@ -126,7 +126,7 @@ cat <<'BANNER'
  |  __/ (_) | (_| | | | | (_) | |_| \__ \  __/
  |_|   \___/ \__,_|_| |_|\___/ \__,_|___/\___|
 
- Your own apps, on your own box. Nothing phones home.
+ Your own apps, on your own box. No account, no cloud in between.
 BANNER
 printf ' %ssource:%s %s@%s\n' "$DIM" "$RESET" "$HB_REPO" "$HB_REF"
 if [ "$HB_REF_ASKED" -eq 0 ] && [ "$HB_REF" = main ]; then
