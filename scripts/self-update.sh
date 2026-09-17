@@ -329,7 +329,13 @@ phase verifying "Re-checking the release is still good"
 # or a manifest that came back empty, fell straight through to the checkout —
 # the two cases a pause most needs to survive, because the first thing a bad
 # release does is make people's boxes unable to read anything.
-if ! git -C "$HB_ROOT" fetch --depth=1 origin main:refs/remotes/origin/hb-control 2>/dev/null; then
+# The leading + is not decoration. This is a shallow clone, so a later fetch of
+# main is frequently not a fast-forward of the ref we stored last time, and
+# without the + git refuses to move it — which, now that this check fails
+# closed, refused the update itself. Caught on a real box within a minute of
+# shipping the fail-closed change, which is the whole reason updates get tested
+# on one before anyone else sees them.
+if ! git -C "$HB_ROOT" fetch --depth=1 origin +main:refs/remotes/origin/hb-control 2>/dev/null; then
   fail "could not re-read the release control file, so this stopped rather than guessing"
 fi
 manifest="$(git -C "$HB_ROOT" show refs/remotes/origin/hb-control:releases/manifest.json 2>/dev/null)"
