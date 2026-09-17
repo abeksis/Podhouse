@@ -329,18 +329,27 @@ phase verifying "Re-checking the release is still good"
 # or a manifest that came back empty, fell straight through to the checkout —
 # the two cases a pause most needs to survive, because the first thing a bad
 # release does is make people's boxes unable to read anything.
-# The leading + is not decoration. This is a shallow clone, so a later fetch of
-# main is frequently not a fast-forward of the ref we stored last time, and
-# without the + git refuses to move it — which, now that this check fails
-# closed, refused the update itself. Caught on a real box within a minute of
-# shipping the fail-closed change, which is the whole reason updates get tested
-# on one before anyone else sees them.
-if ! git -C "$HB_ROOT" fetch --depth=1 origin +main:refs/remotes/origin/hb-control 2>/dev/null; then
-  fail "could not re-read the release control file, so this stopped rather than guessing"
+# Two ways to read it, and it only stops when BOTH fail.
+#
+# Fail-closed has a trap: a check that refuses when it cannot read something is
+# only as good as its ability to read it. The first version of this used
+# `git fetch main:refs/...` without a +, which git declines as a
+# non-fast-forward on a shallow clone — so on a box that had updated before,
+# every subsequent update refused itself. Correct behaviour, useless outcome.
+#
+# So: the git path (freshest, no CDN in the way) with the force it needs, and
+# if git cannot do it at all, the same file over https. A box that truly cannot
+# reach either has no business checking out a new release.
+manifest=""
+if git -C "$HB_ROOT" fetch --depth=1 origin +main:refs/remotes/origin/hb-control 2>/dev/null; then
+  manifest="$(git -C "$HB_ROOT" show refs/remotes/origin/hb-control:releases/manifest.json 2>/dev/null)"
 fi
-manifest="$(git -C "$HB_ROOT" show refs/remotes/origin/hb-control:releases/manifest.json 2>/dev/null)"
 if [ -z "$manifest" ]; then
-  fail "the release control file came back empty, so this stopped rather than guessing"
+  manifest="$(curl -fsSL --max-time 20 \
+    "https://raw.githubusercontent.com/${HB_REPO:-abeksis/Podhouse}/main/releases/manifest.json" 2>/dev/null)" || manifest=""
+fi
+if [ -z "$manifest" ]; then
+  fail "could not re-read the release control file over git or https, so this stopped rather than guessing"
 fi
 frozen="$(printf '%s' "$manifest" | node -e '
       let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
