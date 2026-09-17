@@ -3742,11 +3742,14 @@ function renderUpdates(data) {
         detail: `${u.tag || 'same version'} · same version, patched image`,
         action: `<button type="button" class="button is-small" data-update="${escapeHtml(u.container)}">Update</button>`,
       })),
+      // A held-back row is NEWS, not a task. There is deliberately no button,
+      // and with nothing where the button goes it reads as something stuck
+      // waiting for you — which is how it was read.
       ...held.map((h) => updateRow(h, {
         kind: 'held', label: 'held back',
         title: 'Not offered here: this needs a migration, not an image swap.',
         detail: `${h.tag} → ${h.newerVersion} · ${h.why}`,
-        action: '',
+        action: '<span class="update-note">Nothing to do &mdash; this is a notice</span>',
       })),
     ].join('');
   }
