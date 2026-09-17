@@ -32,8 +32,9 @@ it behind a proxy, on a hostname, or anywhere reachable from outside, put a
 real auth layer in front of it. **Putting it behind the proxy does not add
 authentication** — it only makes the same unauthenticated page easier to find.
 
-Portainer holds the same socket with the same consequences, and it is part of
-`core`, so it is always there.
+Portainer holds the same socket with the same consequences. Since 0.9.0 it is
+not installed on a new box — it is an app in the store, chosen deliberately or
+not at all. A box that had it before keeps it.
 
 **docs/DOCKER-SOCKET.md** lists every Docker call this dashboard makes, who
 else on the box holds the socket, and what a filtered proxy can and cannot fix
