@@ -150,7 +150,14 @@ function tokenMatches(stored, attempt) {
 function pruneSessions(sessions) {
   const now = Date.now();
   for (const [id, s] of Object.entries(sessions)) {
-    if (!s || typeof s.expires !== 'number' || s.expires < now) delete sessions[id];
+    // No token means a session from before 0.10.0. It is dead rather than
+    // half-alive: keeping it readable produced a page that loaded normally and
+    // then refused every button, which reads as a broken dashboard rather than
+    // as "sign in again". It is also a credential that can still be replayed
+    // from another port for reads, for no benefit to anyone.
+    if (!s || typeof s.expires !== 'number' || s.expires < now || typeof s.token !== 'string') {
+      delete sessions[id];
+    }
   }
   return sessions;
 }
@@ -243,7 +250,12 @@ async function isAuthenticated(req, preloaded) {
   const id = cookieFrom(req);
   if (!id) return false;
   const session = data.sessions[id];
-  return !!(session && typeof session.expires === 'number' && session.expires > Date.now());
+  // Same rule as pruneSessions: a session without its write token belongs to a
+  // version of this dashboard that predates them, and is over.
+  return !!(session
+    && typeof session.expires === 'number'
+    && session.expires > Date.now()
+    && typeof session.token === 'string');
 }
 
 function rateLimit(ip, max = FAIL_MAX) {
