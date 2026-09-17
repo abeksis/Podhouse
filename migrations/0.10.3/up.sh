@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 0.10.1 — close the rollback archives that older versions left readable.
+# 0.10.3 — close the rollback archives that older versions left readable.
 #
 # Every update before 0.10.0 wrote state/platform-backups/*.tar.gz under the
 # default umask: 0644 files in a 0755 directory. Those archives contain .env
@@ -16,7 +16,7 @@ set -euo pipefail
 
 HB_ROOT="${HB_ROOT:-/opt/podhouse}"
 DIR="$HB_ROOT/state/platform-backups"
-say() { printf '[migration 0.10.1] %s\n' "$*"; }
+say() { printf '[migration 0.10.3] %s\n' "$*"; }
 
 [ -d "$DIR" ] || { say "no platform backups on this box"; exit 0; }
 
