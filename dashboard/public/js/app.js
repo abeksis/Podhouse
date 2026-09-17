@@ -287,14 +287,6 @@ document.addEventListener('click', (event) => {
 
 /* ------------------------------------------------------------ home render */
 
-function greetingText() {
-  const h = new Date().getHours();
-  if (h < 5) return 'Good night';
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
-}
-
 /** Processor, memory and disk at the foot of the sidebar: a number and a thin bar each. */
 function renderSideMeters(summary) {
   const { metrics } = summary;
@@ -395,6 +387,26 @@ function renderNeeds(items) {
   }).join('');
 }
 
+/**
+ * The bar above every page.
+ *
+ * Only three things earned a place: which box this is, whether it is well, and
+ * whether something is waiting. The first matters because a person with two
+ * boxes has two tabs open that otherwise look identical; the other two because
+ * the Overview is the only page that used to say them, and a problem does not
+ * stop being a problem while you are reading logs.
+ */
+function renderTopbar(summary) {
+  const { health, host } = summary;
+  $('#top-host').textContent = host.name || 'this box';
+  $('#top-address').textContent = host.address || '';
+
+  const chip = $('#top-status');
+  chip.dataset.level = health.level;
+  $('#top-status-text').textContent = health.level === 'good' ? 'All running' : health.title;
+  chip.title = health.sub || '';
+}
+
 function renderHealth(summary) {
   const banner = $('#health');
   const { health, counts } = summary;
@@ -404,6 +416,12 @@ function renderHealth(summary) {
   $('#health-title').textContent = health.level === 'good' ? 'All running' : health.title;
   $('#health-text').textContent = health.level === 'good' ? 'nothing needs you right now' : health.sub;
   banner.title = health.sub;
+
+  // A tile that says "nothing needs you" spends a fifth of the row saying
+  // nothing, and the top bar says it on every page anyway. So this one shows
+  // up only when it has something: a failure, with the reason and the button
+  // that starts fixing it — or a box with nothing installed yet.
+  banner.hidden = health.level === 'good' && counts.installed > 0;
 
   $('#stat-apps').textContent = String(counts.installed);
   $('#stat-apps-note').textContent = `installed of ${counts.modules}`;
@@ -419,8 +437,6 @@ function renderHealth(summary) {
   } else {
     action.innerHTML = '';
   }
-
-  $('#welcome-title').textContent = greetingText();
 }
 
 function renderLauncher(modules) {
@@ -668,6 +684,18 @@ function renderBackupCard(summary) {
   else { level = 'good'; answer = `Backed up ${ago(b.latest.created)} ago`; }
   card.dataset.level = level;
   $('#safety-answer').textContent = answer;
+
+  // The same answer as a number at the top of the page. The tile says when,
+  // the panel below says what to do about it.
+  const tile = $('#stat-backup');
+  if (tile) {
+    tile.dataset.level = level;
+    $('#stat-backup-value').textContent = !b.hasKey ? 'No key'
+      : !b.latest ? 'Never' : `${ago(b.latest.created)} ago`;
+    $('#stat-backup-note').textContent = !b.hasKey ? 'backups cannot run'
+      : b.count ? `${b.count} archive${b.count === 1 ? '' : 's'}${b.scheduled ? ' · on a schedule' : ''}`
+        : 'no archive yet';
+  }
 
   const facts = [
     b.hasKey ? null : 'add HB_BACKUP_KEY to .env and restart the dashboard',
@@ -2596,6 +2624,7 @@ function applySummary(summary) {
   // an install started should still show it as busy.
   state.busy = new Set(summary.busy || []);
   renderSideMeters(summary);
+  renderTopbar(summary);
   renderHealth(summary);
   renderNeeds(summary.needs);
   renderBoxFacts(summary.metrics);
@@ -3452,6 +3481,16 @@ function updateBadge(count, platformVersion) {
       : count ? `${count} waiting` : 'Up to date';
     $('#stat-updates-note').textContent = platformVersion ? `${platformVersion} is available`
       : count ? `app update${count === 1 ? '' : 's'}` : 'apps and Podhouse';
+  }
+
+  // The same news in the top bar, where it is readable from any page. A
+  // Podhouse release is named; app rebuilds are counted.
+  const chip = $('#top-update');
+  if (chip) {
+    const label = platformVersion ? `Podhouse ${platformVersion}`
+      : count ? `${count} update${count === 1 ? '' : 's'}` : '';
+    chip.textContent = label;
+    chip.hidden = !label;
   }
 
   const badge = $('#updates-dot');

@@ -138,10 +138,22 @@ async function bootstrapTokenLocked() {
   return data.bootstrapToken;
 }
 
+/**
+ * A bootstrap token is read off a terminal or out of a chat window, so what
+ * gets pasted often carries the punctuation that surrounded it: a backtick
+ * from a code span, a quote, a newline. None of those can be part of a token —
+ * it is base64url — so they are damage from the copy rather than a wrong
+ * token, and "that bootstrap token is not right" over one backtick costs
+ * somebody half an hour.
+ */
+function cleanToken(text) {
+  return text.trim().replace(/^[`'"]+/, '').replace(/[`'"]+$/, '');
+}
+
 function tokenMatches(stored, attempt) {
   if (!stored || typeof attempt !== 'string') return false;
   const a = Buffer.from(stored);
-  const b = Buffer.from(attempt.trim());
+  const b = Buffer.from(cleanToken(attempt));
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
