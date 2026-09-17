@@ -11,6 +11,7 @@
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
+const crypto = require('crypto');
 
 const ROOT = process.env.HOMEBOX_ROOT || '/opt/podhouse';
 const STATE_DIR = path.join(ROOT, 'state');
@@ -49,7 +50,13 @@ const SECRET_FILES = new Set(['auth.json']);
 async function writeJson(name, value) {
   ensureDir();
   const target = path.join(STATE_DIR, name);
-  const tmp = `${target}.tmp-${process.pid}`;
+  // Unique per WRITE, not per process. `${target}.tmp-${pid}` is the same path
+  // for every write of the same document in this process, so two overlapping
+  // writes — a login while the activity log ticks, two module installs — wrote
+  // into one another's temp file and raced to rename it. One of them then
+  // renamed a file the other had already moved: ENOENT, and a write that
+  // reported success while landing nothing.
+  const tmp = `${target}.tmp-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
   const mode = SECRET_FILES.has(name) ? 0o600 : 0o644;
   // The mode is set at creation and again explicitly, because `mode` in
   // writeFile is masked by the process umask. A file that is world-readable

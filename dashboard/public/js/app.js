@@ -1602,6 +1602,8 @@ async function submitLogin(event) {
     });
     const data = await res.json();
     if (!data.ok) { loginError(data.error || 'That did not work.'); return; }
+    // The only moment this token is ever handed out.
+    writeToken.set(data.token);
     authState.authenticated = true;
     authState.firstRun = false;
     showDashboard();
@@ -1617,6 +1619,7 @@ async function submitLogin(event) {
 
 async function signOut() {
   try { await fetch('api/auth/logout', { method: 'POST' }); } catch { /* leaving anyway */ }
+  writeToken.clear();
   authState = { authenticated: false, firstRun: false, minPassword: 8 };
   showLogin();
 }
@@ -1626,16 +1629,54 @@ async function signOut() {
  * the password. Every fetch goes through here so that lands on the login
  * screen rather than as a wall of failed requests.
  */
+/**
+ * The half of the session that stays on this origin.
+ *
+ * The cookie goes to every app on this host, because cookies ignore ports. This
+ * token does not: localStorage belongs to this origin and this port. The server
+ * requires it on everything that changes the box, so a cookie picked up by an
+ * app on another port cannot install or delete anything.
+ *
+ * It is written once, from the login response, and read on every write below.
+ */
+const TOKEN_KEY = 'hb_write_token';
+const writeToken = {
+  get() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } },
+  set(value) { try { localStorage.setItem(TOKEN_KEY, value || ''); } catch { /* private mode */ } },
+  clear() { try { localStorage.removeItem(TOKEN_KEY); } catch { /* nothing to do */ } },
+};
+
 const rawFetch = window.fetch.bind(window);
 window.fetch = async (input, opts) => {
-  const res = await rawFetch(input, opts);
   const url = String(typeof input === 'string' ? input : input.url || '');
+  const options = opts || {};
+  const method = String(options.method || 'GET').toUpperCase();
+  // Attach it to our own writes only — never to a request leaving this origin.
+  if (url.includes('api/') && !url.includes('api/auth/') && method !== 'GET' && method !== 'HEAD') {
+    const token = writeToken.get();
+    if (token) options.headers = { ...(options.headers || {}), 'x-hb-token': token };
+  }
+  const res = await rawFetch(input, options);
   if (res.status === 401 && url.includes('api/') && !url.includes('api/auth/')) {
     if (authState.authenticated) {
       authState.authenticated = false;
       showLogin();
       loginError('Your session ended. Sign in again.');
     }
+  }
+  // A session from before this existed, or a browser that lost its storage:
+  // the cookie is still good for reading, so the server says so rather than
+  // pretending the session is gone.
+  if (res.status === 403 && url.includes('api/')) {
+    const copy = res.clone();
+    copy.json().then((body) => {
+      if (body && body.code === 'stale-session') {
+        writeToken.clear();
+        authState.authenticated = false;
+        showLogin();
+        loginError('Sign in again to make changes on this device.');
+      }
+    }).catch(() => {});
   }
   return res;
 };
@@ -1673,6 +1714,8 @@ async function submitPasswordChange(event) {
       toast(data.error, 'error', 8000);
       return;
     }
+    // The change issued a fresh session, and with it a fresh write token.
+    writeToken.set(data.token);
     const others = Number(data.otherSessionsSignedOut) || 0;
     toast(others
       ? `Password changed. ${others} other device${others === 1 ? '' : 's'} signed out.`

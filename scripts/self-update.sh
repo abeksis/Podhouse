@@ -78,6 +78,15 @@ case "$TARGET" in
 esac
 
 mkdir -p "$STATE_DIR" "$BACKUP_DIR"
+# The rollback archive below contains .env and state/auth.json — every password
+# this box generated, the backup encryption key, and live sessions. Written
+# under the default umask it lands 0644 inside a 0755 directory, so any local
+# account that can walk the tree reads the lot out of the tarball, whatever the
+# modes on the original files say. Both are closed here, and on directories
+# that already exist from an older version.
+chmod 700 "$BACKUP_DIR" 2>/dev/null || true
+umask 077
+
 cd "$HB_ROOT" || { echo "no such root: $HB_ROOT" >&2; exit 2; }
 
 FROM="$(cat "$HB_ROOT/VERSION" 2>/dev/null || echo 0.0.0)"
@@ -268,6 +277,11 @@ ROLLBACK_SHA="$(git -C "$HB_ROOT" rev-parse HEAD)"
 # migration that does touch a module's config takes its own, targeted.
 
 phase backup "Saving state and .env"
+# Create it empty and private FIRST: tar would otherwise create it under the
+# umask at the moment of writing, and the secrets are inside it from its first
+# block. Exposure is not a window here, it is the whole life of the file.
+: > "$ROLLBACK_TARBALL"
+chmod 600 "$ROLLBACK_TARBALL"
 tar -czf "$ROLLBACK_TARBALL" -C "$HB_ROOT" \
   --exclude='state/platform-backups' \
   --exclude='state/update-backups' \
@@ -311,21 +325,27 @@ git -C "$HB_ROOT" rev-parse "v${TARGET}" >/dev/null 2>&1 \
 # flag is not a freeze switch.
 
 phase verifying "Re-checking the release is still good"
-if git -C "$HB_ROOT" fetch --depth=1 origin main:refs/remotes/origin/hb-control 2>/dev/null; then
-  manifest="$(git -C "$HB_ROOT" show refs/remotes/origin/hb-control:releases/manifest.json 2>/dev/null)"
-  if [ -n "$manifest" ]; then
-    frozen="$(printf '%s' "$manifest" | node -e '
+# "Fails closed" was written above this block and was not true: a failed fetch,
+# or a manifest that came back empty, fell straight through to the checkout —
+# the two cases a pause most needs to survive, because the first thing a bad
+# release does is make people's boxes unable to read anything.
+if ! git -C "$HB_ROOT" fetch --depth=1 origin main:refs/remotes/origin/hb-control 2>/dev/null; then
+  fail "could not re-read the release control file, so this stopped rather than guessing"
+fi
+manifest="$(git -C "$HB_ROOT" show refs/remotes/origin/hb-control:releases/manifest.json 2>/dev/null)"
+if [ -z "$manifest" ]; then
+  fail "the release control file came back empty, so this stopped rather than guessing"
+fi
+frozen="$(printf '%s' "$manifest" | node -e '
       let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
         try { const m = JSON.parse(s);
           if (m.freeze === true) process.stdout.write(m.freeze_reason || "updates are paused by the maintainer");
         } catch { process.stdout.write("MANIFEST_UNREADABLE"); }
       });' 2>/dev/null)"
-    if [ "$frozen" = "MANIFEST_UNREADABLE" ]; then
-      fail "the release manifest could not be read, so this stopped rather than guessing"
-    elif [ -n "$frozen" ]; then
-      fail "the maintainer has paused updates: $frozen"
-    fi
-  fi
+if [ "$frozen" = "MANIFEST_UNREADABLE" ]; then
+  fail "the release manifest could not be read, so this stopped rather than guessing"
+elif [ -n "$frozen" ]; then
+  fail "the maintainer has paused updates: $frozen"
 fi
 
 # ---------------------------------------------------------------- 4. checkout

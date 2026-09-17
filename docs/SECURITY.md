@@ -45,6 +45,36 @@ Whoever reaches it can point any hostname at anything, including a service
 that was never meant to be public. Treat 80 and 443 as the public surface and
 81 as strictly internal.
 
+## Two halves of a session
+
+The session cookie is host-only, and cookies do not know about ports: the apps
+this box installs sit on other ports of the SAME hostname, so visiting one of
+them sends it the dashboard's cookie. HttpOnly keeps a cookie away from scripts;
+it does not hide it from the server receiving it.
+
+So the cookie alone no longer authorises a change. Every request that modifies
+anything must also carry `x-hb-token`, a second secret returned only in the
+login response and kept in this origin's localStorage — which an app on another
+port cannot read and is never handed. A stolen cookie can read the Overview; it
+cannot install, remove, restore or change the password.
+
+Sessions created before this existed have no token and are refused for writes,
+which sends that browser to the login screen once.
+
+## What is still open
+
+- **Release signing.** `scripts/self-update.sh` verifies that a release is not
+  frozen and that the checkout succeeded. It does NOT verify a signature: a compromise
+  of the upstream repository would deliver code this box runs as root. Signing
+  releases and pinning the signer is real work and is not done.
+- **Cross-process auth writes.** Auth changes inside the dashboard are
+  serialised, so a login cannot restore a password that was just changed. The
+  CLI writes the same file and is not part of that queue; two writers at the
+  same instant can still lose one of the changes.
+- **LAN-only is an assumption.** The dashboard binds 8443 on every interface
+  and the deployment is expected to keep it on a private network. Nothing in
+  the process enforces that.
+
 ## What is deliberately narrowed
 
 - **Purge is a separate verb from uninstall.** `remove` deletes containers

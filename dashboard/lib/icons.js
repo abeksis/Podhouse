@@ -32,8 +32,14 @@ const TIMEOUT_MS = 10000;
 const MAX_REDIRECTS = 3;
 
 // Only formats a browser will actually draw in an <img>.
+//
+// SVG is NOT on this list, and that is the point. An SVG is a document: it can
+// carry <script>, and it was being stored byte-for-byte and served back from
+// the dashboard's own origin. Opening such an icon in a tab — not rendering it
+// in an <img>, but opening it — ran that script with the dashboard's cookie.
+// The icons that ship with Podhouse are SVG and are unaffected: they come from
+// the image, not from a URL somebody pasted.
 const EXT_FOR = {
-  'image/svg+xml': 'svg',
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
@@ -41,6 +47,50 @@ const EXT_FOR = {
   'image/x-icon': 'ico',
   'image/vnd.microsoft.icon': 'ico',
 };
+
+/**
+ * What the BYTES say, not what the server claimed.
+ *
+ * Content-Type is under the same control as the body, so an attacker who wants
+ * an SVG stored can label it image/png. These are the file signatures; a body
+ * that matches none of them is refused whatever the header said.
+ */
+function sniff(body) {
+  const b = body;
+  if (b.length > 8 && b[0] === 0x89 && b.toString('latin1', 1, 4) === 'PNG') return 'png';
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+  if (b.length > 12 && b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP') return 'webp';
+  if (b.length > 6 && b.toString('latin1', 0, 3) === 'GIF') return 'gif';
+  if (b.length > 4 && b[0] === 0x00 && b[1] === 0x00 && (b[2] === 0x01 || b[2] === 0x02) && b[3] === 0x00) return 'ico';
+  return null;
+}
+
+/**
+ * Addresses this fetch must never be pointed at.
+ *
+ * Loopback, link-local (including the cloud metadata address), every private
+ * range, and the names that only mean something inside a LAN. Written as
+ * literal checks rather than a DNS lookup of the name, because a hostname is
+ * resolved here first: `evil.example.com` can answer 127.0.0.1.
+ */
+const PRIVATE_V4 = [
+  /^127\./, /^10\./, /^0\./, /^169\.254\./, /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[01])\./, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+];
+
+function isPrivateHost(hostname) {
+  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) return true;
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')
+      || host.endsWith('.internal') || host.endsWith('.home.arpa')) return true;
+  if (host === '::1' || host === '::' || host.startsWith('fc') || host.startsWith('fd')
+      || host.startsWith('fe80')) return true;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return PRIVATE_V4.some((re) => re.test(host));
+  // An IPv4-mapped IPv6 address, e.g. ::ffff:127.0.0.1.
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(host);
+  if (mapped) return PRIVATE_V4.some((re) => re.test(mapped[1]));
+  return false;
+}
 
 const isRemote = (value) => /^https?:\/\//i.test(String(value || '').trim());
 const isLocal = (value) => new RegExp(`^${PREFIX}[a-f0-9]{16}\\.[a-z]{3,4}$`).test(String(value || '').trim());
@@ -58,6 +108,18 @@ function get(url, redirectsLeft = MAX_REDIRECTS) {
     // http/https only — a redirect chain must not land on file: or data:.
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       reject(new Error(`icons can only be fetched over http or https, not ${parsed.protocol}`));
+      return;
+    }
+
+    // An icon comes from the internet. This fetch, however, is made by a
+    // process that sits inside the box's own networks and can reach the router,
+    // the other apps' admin ports and every container on the bridge — so a URL
+    // pointing at one of those turns "fetch an icon" into a way to ask the
+    // dashboard what is behind the firewall, and to read the answer through the
+    // error message. Names are resolved first, because a public hostname can
+    // resolve to 127.0.0.1 just as easily as an address can be written out.
+    if (isPrivateHost(parsed.hostname)) {
+      reject(new Error('an icon URL has to be a public address, not one inside this network'));
       return;
     }
 
@@ -81,7 +143,7 @@ function get(url, redirectsLeft = MAX_REDIRECTS) {
       const ext = EXT_FOR[type];
       if (!ext) {
         res.resume();
-        reject(new Error(`that URL is ${type || 'not an image'} — an icon has to be a PNG, SVG, JPEG, WebP, GIF or ICO`));
+        reject(new Error(`that URL is ${type || 'not an image'} — an icon has to be a PNG, JPEG, WebP, GIF or ICO. SVG from a URL is refused on purpose: it can carry script, and it would be served back from this dashboard's own address`));
         return;
       }
 
@@ -96,7 +158,16 @@ function get(url, redirectsLeft = MAX_REDIRECTS) {
         }
         chunks.push(chunk);
       });
-      res.on('end', () => resolve({ body: Buffer.concat(chunks), ext }));
+      res.on('end', () => {
+        const body = Buffer.concat(chunks);
+        // The header got it this far; the bytes decide.
+        const actual = sniff(body);
+        if (!actual) {
+          reject(new Error('that file is not one of the image formats this accepts, whatever its server called it'));
+          return;
+        }
+        resolve({ body, ext: actual });
+      });
     });
 
     req.on('timeout', () => { req.destroy(); reject(new Error('that URL did not answer in time')); });

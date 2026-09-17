@@ -26,6 +26,7 @@ const path = require('path');
 const state = require('./state-store');
 const yaml = require('./yaml');
 const icons = require('./icons');
+const policy = require('./policy');
 
 const MODULES_DIR = path.join(state.ROOT, 'modules');
 const FILE = 'catalog.json';
@@ -198,6 +199,22 @@ services:
     image: ${q(app.image)}
     container_name: ${app.serviceName}
     restart: unless-stopped
+    # The same limits every shipped module carries, and \`homebox validate\`
+    # refuses a module without them. An app added from the App Store used to
+    # come out with Docker's full default capability set — the one place where
+    # the rule the project states about itself was not applied.
+    #
+    # DAC_OVERRIDE is here because the config directory below belongs to the
+    # box's user while most images start as root; the five capabilities that
+    # let an image drop to its own user are NOT added blindly, since an image
+    # that does not need them should not have them. If a hand-added app will
+    # not start, docs/MODULE-SCHEMA.md says which to add and why.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
     environment:
       - TZ=\${TZ:-UTC}
       - PUID=\${PUID:-1000}
@@ -264,6 +281,11 @@ async function createApp(input) {
   const text = composeFor(app);
   const meta = yaml.extractTopLevel(text, 'x-homebox');
   if (!meta || !meta.id) throw new Error('the generated module did not parse — nothing was written');
+  // The generator is held to the same rule as everything else, by the same
+  // code that holds it — see lib/policy.js. If this ever fails, the template
+  // above drifted, and no module is written until it is fixed.
+  const unhardened = policy.describe(text);
+  if (unhardened) throw new Error(`the generated module is missing its limits (${unhardened}) — nothing was written`);
 
   await fsp.mkdir(path.join(dir, 'config'), { recursive: true });
   await fsp.writeFile(path.join(dir, 'docker-compose.yml'), text, 'utf8');

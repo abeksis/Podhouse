@@ -163,15 +163,64 @@ const ASSET_TAG = (() => {
   return newest ? `${VERSION}-${Math.round(newest / 1000).toString(36)}` : VERSION;
 })();
 
+/**
+ * Headers every response carries.
+ *
+ * The page is one document that talks to its own origin and nothing else: no
+ * CDN, no fonts, no analytics — which makes a strict policy cheap here where
+ * it is usually a fight. `unsafe-inline` for style is the one concession, for
+ * the inline widths on the meters and bars.
+ *
+ * frame-ancestors, not X-Frame-Options: the app is meant to be reachable
+ * behind the box's own proxy, and being framed by an unrelated page is how a
+ * click lands on "remove" while the person thinks they are clicking something
+ * else.
+ */
+const BASE_HEADERS = {
+  'content-security-policy': [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "object-src 'none'",
+  ].join('; '),
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'same-origin',
+  'x-frame-options': 'DENY',
+};
+
 async function serveIndex(res) {
   const html = (await fsp.readFile(path.join(PUBLIC_DIR, 'index.html'), 'utf8'))
     .replace(/__V__/g, encodeURIComponent(ASSET_TAG));
   res.writeHead(200, {
+    ...BASE_HEADERS,
     'content-type': MIME['.html'],
     'content-length': Buffer.byteLength(html),
     'cache-control': 'no-cache',
   });
   res.end(html);
+}
+
+/**
+ * Stream a file to the response, and survive it going wrong mid-flight.
+ *
+ * A bare `createReadStream(file).pipe(res)` has no error handler: a file that
+ * disappears between the stat and the read, or a disk that fails halfway,
+ * emits an error on a stream nobody is listening to. The headers are already
+ * out by then, so there is nothing left to tell the client — the socket is
+ * closed rather than the process.
+ */
+function streamFile(res, file) {
+  const stream = fs.createReadStream(file);
+  stream.on('error', (err) => {
+    console.error(`[homebox] read failed for ${file}: ${err.message}`);
+    res.destroy();
+  });
+  stream.pipe(res);
 }
 
 async function serveStatic(res, urlPath) {
@@ -187,8 +236,14 @@ async function serveStatic(res, urlPath) {
     res.writeHead(200, {
       'content-type': MIME[ext] || 'application/octet-stream',
       'cache-control': 'public, max-age=31536000, immutable',
+      // These bytes came from a URL somebody pasted. SVG is refused at the
+      // download now (lib/icons.js), and this is the second line: the browser
+      // may not re-interpret the type, and if one of these ever is opened as a
+      // document it runs with nothing — no scripts, no origin, no requests.
+      'x-content-type-options': 'nosniff',
+      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     });
-    fs.createReadStream(file).pipe(res);
+    streamFile(res, file);
     return;
   }
   const rel = urlPath.replace(/^\/+/, '');
@@ -213,7 +268,7 @@ async function serveStatic(res, urlPath) {
       // leaves stale JS talking to a new API.
       'cache-control': ext === '.html' || ext === '.js' || ext === '.css' ? 'no-cache' : 'public, max-age=86400',
     });
-    fs.createReadStream(target).pipe(res);
+    streamFile(res, target);
   } catch {
     res.writeHead(404).end('not found');
   }
@@ -709,28 +764,66 @@ function serveEvents(req, res) {
   });
 }
 
+const MAX_BODY = 16384;
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
+    let done = false;
+    // Rejecting the promise does NOT stop the sender. The old version called
+    // reject() past the limit and then kept appending every further chunk to
+    // the same string, so the one thing the limit existed to prevent — a body
+    // that grows without bound on an endpoint reachable before login — went on
+    // happening, quietly, after the caller had already been told no. The
+    // request is destroyed here instead, which is what ends it.
+    const stop = (message) => {
+      if (done) return;
+      done = true;
+      data = '';
+      req.destroy();
+      reject(new Error(message));
+    };
     req.on('data', (chunk) => {
+      if (done) return;
       data += chunk;
       // Every POST here is a few dozen bytes; anything larger is a bug or an
       // attempt to exhaust memory on an unauthenticated endpoint.
-      if (data.length > 16384) reject(new Error('body too large'));
+      if (data.length > MAX_BODY) stop('body too large');
     });
     req.on('end', () => {
+      if (done) return;
+      done = true;
       try {
         resolve(data ? JSON.parse(data) : {});
       } catch {
         reject(new Error('invalid JSON body'));
       }
     });
-    req.on('error', reject);
+    req.on('error', (err) => { if (!done) { done = true; reject(err); } });
   });
 }
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  // Parsed INSIDE the boundary, and against a fixed base.
+  //
+  // This used to read `http://${req.headers.host}`, above the try. A request
+  // with a Host header that is not a valid authority — `Host: [` is enough —
+  // made the URL constructor throw, and because this handler is async that
+  // became an unhandled rejection with nothing to catch it: Node 22 ends the
+  // process on those. Anyone who could reach the port could stop the
+  // dashboard with one line of netcat, repeatedly, faster than Docker
+  // restarts it.
+  //
+  // Nothing here needs the Host. Every route is a path, and the one place
+  // that cares about the address the box answers on reads it from .env.
+  let url;
+  try {
+    url = new URL(req.url, 'http://podhouse.invalid');
+  } catch {
+    res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('bad request target');
+    return;
+  }
   const route = url.pathname;
 
   try {
@@ -757,15 +850,18 @@ const server = http.createServer(async (req, res) => {
         if (req.method !== 'POST') return sendJson(res, 405, { error: 'method not allowed' });
 
         if (route === '/api/auth/claim') {
-          const { cookie } = await auth.claim(req, await readBody(req));
-          res.setHeader('set-cookie', cookie);
+          const claimed = await auth.claim(req, await readBody(req));
+          res.setHeader('set-cookie', claimed.cookie);
           activity.note({ name: 'dashboard', action: 'claimed', level: 'info' });
-          return sendJson(res, 200, { ok: true });
+          // The write token is returned HERE and nowhere else — an endpoint
+          // that handed it out on presentation of the cookie would hand it to
+          // whoever stole the cookie. See lib/auth.js.
+          return sendJson(res, 200, { ok: true, token: claimed.token });
         }
         if (route === '/api/auth/login') {
-          const { cookie } = await auth.login(req, await readBody(req));
-          res.setHeader('set-cookie', cookie);
-          return sendJson(res, 200, { ok: true });
+          const signedIn = await auth.login(req, await readBody(req));
+          res.setHeader('set-cookie', signedIn.cookie);
+          return sendJson(res, 200, { ok: true, token: signedIn.token });
         }
         if (route === '/api/auth/logout') {
           const { cookie } = await auth.logout(req);
@@ -777,7 +873,9 @@ const server = http.createServer(async (req, res) => {
           if (!(await auth.isAuthenticated(req))) return sendJson(res, 401, { error: 'not signed in' });
           const result = await auth.changePassword(req, await readBody(req));
           res.setHeader('set-cookie', result.cookie);
-          return sendJson(res, 200, { ok: true, otherSessionsSignedOut: result.otherSessionsSignedOut });
+          return sendJson(res, 200, {
+            ok: true, token: result.token, otherSessionsSignedOut: result.otherSessionsSignedOut,
+          });
         }
         return sendJson(res, 404, { error: 'no such endpoint' });
       } catch (err) {
@@ -791,6 +889,26 @@ const server = http.createServer(async (req, res) => {
       // on its own once /api/auth/status answers.
       if (route.startsWith('/api/')) return sendJson(res, 401, { error: 'not signed in' });
       return serveIndex(res);
+    }
+
+    // Anything that CHANGES the box needs the second half of the session.
+    //
+    // The cookie travels to every app on this host, because cookies ignore
+    // ports — see lib/auth.js. The token does not: it lives in this origin's
+    // localStorage and arrives in a header the page adds. So a cookie taken by
+    // a compromised app on another port can still read the Overview, and can
+    // no longer install, remove, restore or change the password.
+    //
+    // GET and HEAD are deliberately outside this: they are what a browser
+    // sends on its own, and holding a read behind a header only breaks the
+    // page. The writes are the ones worth protecting.
+    if (route.startsWith('/api/') && !['GET', 'HEAD'].includes(req.method)) {
+      if (!(await auth.hasWriteToken(req))) {
+        return sendJson(res, 403, {
+          error: 'this session cannot make changes — sign in again on this page',
+          code: 'stale-session',
+        });
+      }
     }
 
     // POST /api/containers/<name>/<action> — the Running list's buttons.
@@ -1117,7 +1235,7 @@ const server = http.createServer(async (req, res) => {
             'content-length': stat.size,
             'content-disposition': `attachment; filename="${name}"`,
           });
-          return fs.createReadStream(file).pipe(res);
+          return streamFile(res, file);
         }
         return sendJson(res, 404, { error: 'no such endpoint' });
       } catch (err) {
@@ -1232,6 +1350,24 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 500, { error: err.message });
   }
 });
+
+/**
+ * Last resort, not a policy.
+ *
+ * Every request is inside a try, and the one path that escaped it — parsing a
+ * malformed Host — is fixed above. This is what remains: a rejection from a
+ * background timer, a stream that fails after its headers went out, a bug
+ * nobody has hit yet. Node 22 ends the process on an unhandled rejection, and
+ * a dashboard that exits is a box whose owner cannot reach anything, so this
+ * logs loudly and keeps serving.
+ *
+ * It is deliberately noisy: a silent catch-all turns a bug into a mystery.
+ */
+for (const kind of ['unhandledRejection', 'uncaughtException']) {
+  process.on(kind, (err) => {
+    console.error(`[homebox] ${kind}:`, err && err.stack ? err.stack : err);
+  });
+}
 
 async function main() {
   hostMetrics.start();

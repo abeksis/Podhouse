@@ -65,6 +65,33 @@ async function read() {
 
 const write = (data) => state.writeJson(FILE, data);
 
+/**
+ * One auth change at a time.
+ *
+ * Every mutation here is read-modify-write on the whole document, and without
+ * this they interleave: a login that read the file before a password change
+ * writes its own snapshot afterwards, and the OLD password hash and the OLD
+ * sessions come back from the dead. Revoking access is the one operation that
+ * must not be undoable by a request already in flight with the credentials
+ * being revoked.
+ *
+ * A promise chain rather than a lock library: this is a single process with no
+ * npm dependencies, the critical sections are microseconds of JSON, and a
+ * queue that cannot deadlock is worth more here than one that can be tuned.
+ * `run` is attached to both outcomes of the previous link so one failed
+ * mutation cannot wedge the queue.
+ *
+ * NOT cross-process. The CLI can write this file too (`homebox unlock`), and
+ * two writers on one box would still race — that needs a lock file, and it is
+ * in docs/SECURITY.md rather than pretended away here.
+ */
+let authQueue = Promise.resolve();
+function serialized(fn) {
+  const run = authQueue.then(fn, fn);
+  authQueue = run.then(() => {}, () => {});
+  return run;
+}
+
 /* --------------------------------------------------------------- password */
 
 function hash(password, salt = crypto.randomBytes(16)) {
@@ -97,7 +124,11 @@ function passwordMatches(stored, attempt) {
  * Generated on demand rather than only by install.sh, so a machine that was
  * running before there was a login can still be claimed without reinstalling.
  */
-async function bootstrapToken() {
+function bootstrapToken() {
+  return serialized(bootstrapTokenLocked);
+}
+
+async function bootstrapTokenLocked() {
   const data = await read();
   if (data.password) return null;            // already claimed; the token is spent
   if (!data.bootstrapToken) {
@@ -124,12 +155,52 @@ function pruneSessions(sessions) {
   return sessions;
 }
 
+/**
+ * A session is TWO secrets, and the browser keeps them in different places.
+ *
+ * Cookies do not know about ports. The dashboard is on 8443 and the apps it
+ * installs are on other ports of the same host, so visiting Jellyfin sends it
+ * the dashboard's cookie — HttpOnly hides a cookie from scripts, not from the
+ * server receiving it. A compromised app could take that cookie and drive the
+ * dashboard, which holds the Docker socket.
+ *
+ * So the cookie alone no longer authorises anything that changes the box. The
+ * second half is a token returned ONLY in the login response body, which the
+ * page keeps in localStorage — storage that belongs to this origin and this
+ * port, and which no other app can read or be handed. Every write request must
+ * present it. A stolen cookie can now read pages; it cannot install, delete,
+ * restore or change the password.
+ *
+ * It is not offered by any cookie-authenticated endpoint, deliberately: an
+ * endpoint that hands it over on presentation of the cookie would hand it to
+ * the thief as well.
+ */
 async function createSession(data) {
   const id = crypto.randomBytes(32).toString('base64url');
+  const token = crypto.randomBytes(32).toString('base64url');
   pruneSessions(data.sessions);
-  data.sessions[id] = { created: Date.now(), expires: Date.now() + SESSION_MS };
+  data.sessions[id] = { created: Date.now(), expires: Date.now() + SESSION_MS, token };
   await write(data);
-  return id;
+  return { id, token };
+}
+
+/**
+ * Does this request carry the second half?
+ *
+ * Sessions created before this existed have no token. They are not quietly
+ * accepted — that would leave the hole open for thirty days — they are refused
+ * here, which sends the person back to the login screen once.
+ */
+async function hasWriteToken(req) {
+  const id = cookieFrom(req);
+  if (!id) return false;
+  const data = await read();
+  const session = data.sessions[id];
+  if (!session || typeof session.token !== 'string') return false;
+  const sent = String(req.headers['x-hb-token'] || '');
+  const a = Buffer.from(session.token);
+  const b = Buffer.from(sent);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 function cookieFrom(req) {
@@ -192,7 +263,11 @@ function noteFailure(ip, entry) {
 }
 
 /** First run: prove you have the installer's token, then set the password. */
-async function claim(req, { token, password }) {
+function claim(req, body) {
+  return serialized(() => claimLocked(req, body));
+}
+
+async function claimLocked(req, { token, password }) {
   const ip = clientIp(req);
   const entry = rateLimit(ip, CLAIM_MAX);
   const data = await read();
@@ -210,11 +285,15 @@ async function claim(req, { token, password }) {
   data.bootstrapToken = null;      // one-time, and it is now spent
   data.claimedAt = new Date().toISOString();
   failures.delete(ip);
-  const id = await createSession(data);
-  return { cookie: sessionCookie(id, req) };
+  const session = await createSession(data);
+  return { cookie: sessionCookie(session.id, req), token: session.token };
 }
 
-async function login(req, { password }) {
+function login(req, body) {
+  return serialized(() => loginLocked(req, body));
+}
+
+async function loginLocked(req, { password }) {
   const ip = clientIp(req);
   const entry = rateLimit(ip);
   const data = await read();
@@ -225,11 +304,15 @@ async function login(req, { password }) {
     throw Object.assign(new Error('wrong password'), { status: 401 });
   }
   failures.delete(ip);
-  const id = await createSession(data);
-  return { cookie: sessionCookie(id, req) };
+  const { id, token } = await createSession(data);
+  return { cookie: sessionCookie(id, req), token };
 }
 
-async function logout(req) {
+function logout(req) {
+  return serialized(() => logoutLocked(req));
+}
+
+async function logoutLocked(req) {
   const data = await read();
   const id = cookieFrom(req);
   if (id && data.sessions[id]) {
@@ -240,7 +323,11 @@ async function logout(req) {
 }
 
 /** Change the password, and drop every other session while doing it. */
-async function changePassword(req, { current, next }) {
+function changePassword(req, body) {
+  return serialized(() => changePasswordLocked(req, body));
+}
+
+async function changePasswordLocked(req, { current, next }) {
   const data = await read();
   if (!passwordMatches(data.password, String(current || ''))) {
     throw Object.assign(new Error('the current password is not right'), { status: 401 });
@@ -255,8 +342,8 @@ async function changePassword(req, { current, next }) {
   const mine = cookieFrom(req);
   const others = Object.keys(pruneSessions(data.sessions)).filter((k) => k !== mine).length;
   data.sessions = {};
-  const id = await createSession(data);
-  return { cookie: sessionCookie(id, req), otherSessionsSignedOut: others };
+  const { id, token } = await createSession(data);
+  return { cookie: sessionCookie(id, req), token, otherSessionsSignedOut: others };
 }
 
 /**
@@ -265,9 +352,26 @@ async function changePassword(req, { current, next }) {
  * wrong value here costs an attacker nothing but their own rate limit.
  */
 function clientIp(req) {
+  const socket = req.socket.remoteAddress || 'unknown';
+  // The header is a claim, not a fact, and anybody who can reach this port can
+  // write it. Trusting it outright meant a guesser could send a different
+  // X-Forwarded-For on every attempt and never spend a single one of their
+  // eight tries — the throttle counted a new "address" each time.
+  //
+  // It is still read, because the real proxy in front of this does set it and
+  // without it every attempt through the proxy shares one bucket. The answer
+  // is to trust it only FROM the proxy: the counted identity is the socket
+  // address, plus the forwarded one when the connection actually came from a
+  // private address on this box's own networks.
+  if (!PROXY_HOPS.test(socket)) return socket;
   const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return fwd || req.socket.remoteAddress || 'unknown';
+  return fwd ? `${socket}|${fwd}` : socket;
 }
+
+// Loopback, RFC1918 and the container networks Docker hands out. A request
+// arriving from one of these came through the box itself, so its forwarded
+// address is worth something; one from anywhere else is not.
+const PROXY_HOPS = /^(::1|::ffff:127\.|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
 
 // The lockout is deliberately in memory and nowhere else: it must not cost a
 // disk write per failed attempt, and losing it on restart is harmless — an
@@ -277,6 +381,6 @@ function clientIp(req) {
 // short-lived Map, which would look like it worked and do nothing.
 
 module.exports = {
-  status, isAuthenticated, claim, login, logout, changePassword,
+  status, isAuthenticated, hasWriteToken, claim, login, logout, changePassword,
   bootstrapToken, sessionCookie, COOKIE, MIN_PASSWORD,
 };

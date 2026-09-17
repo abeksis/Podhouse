@@ -111,7 +111,22 @@ function run(command, args, options = {}) {
 }
 
 async function ensureDir() {
-  await fsp.mkdir(BACKUP_DIR, { recursive: true });
+  await fsp.mkdir(BACKUP_DIR, { recursive: true, mode: 0o700 });
+  // Also for a directory an older version already created world-readable. The
+  // archives inside hold .env and state/, so the directory is as sensitive as
+  // they are.
+  await fsp.chmod(BACKUP_DIR, 0o700).catch(() => {});
+}
+
+/**
+ * A private path nobody else can guess or collide with.
+ *
+ * `.staging-${pid}` is neither: two backups in one process reuse it, and any
+ * local account knows the name before it exists. The random half makes the
+ * name unpredictable, and the caller opens it 0600.
+ */
+function scratchPath(dir, prefix) {
+  return path.join(dir, `${prefix}-${process.pid}-${crypto.randomBytes(6).toString('hex')}`);
 }
 
 /* ------------------------------------------------------------ encryption */
@@ -119,9 +134,9 @@ async function ensureDir() {
 async function encryptFile(plainPath, encPath, secret) {
   const key = deriveKey(secret);
   const iv = crypto.randomBytes(IV_LENGTH);
-  const tmp = `${encPath}.tmp-${process.pid}`;
+  const tmp = scratchPath(path.dirname(encPath), '.enc');
 
-  await fsp.writeFile(tmp, iv);
+  await fsp.writeFile(tmp, iv, { mode: 0o600 });
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   await pipeline(fs.createReadStream(plainPath), cipher, fs.createWriteStream(tmp, { flags: 'a' }));
   await fsp.appendFile(tmp, cipher.getAuthTag());
@@ -129,7 +144,12 @@ async function encryptFile(plainPath, encPath, secret) {
   // Read it back and authenticate before it is allowed to become a real
   // backup. An archive that cannot be decrypted is worse than no archive:
   // it is an archive you believe in.
-  await decryptToSink(tmp, key);
+  try {
+    await decryptToSink(tmp, key);
+  } catch (err) {
+    await fsp.rm(tmp, { force: true });
+    throw err;
+  }
   await fsp.rename(tmp, encPath);
 }
 
@@ -167,11 +187,21 @@ async function decryptFile(encPath, outPath, secret) {
     await handle.read(tag, 0, TAG_LENGTH, size - TAG_LENGTH);
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(tag);
-    await pipeline(
-      fs.createReadStream(encPath, { start: IV_LENGTH, end: size - TAG_LENGTH - 1 }),
-      decipher,
-      fs.createWriteStream(outPath)
-    );
+    try {
+      await pipeline(
+        fs.createReadStream(encPath, { start: IV_LENGTH, end: size - TAG_LENGTH - 1 }),
+        decipher,
+        // 0600: this is the decrypted copy of everything on the box, and it
+        // sits on disk for as long as the restore takes.
+        fs.createWriteStream(outPath, { mode: 0o600 })
+      );
+    } catch (err) {
+      // GCM only fails at the END, after the plaintext has been written. A
+      // failed authentication must not leave a readable copy behind of an
+      // archive we just decided not to trust.
+      await fsp.rm(outPath, { force: true });
+      throw err;
+    }
   } finally {
     await handle.close();
   }
@@ -233,7 +263,7 @@ async function create({ kind = 'config' } = {}) {
   await ensureDir();
   const name = `homebox-${kind}-${timestamp()}.tar.gz.enc`;
   const target = path.join(BACKUP_DIR, name);
-  const plain = path.join(BACKUP_DIR, `.staging-${process.pid}.tar.gz`);
+  const plain = scratchPath(BACKUP_DIR, '.staging') + '.tar.gz';
 
   try {
     // tar to a staging file rather than piping into the cipher: a tar that
@@ -242,7 +272,9 @@ async function create({ kind = 'config' } = {}) {
     const excludes = await rebuildableExcludes();
     await new Promise((resolve, reject) => {
       const child = spawn('tar', tarArgs(kind, excludes), { cwd: ROOT });
-      const out = fs.createWriteStream(plain);
+      // 0600 from the first byte: this is the whole box in the clear until
+      // the cipher has run over it.
+      const out = fs.createWriteStream(plain, { mode: 0o600 });
       let stderr = '';
       child.stderr.on('data', (c) => { stderr = (stderr + c).slice(-8000); });
       child.stdout.pipe(out);

@@ -288,6 +288,22 @@ cmd_install() {
   local id="$1"
   step "Installing $(meta "$id" 'm.title')"
 
+  # Same gate as `validate` and as the dashboard's install path, from the same
+  # file (dashboard/lib/policy.js). A module that does not declare its limits
+  # does not get started by any route.
+  local unhardened
+  unhardened="$(node -e '
+    const policy = require(process.argv[1] + "/dashboard/lib/policy.js");
+    const fs = require("fs");
+    const said = policy.describe(fs.readFileSync(process.argv[2], "utf8"));
+    if (said) console.log(said);
+  ' "$HB_ROOT" "$(module_file "$id")" 2>/dev/null)"
+  if [ -n "$unhardened" ]; then
+    die "$id does not declare what it may do: $unhardened
+Add security_opt: no-new-privileges:true and cap_drop: ALL to that service, or
+privileged: true with a reason. See docs/MODULE-SCHEMA.md"
+  fi
+
   # Declared secrets first, because setup.sh reads .env. install.sh sweeps
   # these when the BOX is built; a module that arrived in a later `git pull`
   # was never swept and would start on whatever default its compose file
@@ -621,33 +637,16 @@ cmd_validate() {
     # 26 modules of 63, not by decision but because nobody was counting. A
     # module added next year should fail here rather than quietly ship with
     # Docker's default capability set.
+    # ONE definition of the rule, shared with the dashboard and the generator
+    # (dashboard/lib/policy.js). Two copies of it is how the App Store ended up
+    # writing modules that this very command would have rejected.
     local unhardened
     unhardened="$(node -e '
+      const policy = require(process.argv[1] + "/dashboard/lib/policy.js");
       const fs = require("fs");
-      const text = fs.readFileSync(process.argv[1], "utf8");
-      const lines = text.split("\n");
-      const at = lines.findIndex((l) => /^services:\s*$/.test(l));
-      if (at < 0) { console.log("no services block"); process.exit(0); }
-      const starts = [];
-      for (let i = at + 1; i < lines.length; i += 1) {
-        if (/^\S/.test(lines[i]) && lines[i].trim() !== "") break;
-        if (/^ {2}[A-Za-z0-9_.-]+:\s*$/.test(lines[i])) starts.push(i);
-      }
-      const missing = [];
-      starts.forEach((start, n) => {
-        const end = (starts[n + 1] ?? lines.length);
-        const body = lines.slice(start, end);
-        const name = lines[start].trim().replace(/:$/, "");
-        const has = (re) => body.some((l) => re.test(l));
-        const gaps = [];
-        if (!has(/^ {4}security_opt:/)) gaps.push("security_opt");
-        // privileged: true is its own declaration — a module that needs the
-        // host says so out loud instead of pretending to drop capabilities.
-        if (!has(/^ {4}cap_drop:/) && !has(/^ {4}privileged:\s*true/)) gaps.push("cap_drop");
-        if (gaps.length) missing.push(name + " (" + gaps.join(", ") + ")");
-      });
-      if (missing.length) console.log(missing.join("; "));
-    ' "$file" 2>/dev/null)"
+      const said = policy.describe(fs.readFileSync(process.argv[2], "utf8"));
+      if (said) console.log(said);
+    ' "$HB_ROOT" "$file" 2>/dev/null)"
     if [ -n "$unhardened" ]; then
       printf '%sx %-14s not hardened: %s%s\n' "$RED" "$id" "$unhardened" "$RESET"; failed=1; continue
     fi

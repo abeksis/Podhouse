@@ -75,3 +75,12 @@ App icons in `dashboard/public/icons` come from [homarr-labs/dashboard-icons](ht
 | VPN | `ghcr.io/wg-easy/wg-easy` |
 | Wizarr | `ghcr.io/wizarrrr/wizarr` |
 | WordPress | `wordpress`, `mariadb` |
+
+## Security review
+
+**Adam Twilley** reviewed Podhouse in September 2026 and reported the findings
+fixed in 0.10.0: the crash on a malformed Host header, plaintext rollback
+archives, the auth write race, the cookie shared across ports, downloaded SVG
+served from the dashboard origin, a spoofable login throttle, generated modules
+that skipped the hardening rule, and a freeze check that failed open. He asked
+for no credit, which is the usual sign that somebody deserves it.
