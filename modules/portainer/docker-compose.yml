@@ -1,0 +1,86 @@
+# Portainer — a Podhouse module
+#
+# A full Docker management UI. It used to be part of `core`, which meant every
+# box ran it whether or not anyone opened it — and it holds a read-write
+# Docker socket, which is root on this box. It is now something you choose.
+# Boxes that already had it keep it; see modules/core/docker-compose.yml.
+
+x-homebox:
+  id: portainer
+  added_at: "2026-09-17"
+  title: "Portainer"
+  tagline: "Docker itself, with a UI"
+  description: "The general-purpose Docker interface: every container, image, network and volume on the box, including the ones Podhouse did not create. Useful when something is wrong at a level below the app, and unnecessary for everyday use — Podhouse already shows logs, restarts apps and applies updates on its own."
+  icon: "portainer.svg"
+  category: "system"
+  required: false
+  default: false
+  ram: "~120MB"
+  theme:
+    emoji: "🐳"
+    color: "#13bef9"
+    bg: "rgba(19,190,249,0.12)"
+  tips:
+    - "It holds a read-write Docker socket, which is the same as root on this box — keep it on the LAN and never put it behind a public hostname"
+    - "The admin account is created at first start from a generated password: `homebox secrets portainer` prints it"
+    - "You do not need this for logs, restarts or updates — the Podhouse dashboard does all three"
+  env_vars:
+    PORTAINER_ADMIN_PASSWORD:
+      label: "Admin password"
+      type: "secret"
+      config_editable: false
+  services:
+    portainer:
+      friendly_name: "Portainer"
+      color: "#13bef9"
+      description: "Full Docker management UI"
+      icon: "portainer.svg"
+      port_map: 9000
+      url_scheme: "http"
+      first_login: "Portainer's admin account, seeded from .env at first start."
+
+services:
+  portainer:
+    image: portainer/portainer-ce:2.45.0
+    # Seeding the admin password from a file means the setup screen is never
+    # left open for whoever reaches the box first.
+    command: ["--admin-password-file", "/run/secrets/portainer_admin_password"]
+    container_name: portainer
+    ports:
+      - "${PORTAINER_PORT:-9000}:9000"
+    environment:
+      - TZ=${TZ:-UTC}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HB_ROOT:-/opt/podhouse}/modules/portainer/config/portainer:/data
+      - ${HB_ROOT:-/opt/podhouse}/modules/portainer/config/portainer-admin-password:/run/secrets/portainer_admin_password:ro
+    networks:
+      - homebox_proxy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.50'
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # DAC_OVERRIDE: this container runs as root inside, and the files it
+      # reads and writes under /opt/podhouse belong to the BOX's user. Root
+      # does not ignore file modes on its own, so without this the app
+      # cannot open its own database or config on any box installed the
+      # normal way.
+      - DAC_OVERRIDE
+    # No healthcheck: the image is distroless, with no shell and no HTTP
+    # client to run a probe with.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: always
+
+networks:
+  homebox_proxy:
+    external: true

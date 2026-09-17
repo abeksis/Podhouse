@@ -1,15 +1,17 @@
 # Core — a Podhouse module
 #
-# Nginx Proxy Manager + Portainer.
-# Always active — the reverse proxy that routes your domain to the right
-# service, and the container manager you reach for when something is wrong.
+# Nginx Proxy Manager: the reverse proxy that routes your domain to the right
+# service. Always active.
+#
+# Portainer used to be here too and is now its own module — see the comment
+# above its (legacy, profiled) definition below.
 
 x-homebox:
   id: core
   added_at: "2026-09-05"
   title: "Core Infrastructure"
   tagline: "What every other app stands on"
-  description: "A reverse proxy that routes a domain to the right app and gets free SSL certificates for it, plus a container manager for when you need to look under the hood. Every other module assumes these are here."
+  description: "A reverse proxy that routes a domain to the right app and gets free SSL certificates for it. Every other module assumes it is here."
   icon: "nginx-proxy-manager.svg"
   category: "system"
   required: true
@@ -22,7 +24,7 @@ x-homebox:
   tips:
     - "Nginx Proxy Manager's own admin UI is on port 81. That port is how someone takes over your proxy — do not expose it beyond the LAN"
     - "The NPM admin account is seeded at first boot from the generated password; `homebox secrets core` prints it"
-    - "Portainer holds a read-write Docker socket, which is effectively root on this box. Same rule: LAN only"
+    - "Portainer used to live here and is now its own app in the store — a box that already had it keeps it, and it still holds a read-write Docker socket, so: LAN only"
   env_vars:
     NPM_ADMIN_PASSWORD:
       label: "Proxy manager admin password"
@@ -103,7 +105,21 @@ services:
         max-file: "3"
     restart: always
 
+  # LEGACY, and left here on purpose.
+  #
+  # Portainer was part of core until 0.9.0, so every box installed before then
+  # is running this container. It is a second read-write Docker socket on the
+  # box — root, in effect — and most people never open it, so new boxes do not
+  # get it: it is a module of its own in the store now (modules/portainer).
+  #
+  # The profile is what makes both true at once. Compose does not start a
+  # service in a profile that is not asked for, and it does not treat the
+  # container of one as an orphan either — so a box that has Portainer keeps it
+  # running across every update, and a box that does not, never creates it.
+  # Removing these lines instead would DELETE a working Portainer, with its
+  # settings, on the next `compose up --remove-orphans`.
   portainer:
+    profiles: ["legacy"]
     image: portainer/portainer-ce:2.45.0
     # Seeding the admin password from a file means the setup screen is never
     # left open for whoever reaches the box first.

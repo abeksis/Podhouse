@@ -13,7 +13,7 @@ and for the dashboard as it is built today that answer would be theatre.
 | Container | Mount | What it does with it |
 |---|---|---|
 | `dashboard` | read-write | creates, starts, stops and deletes containers; builds and pulls images; creates networks |
-| `portainer` | read-write | everything, by design — it is a general Docker UI |
+| `portainer` | read-write | everything, by design — it is a general Docker UI. Not installed on a new box since 0.9.0 |
 | `beszel-agent` | proxied, read-only | lists containers and reads their stats, so the graphs have names |
 
 A `:ro` mount on the socket means nothing: the flag applies to the file, and
@@ -63,10 +63,12 @@ and stats and nothing else, so it now talks to a `docker-socket-proxy` with
 `CONTAINERS=1` and every write method refused, instead of holding the socket.
 Done; see `modules/metrics/docker-compose.yml`.
 
-**2. Make Portainer a choice rather than a default.** It is a second
-unrestricted key on every box, installed as part of `core`, and most people
-never open it. Either it becomes optional, or it gets the same proxy with
-writes off and becomes a viewer.
+**2. Make Portainer a choice rather than a default.** Done in 0.9.0: it is an
+app in the store (`modules/portainer`) instead of half of `core`, so a new box
+has one holder of the socket rather than two. A box that already ran it keeps
+it running and keeps its settings — the old definition stays in `core` behind
+a Compose profile, which is what stops `up --remove-orphans` from deleting a
+container that is no longer being asked for.
 
 **3. Split the dashboard.** The only real fix: the web process holds no socket
 and talks to a small privileged worker over a unix socket of our own, whose
