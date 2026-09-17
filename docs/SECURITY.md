@@ -45,6 +45,9 @@ Whoever reaches it can point any hostname at anything, including a service
 that was never meant to be public. Treat 80 and 443 as the public surface and
 81 as strictly internal.
 
+An outside review of this project, and what was done about each of its
+findings, is in docs/SECURITY-REVIEW.md.
+
 ## Two halves of a session
 
 The session cookie is host-only, and cookies do not know about ports: the apps
