@@ -44,6 +44,10 @@ x-homebox:
       icon: "beszel.svg"
       # Listens on the host at 45876 for the hub, and has no page of its own.
       internal: true
+    metrics-socket:
+      friendly_name: "Docker filter"
+      description: "Answers the agent's read-only questions about containers"
+      internal: true
 
 services:
   beszel:
@@ -93,9 +97,13 @@ services:
       - TZ=${TZ:-UTC}
       - LISTEN=45876
       - KEY=${BESZEL_AGENT_KEY:-}
-    volumes:
-      # Read-only, and only so the agent can name the containers it reports.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Not the socket itself. The agent only ever lists containers and reads
+      # their stats, and a `:ro` mount on a socket restricts nothing — the
+      # flag applies to the file, and every write goes through the API behind
+      # it. This points it at a proxy that answers GETs about containers and
+      # refuses everything else, so the graphs keep their names and this
+      # container can no longer create anything. See docs/DOCKER-SOCKET.md.
+      - DOCKER_HOST=tcp://127.0.0.1:2377
     deploy:
       resources:
         limits:
@@ -112,6 +120,56 @@ services:
       # cannot open its own database or config on any box installed the
       # normal way.
       - DAC_OVERRIDE
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: always
+
+  # A filter in front of the Docker socket, for the agent above.
+  #
+  # It answers /containers GETs and refuses every other path and every write
+  # method, so the worst a compromised agent can do with it is read the names
+  # and stats it was already reading. Published on loopback only, because the
+  # agent runs with host networking and cannot reach a bridge network.
+  metrics-socket:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: metrics-socket
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # The proxy is haproxy: it drops to its own user and binds inside the
+      # container, and it cannot do either without these.
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    environment:
+      - CONTAINERS=1
+      # Everything else stays off, including POST: this proxy can only read.
+      - POST=0
+      - IMAGES=0
+      - NETWORKS=0
+      - VOLUMES=0
+      - EXEC=0
+      - INFO=0
+      - SERVICES=0
+      - TASKS=0
+      - SWARM=0
+      - SYSTEM=0
+    ports:
+      - "127.0.0.1:2377:2375"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.25'
     logging:
       driver: json-file
       options:

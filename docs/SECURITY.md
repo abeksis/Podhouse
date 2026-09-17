@@ -35,6 +35,11 @@ authentication** — it only makes the same unauthenticated page easier to find.
 Portainer holds the same socket with the same consequences, and it is part of
 `core`, so it is always there.
 
+**docs/DOCKER-SOCKET.md** lists every Docker call this dashboard makes, who
+else on the box holds the socket, and what a filtered proxy can and cannot fix
+— including why putting one in front of the dashboard as it is built today
+would be decoration rather than a mitigation.
+
 **Nginx Proxy Manager's admin UI on port 81 is the third key to this box.**
 Whoever reaches it can point any hostname at anything, including a service
 that was never meant to be public. Treat 80 and 443 as the public surface and
