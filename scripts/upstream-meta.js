@@ -153,6 +153,8 @@ function flatten(md) {
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')            // images
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')          // links -> their text
     .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')         // reference links
+    .replace(/\[([^\]]+)\](?!\()/g, '$1')             // [shortcut] reference links
+    .replace(/\\([*_`#[\]])/g, '$1')                  // markdown escapes: \*arr
     .replace(/[*_`~]{1,3}([^*_`~]+)[*_`~]{1,3}/g, '$1')
     .replace(/:[a-z0-9_+-]+:/g, '')                  // :emoji: codes
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')

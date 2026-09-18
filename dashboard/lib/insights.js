@@ -130,8 +130,18 @@ async function isRunning(serviceName, containers) {
  * install the app and the card starts working.
  */
 async function arrApiKey(serviceName) {
-  const file = path.join(state.ROOT, 'modules', 'media', 'config', serviceName, 'config.xml');
-  const xml = await fsp.readFile(file, 'utf8');
+  // Its own module since 0.10.9 (modules/radarr/config/radarr); inside the
+  // old Media Stack on a box that still runs that.
+  const candidates = [
+    path.join(state.ROOT, 'modules', serviceName, 'config', serviceName, 'config.xml'),
+    path.join(state.ROOT, 'modules', 'media', 'config', serviceName, 'config.xml'),
+  ];
+  let xml = null;
+  for (const file of candidates) {
+    xml = await fsp.readFile(file, 'utf8').catch(() => null);
+    if (xml) break;
+  }
+  if (!xml) throw new Error(`${serviceName} has not written its config yet`);
   const match = /<ApiKey>([a-f0-9]+)<\/ApiKey>/i.exec(xml);
   if (!match) throw new Error(`${serviceName} has not written an API key yet`);
   return match[1];

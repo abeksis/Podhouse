@@ -8,6 +8,7 @@
   "authelia": "authelia/authelia",
   "automation": "n8n-io/n8n",
   "backup": "duplicati/duplicati",
+  "bazarr": "morpheus65535/bazarr",
   "bedrock": null,
   "bookmarks": "sissbruecker/linkding",
   "bookstack": "BookStackApp/BookStack",
@@ -31,6 +32,10 @@
   "files": {
     "repo": "gtsteffaniak/filebrowser",
     "description": "FileBrowser Quantum provides an easy way to access and manage your files from the web. It has a modern responsive interface that has many advanced features to manage users, access, sharing, and file preview and editing."
+  },
+  "flaresolverr": {
+    "repo": "FlareSolverr/FlareSolverr",
+    "sentences": 2
   },
   "freshrss": "FreshRSS/FreshRSS",
   "frigate": "blakeblackshear/frigate",
@@ -79,11 +84,18 @@
   "pinchflat": "kieraneglin/pinchflat",
   "plex": null,
   "portainer": "portainer/portainer",
+  "prowlarr": "Prowlarr/Prowlarr",
+  "qbittorrent": "qbittorrent/qBittorrent",
+  "radarr": {
+    "repo": "Radarr/Radarr",
+    "sentences": 3
+  },
   "searxng": {
     "repo": "searxng/searxng",
     "sentences": 2
   },
   "shelfarr": "pedro-revez-silva/shelfarr",
+  "sonarr": "Sonarr/Sonarr",
   "speedtest": "alexjustesen/speedtest-tracker",
   "stablediffusion": {
     "repo": "AUTOMATIC1111/stable-diffusion-webui",

@@ -89,6 +89,31 @@ function backupExcludes(backup) {
   return [...new Set(out)];
 }
 
+const ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const idList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && ID_RE.test(x)) : []);
+
+/**
+ * Why this module may not be installed right now, or null.
+ *
+ * `modules` must carry `installed` (withContainers). Two cases, both from the
+ * Media Stack becoming six modules: the old all-in-one is not offered to a box
+ * that does not already run it, and none of the six can be added beside it,
+ * since they would claim the same container names.
+ */
+function installBlocker(mod, modules) {
+  const byId = new Map(modules.map((m) => [m.id, m]));
+  const isOn = (id) => !!(byId.get(id) && byId.get(id).installed);
+  if (mod.replaced_by.length && !isOn(mod.id)) {
+    const names = mod.replaced_by.map((id) => (byId.get(id) || {}).title || id).join(', ');
+    return `${mod.title} is now separate apps: ${names}. Install those instead.`;
+  }
+  const clash = mod.conflicts.find(isOn);
+  if (clash) {
+    return `${mod.title} already runs on this box as part of ${byId.get(clash).title}.`;
+  }
+  return null;
+}
+
 function normalize(id, meta, dir) {
   const m = meta && typeof meta === 'object' ? meta : {};
   const services = Object.entries(m.services || {}).map(([name, svc]) => normalizeService(name, svc));
@@ -105,6 +130,11 @@ function normalize(id, meta, dir) {
     docs: typeof m.docs === 'string' && /^https:\/\/[^\s"'<>]+$/.test(m.docs) ? m.docs : null,
     // An SPDX id such as MIT or AGPL-3.0, shown as text.
     license: typeof m.license === 'string' && /^[A-Za-z0-9.+-]{1,32}$/.test(m.license) ? m.license : null,
+    // Modules that cannot run beside this one (the same container names), the
+    // modules that took over from this one, and the set it is shown in.
+    conflicts: idList(m.conflicts),
+    replaced_by: idList(m.replaced_by),
+    collection: typeof m.collection === 'string' && ID_RE.test(m.collection) ? m.collection : null,
     icon: m.icon || null,
     category,
     required: m.required === true,
@@ -258,4 +288,4 @@ function enabledIds(modules) {
   return new Set(modules.filter((m) => m.default || m.required).map((m) => m.id));
 }
 
-module.exports = { loadAll, withContainers, enabledIds, CATEGORIES, MODULES_DIR, backupExcludes };
+module.exports = { loadAll, withContainers, enabledIds, installBlocker, CATEGORIES, MODULES_DIR, backupExcludes };

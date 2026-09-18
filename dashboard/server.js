@@ -599,7 +599,9 @@ async function apiSummary() {
     // What is waiting for you, in the order it matters.
     needs: await needsAttention({ metrics, backups, health }),
     counts: {
-      modules: modules.length,
+      // What this box can be offered: an app replaced by others only counts
+      // where it still runs.
+      modules: withState.filter((m) => !(m.replaced_by.length && !m.installed)).length,
       installed: withState.filter((m) => m.installed).length,
       // Same exclusion as the verdict: a stopped update helper counted here
       // reads as "20 running of 21" on a box where everything is running.
@@ -741,6 +743,14 @@ async function runAction(id, action, onLine = null) {
   }
   if (inFlight.has(id)) {
     return { status: 409, body: { error: `${mod.title} is already busy` } };
+  }
+  // The old Media Stack and its six successors claim the same container
+  // names; neither may be installed beside the other. See lib/modules.js.
+  if (action === 'install') {
+    const containers = await docker.listContainers().catch(() => []);
+    const live = modulesLib.withContainers(modules, containers, HOST_ADDRESS).modules;
+    const blocked = modulesLib.installBlocker(live.find((m) => m.id === id), live);
+    if (blocked) return { status: 409, body: { error: blocked } };
   }
 
   inFlight.add(id);

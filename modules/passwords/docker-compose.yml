@@ -8,7 +8,7 @@ x-homebox:
   title: "Password Vault"
   # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
   tagline: "Unofficial Bitwarden compatible server written in Rust, formerly known as bitwarden_rs"
-  description: "An alternative server implementation of the Bitwarden Client API, written in Rust and compatible with official Bitwarden clients [disclaimer], perfect for self-hosted deployment where running the official resource-heavy service might not be ideal."
+  description: "An alternative server implementation of the Bitwarden Client API, written in Rust and compatible with official Bitwarden clients disclaimer, perfect for self-hosted deployment where running the official resource-heavy service might not be ideal."
   source: "https://github.com/dani-garcia/vaultwarden"
   license: "AGPL-3.0"
   icon: "vaultwarden.svg"

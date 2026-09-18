@@ -906,7 +906,7 @@ function renderStoreStats() {
   const percent = total ? Math.min(100, Math.round((estimate / total) * 100)) : 0;
 
   $('#store-summary').textContent =
-    `${installed.length} of ${state.modules.length} installed · together they ask for about ${bytes(estimate)}`;
+    `${installed.length} of ${state.modules.filter(offered).length} installed · together they ask for about ${bytes(estimate)}`;
   renderMemoryPlan(installed, estimate, total, percent);
 }
 
@@ -963,6 +963,50 @@ const SORTS = {
 };
 
 /** The card's one button, in whichever state the module is actually in. */
+/**
+ * The Media Stack became six modules in 0.10.9. A box that already runs it
+ * keeps it, and the six cannot go in beside it (same container names); a box
+ * that does not is not offered the old one at all. Same rule as the server's
+ * installBlocker() in lib/modules.js, which is the one that actually refuses.
+ */
+function offered(m) {
+  return !(m.replaced_by && m.replaced_by.length && !m.installed);
+}
+
+/** The installed module this one cannot run beside, or null. */
+function blockedBy(m) {
+  if (m.installed || !m.conflicts || !m.conflicts.length) return null;
+  return state.modules.find((o) => m.conflicts.includes(o.id) && o.installed) || null;
+}
+
+/**
+ * A set of apps meant to work together, shown above their cards with one
+ * button that queues all of them. Its title and text are the old all-in-one
+ * module's, which is exactly what the set is.
+ */
+function renderSets(list) {
+  const box = $('#catalog-sets');
+  if (!box) return;
+  const ids = [...new Set(list.map((m) => m.collection).filter(Boolean))];
+  box.innerHTML = ids.map((set) => {
+    const members = state.modules.filter((m) => m.collection === set && offered(m));
+    if (members.some(blockedBy)) return '';          // the old stack runs here
+    const about = state.modules.find((m) => m.id === set) || {};
+    const missing = members.filter((m) => !m.installed && !state.pending.get(m.id));
+    const button = missing.length
+      ? `<button type="button" class="button is-primary is-small" data-queue-set="${escapeHtml(set)}">Add ${missing.length === members.length ? `all ${members.length}` : `the other ${missing.length}`}</button>`
+      : '<span class="status-text">All in place</span>';
+    return `<section class="set-card">
+      <div class="set-text">
+        <h3>${escapeHtml(about.title || set)}</h3>
+        <p>${escapeHtml(about.description || '')}</p>
+        <p class="set-members">${members.map((m) => `<span class="${m.installed ? 'is-on' : ''}">${escapeHtml(m.title)}</span>`).join('')}</p>
+      </div>
+      ${button}
+    </section>`;
+  }).join('');
+}
+
 function appActionButton(mod) {
   const id = escapeHtml(mod.id);
   if (state.busy.has(mod.id)) {
@@ -970,6 +1014,10 @@ function appActionButton(mod) {
   }
   if (mod.required) {
     return '<span class="module-toggle is-locked" title="The rest of Podhouse depends on it">Base system</span>';
+  }
+  const holder = blockedBy(mod);
+  if (holder) {
+    return `<span class="module-toggle is-locked" title="Already running on this box as part of ${escapeHtml(holder.title)}">In ${escapeHtml(holder.title)}</span>`;
   }
   // Chosen but not applied yet. Clicking again takes the choice back.
   if (state.pending.has(mod.id)) {
@@ -1066,10 +1114,12 @@ window.addEventListener('resize', () => fitTaglines($('#catalog-grid')));
 function renderApps() {
   const query = state.appQuery.trim().toLowerCase();
   const list = state.modules
+    .filter(offered)
     .filter((m) => state.category === 'all' || m.category === state.category)
     .filter((m) => matchesQuery(m, query))
     .sort(SORTS[state.appSort] || SORTS.name);
 
+  renderSets(query ? [] : list);
   $('#catalog-grid').innerHTML = list.map((m) => {
     const art = iconArt(m.icon || (m.theme && m.theme.emoji), monogram(m.title, m.theme && m.theme.color));
     const queued = state.pending.has(m.id)
@@ -4346,6 +4396,16 @@ function queueChange(id) {
   renderApplyBar();
 }
 
+/** Queue every member of a set that is not on the box yet — "Add all six". */
+function queueCollection(collection) {
+  for (const m of state.modules) {
+    if (m.collection !== collection || m.installed || state.busy.has(m.id) || blockedBy(m)) continue;
+    state.pending.set(m.id, true);
+  }
+  renderApps();
+  renderApplyBar();
+}
+
 function cancelPending() {
   state.pending.clear();
   renderApps();
@@ -4505,6 +4565,12 @@ document.addEventListener('click', async (event) => {
   if (queueBtn) {
     event.preventDefault();
     queueChange(queueBtn.dataset.queue);
+    return;
+  }
+  const setBtn = event.target.closest('[data-queue-set]');
+  if (setBtn) {
+    event.preventDefault();
+    queueCollection(setBtn.dataset.queueSet);
     return;
   }
   if (event.target.closest('#sign-out')) { signOut(); return; }

@@ -39,6 +39,13 @@ elif sudo -n docker version >/dev/null 2>&1; then
   DOCKER=(sudo -n docker)
 fi
 have_docker() { [ "${#DOCKER[@]}" -gt 0 ]; }
+
+# Does this module have any container at all, running or not? Installed means
+# its compose project exists, the same test the dashboard uses.
+module_has_containers() {
+  have_docker || return 1
+  [ -n "$("${DOCKER[@]}" ps -aq --filter "label=com.docker.compose.project=homebox-$1" 2>/dev/null)" ]
+}
 dk() { have_docker || die "docker is not reachable from this account"; "${DOCKER[@]}" "$@"; }
 
 module_ids() {
@@ -179,6 +186,10 @@ cmd_list() {
     ram="$(meta "$id" 'm.ram || "-"')"
     total="$(module_total_count "$id")"
     up="$(module_running_count "$id")"
+    # A module other modules replaced is only listed where it still runs.
+    if [ "${total:-0}" -eq 0 ] && [ -n "$(meta "$id" '(m.replaced_by || []).join(" ")')" ]; then
+      continue
+    fi
     if [ "${total:-0}" -eq 0 ]; then
       state="not installed"; colour="$DIM"
     elif [ "$up" -eq "$total" ]; then
@@ -286,6 +297,21 @@ run_setup() {
 cmd_install() {
   require_module "${1:-}"
   local id="$1"
+
+  # The old Media Stack and the six modules it became share container names,
+  # so neither goes in beside the other — the rule installBlocker() in
+  # dashboard/lib/modules.js applies on the dashboard's side.
+  local replaced clash
+  replaced="$(meta "$id" '(m.replaced_by || []).join(" ")')"
+  if [ -n "$replaced" ] && ! module_has_containers "$id"; then
+    die "$(meta "$id" 'm.title') is now separate apps: $replaced. Install those instead."
+  fi
+  for clash in $(meta "$id" '(m.conflicts || []).join(" ")'); do
+    if module_has_containers "$clash"; then
+      die "$(meta "$id" 'm.title') already runs on this box as part of $(meta "$clash" 'm.title')."
+    fi
+  done
+
   step "Installing $(meta "$id" 'm.title')"
 
   # Same gate as `validate` and as the dashboard's install path, from the same

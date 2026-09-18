@@ -1,0 +1,81 @@
+# FlareSolverr — a Podhouse module
+#
+# FlareSolverr — gets indexers past Cloudflare challenges, for Prowlarr.
+#
+# Until 0.10.9 this app came only inside the Media Stack (modules/media). It is
+# its own module now so it can be installed, updated and removed by itself;
+# "Add the whole set" on the Apps page still installs all six in one go. A box
+# that already runs the Media Stack keeps it — see `conflicts` below.
+
+x-homebox:
+  id: flaresolverr
+  added_at: "2026-09-18"
+  title: "FlareSolverr"
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Proxy server to bypass Cloudflare protection"
+  description: "FlareSolverr is a proxy server to bypass Cloudflare and DDoS-GUARD protection. FlareSolverr starts a proxy server, and it waits for user requests in an idle state using few resources."
+  source: "https://github.com/FlareSolverr/FlareSolverr"
+  license: "MIT"
+  icon: "flaresolverr.svg"
+  category: "media"
+  required: false
+  default: false
+  # Measured on a running box (192.168.1.77, 2026-09-18), idle.
+  ram: "~330MB"
+  # Shown together as one set on the Apps page, with a button that queues all six.
+  collection: "media"
+  # The same containers under the old all-in-one module. Two copies of the
+  # same container name cannot exist, so this one is not offered while that runs.
+  conflicts:
+    - media
+  theme:
+    emoji: "🛡️"
+    color: "#6c7a89"
+    bg: "#6c7a891f"
+  tips:
+    - "It has no page of its own. In Prowlarr, add it under Settings > Indexers as a FlareSolverr proxy at http://flaresolverr:8191."
+  services:
+    flaresolverr:
+      friendly_name: "FlareSolverr"
+      description: "Solves Cloudflare challenges for indexers"
+      icon: "flaresolverr.svg"
+      internal: true
+      tip: "No UI worth opening — point Prowlarr at http://flaresolverr:8191"
+
+services:
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.0
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Starts as root, takes ownership of its data directory and drops to its
+      # own user. Without these five it either dies on chown or stays root.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    container_name: flaresolverr
+    environment:
+      - TZ=${TZ:-UTC}
+      - LOG_LEVEL=info
+    networks:
+      - homebox_proxy
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '1.00'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: always
+
+networks:
+  homebox_proxy:
+    external: true
