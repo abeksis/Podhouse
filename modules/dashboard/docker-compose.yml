@@ -63,6 +63,9 @@ services:
       # Set HB_ANONYMOUS_STATS=off in .env to check for updates straight from
       # GitHub and not be counted among running boxes (lib/platform.js).
       - HB_ANONYMOUS_STATS=${HB_ANONYMOUS_STATS:-on}
+      # Backups copied to HB_BACKUP_COPY_DIR go through a helper container
+      # from in here; the CLI on the host copies directly. See lib/backup.js.
+      - HB_BACKUP_COPY_VIA=container
     volumes:
       # Same path inside and out: `docker compose -f /opt/podhouse/modules/...`
       # run from in here produces bind mounts the host daemon can resolve.
@@ -90,15 +93,11 @@ services:
       # this mount is not broken. HB_ROOT always holds the source here; the
       # dashboard is built from it.
       - ${HB_ROOT:-/opt/podhouse}/dashboard/public:/app/public:ro
-      # Where every backup archive is copied after it is verified — normally a
-      # NAS share mounted on the host (lib/backup.js, "the copy off the box").
-      # Same path inside and out, like HB_ROOT above, so the value in .env
-      # means the same thing to the CLI on the host and to this container.
-      #
-      # Unset, it falls back to the local backups directory, which is already
-      # inside the tree mounted above: binding it again changes nothing, and
-      # lib/backup.js does not attempt a copy at all when the key is empty.
-      - ${HB_BACKUP_COPY_DIR:-${HB_ROOT:-/opt/podhouse}/backups}:${HB_BACKUP_COPY_DIR:-${HB_ROOT:-/opt/podhouse}/backups}
+      # NOT mounted here: HB_BACKUP_COPY_DIR, the NAS folder backups are copied
+      # to. 0.10.6 bound it, which made this container's start depend on the
+      # NAS — an automounted share still booting after a power cut could keep
+      # the dashboard down. The copy now runs in a throwaway container started
+      # for that one job (lib/compose.js, copyArchiveOut).
     networks:
       - homebox_proxy
     deploy:

@@ -407,14 +407,14 @@ async function backupInfo(modules, metrics) {
     running: !!center.running,
     count: center.count,
     latest: center.latest,
-    // A problem RIGHT NOW (the share is not mounted) outranks how the last
-    // attempt went: it is the one that decides whether tonight's copy works.
-    copy: center.copy
+    // How the last copy went. `ok` stays null until one has been attempted,
+    // so a folder set this minute is not reported as broken.
+    copy: center.copy && center.copy.configured
       ? {
-        configured: !!center.copy.configured,
-        dir: center.copy.dir || null,
-        ok: center.copy.configured ? !center.copy.problem && !center.copy.lastError : null,
-        problem: center.copy.problem || center.copy.lastError || null,
+        configured: true,
+        dir: center.copy.dir,
+        ok: center.copy.tried ? !center.copy.problem : null,
+        problem: center.copy.problem || null,
         count: center.copy.count || 0,
         lastOk: center.copy.lastOk || null,
       }

@@ -260,17 +260,17 @@ async function save(changes) {
     }
   }
 
-  // Where every archive gets copied. It becomes both halves of a bind mount on
-  // the dashboard, so a colon or a space would break the compose file of the
-  // one container that must always come back up — refused here, before it is
-  // written, rather than discovered when the page does not return.
+  // Where every archive gets copied. It is handed to `docker run --mount` for
+  // the copy, where commas separate options — so a comma, colon or space is
+  // refused here, when it is typed, rather than at two in the morning when the
+  // first scheduled copy fails on it.
   const copyDir = changes.HB_BACKUP_COPY_DIR;
   if (typeof copyDir === 'string' && copyDir !== '') {
     if (!copyDir.startsWith('/')) {
       throw new Error('HB_BACKUP_COPY_DIR needs a full path, e.g. /mnt/nas/podhouse-backups.');
     }
-    if (/[\s:]/.test(copyDir)) {
-      throw new Error('HB_BACKUP_COPY_DIR cannot contain spaces or colons: it becomes a mount on the dashboard.');
+    if (/[\s:,]/.test(copyDir)) {
+      throw new Error('HB_BACKUP_COPY_DIR cannot contain spaces, commas or colons.');
     }
     const root = state.ROOT.replace(/\/+$/, '');
     if (copyDir === root || copyDir.startsWith(`${root}/`)) {

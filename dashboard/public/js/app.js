@@ -689,7 +689,8 @@ function renderBackupCard(summary) {
   const copyFailing = copy.configured && copy.ok === false;
   if (copyFailing && level === 'good') level = 'warn';
   const where = !copy.configured ? 'this box only'
-    : copyFailing ? 'NAS copy failing' : 'on the NAS too';
+    : copyFailing ? 'NAS copy failing'
+      : copy.ok ? 'on the NAS too' : 'NAS copy on the next backup';
 
   card.dataset.level = level;
   $('#safety-answer').textContent = answer;
@@ -709,7 +710,8 @@ function renderBackupCard(summary) {
   const copyFact = !copy.configured
     ? 'only on this box\'s disk — a NAS folder can be set in Settings'
     : copyFailing ? `not reaching ${copy.dir}`
-      : `copied to ${copy.dir}${copy.lastOk ? ` ${ago(copy.lastOk)} ago` : ''}`;
+      : copy.ok ? `copied to ${copy.dir}${copy.lastOk ? ` ${ago(copy.lastOk)} ago` : ''}`
+        : `the next backup is also copied to ${copy.dir}`;
 
   const facts = [
     b.hasKey ? null : 'add HB_BACKUP_KEY to .env and restart the dashboard',
@@ -1483,14 +1485,16 @@ function renderBackups() {
   // whole Podhouse folder being deleted, which is how this line came to be.
   const copy = b.copy || {};
   const copyNote = $('#backup-copy-note');
-  copyNote.classList.toggle('is-warn', !!(copy.configured && (copy.problem || copy.lastError)));
+  copyNote.classList.toggle('is-warn', !!(copy.configured && copy.problem));
   if (!copy.configured) {
     copyNote.textContent = (b.sameDisk
       ? 'These archives are on the disk they protect. They cover a mistake, not a failed drive or a deleted folder. '
       : 'These archives are only on this box. ')
       + 'To keep a copy on a NAS, set "Also copy every archive to" under Configuration → Backup.';
-  } else if (copy.problem || copy.lastError) {
-    copyNote.textContent = `Copies are not reaching ${copy.dir}: ${copy.problem || copy.lastError}`;
+  } else if (copy.problem) {
+    copyNote.textContent = `Copies are not reaching ${copy.dir}: ${copy.problem}`;
+  } else if (!copy.tried) {
+    copyNote.textContent = `Archives will also be copied to ${copy.dir}. None has been yet — "Back up now" makes the first one and shows whether it worked.`;
   } else {
     copyNote.textContent = `Every archive is also copied to ${copy.dir} and checked there`
       + ` — ${copy.count} there now${copy.lastOk ? `, the last ${ago(copy.lastOk)} ago` : ''}.`;

@@ -349,6 +349,83 @@ async function selfRecreate(image) {
 }
 
 /**
+ * Copy one backup archive to the off-box folder, from a container that exists
+ * only for that copy.
+ *
+ * The dashboard does not mount that folder itself. It is usually a NAS share,
+ * often an automount, and a bind mount on the dashboard makes the dashboard's
+ * own start depend on it: a NAS still booting after a power cut would keep the
+ * page down. Here a NAS that is down costs one copy, which is recorded and
+ * shown, and nothing else.
+ *
+ * The helper runs this dashboard's own image (present — we are running it),
+ * with no network, no capabilities beyond reading files it does not own, the
+ * local backups read-only and the destination as the only writable path. It
+ * holds no Docker socket and is handed no key. `--mount` rather than `-v`: a
+ * missing source is an error, where `-v` would quietly create an empty
+ * directory on the local disk — the exact thing this is meant to avoid.
+ */
+const COPY_DIR_PATTERN = /^\/[^\s:,]*$/;
+const ARCHIVE_PATTERN = /^homebox-(config|full)-\d{8}_\d{6}\.tar\.gz\.enc$/;
+
+async function ownImage() {
+  const { stdout } = await run('docker', ['inspect', '--format', '{{.Config.Image}}', 'dashboard'], { timeout: 20000 });
+  return stdout.trim();
+}
+
+async function copyArchiveOut({ sourceDir, destDir, name, keep }) {
+  if (!COPY_DIR_PATTERN.test(String(sourceDir)) || !COPY_DIR_PATTERN.test(String(destDir))) {
+    throw new ComposeError('refusing a backup folder with spaces, commas or colons in it');
+  }
+  if (!ARCHIVE_PATTERN.test(String(name))) throw new ComposeError(`not a backup filename: ${name}`);
+  const image = await ownImage();
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.\-/:]{0,255}$/.test(image)) {
+    throw new ComposeError(`refusing to run a helper from a suspicious image: ${image}`);
+  }
+  let result;
+  try {
+    const { stdout } = await run('docker', [
+      'run', '--rm', '--network', 'none',
+      '--cap-drop', 'ALL', '--cap-add', 'DAC_OVERRIDE',
+      '--security-opt', 'no-new-privileges:true',
+      '--mount', `type=bind,src=${sourceDir},dst=/src,readonly`,
+      '--mount', `type=bind,src=${destDir},dst=/dst`,
+      '--entrypoint', 'node',
+      image, '/app/lib/archive-copy.js', name, String(Math.max(1, Number(keep) || 7)),
+    // A big archive over a slow share takes a while; a hung NFS server must
+    // still end, though, so the backup that is waiting on it can finish.
+    ], { timeout: 30 * 60000 });
+    result = stdout;
+  } catch (err) {
+    // The helper speaks JSON even when the copy fails; docker itself does not
+    // (a bind source that is missing is refused before anything runs).
+    result = err.stdout || '';
+    if (!result.trim()) {
+      // docker ends with "Run 'docker run --help'"; the reason is the line
+      // before it, so look through all of it rather than taking the last.
+      const said = (err.stderr || err.message || '').trim();
+      if (/bind source path does not exist|no such file or directory/i.test(said)) {
+        return { ok: false, error: `${destDir} does not exist. Is the NAS mounted?` };
+      }
+      const reason = said.split('\n').find((l) => /error/i.test(l)) || said.split('\n')[0];
+      return { ok: false, error: (reason || 'the copy could not be started').replace(/^docker:\s*/, '') };
+    }
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(result.trim().split('\n').pop());
+  } catch {
+    return { ok: false, error: 'the copy finished without saying whether it worked' };
+  }
+  // Inside the helper the folders are /src and /dst; nobody reading the page
+  // knows those names, so put the real ones back.
+  if (parsed && typeof parsed.error === 'string') {
+    parsed.error = parsed.error.replace(/\/dst\b/g, destDir).replace(/\/src\b/g, sourceDir);
+  }
+  return parsed;
+}
+
+/**
  * Per-container lifecycle, for the Running list's Logs / Restart / Pause
  * buttons. It goes through the docker CLI rather than the Engine API so that
  * every write on this box lands in one file — and through the same argv-only
@@ -380,7 +457,7 @@ async function available() {
 
 module.exports = {
   install, start, stop, restart, down, purge, update, pull, available, runSetup,
-  pullService, upService, stopService, restartService, retag, selfRecreate,
+  pullService, upService, stopService, restartService, retag, selfRecreate, copyArchiveOut,
   // The argv-only runner itself, for lib/storage.js — it drives `docker run`
   // rather than `docker compose`, and reimplementing the line buffering and
   // the timeout a second time is how the two drift apart.

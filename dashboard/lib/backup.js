@@ -27,6 +27,7 @@ const { pipeline } = require('stream/promises');
 
 const state = require('./state-store');
 const modulesLib = require('./modules');
+const { copyInto } = require('./archive-copy');
 
 const ALGORITHM = 'aes-256-gcm';
 const KEY_LENGTH = 32;
@@ -303,7 +304,7 @@ async function create({ kind = 'config' } = {}) {
     await prune();
     // After the local archive is final and verified, never instead of it: a
     // NAS that is down must not cost the box the backup it did manage.
-    const copy = await copyOffBox(name, secret);
+    const copy = await copyOffBox(name);
     return { name, size, kind, copy, seconds: Math.round((Date.now() - started) / 1000) };
   } finally {
     await fsp.rm(plain, { force: true });
@@ -391,41 +392,27 @@ async function prune() {
  * The archives above live inside the tree they protect, so a dead disk, or one
  * `rm -rf /opt/podhouse`, takes the backups along with everything else. That is
  * not a hypothetical; it is how this came to be written. When
- * HB_BACKUP_COPY_DIR names a directory — normally a NAS share mounted on the
- * host — every archive is copied there once it has been verified, and the copy
- * is verified again where it landed.
+ * HB_BACKUP_COPY_DIR names a folder — normally a NAS share mounted on the host
+ * — every archive is copied there once it has been verified, and compared byte
+ * for byte where it landed (lib/archive-copy.js).
  *
  * The local archive stays. Restoring from the same disk is fast and works while
  * the NAS is off; the copy is the one that survives the box.
+ *
+ * From the CLI on the host the folder is simply there. From the dashboard it is
+ * not, on purpose: the copy runs in a throwaway container (lib/compose.js,
+ * copyArchiveOut), so a NAS that is down at boot costs one copy instead of
+ * keeping the dashboard from starting.
  *
  * A failed copy does not fail the backup. It is recorded and shown instead,
  * because a share that stopped accepting copies three weeks ago is precisely
  * the thing nobody notices until the day it matters.
  */
 const COPY_STATE_FILE = 'backup-copy.json';
+const IN_CONTAINER = process.env.HB_BACKUP_COPY_VIA === 'container';
 
 function copyDir() {
   return readEnvValue('HB_BACKUP_COPY_DIR');
-}
-
-/** null when the destination can take a copy right now, otherwise why not. */
-async function copyProblem(dir) {
-  if (!path.isAbsolute(dir)) return `${dir} is not an absolute path`;
-  let st;
-  try {
-    st = await fsp.stat(dir);
-  } catch {
-    return `${dir} does not exist here. If it was just set, the dashboard needs recreating to see it — saving it in Settings does that.`;
-  }
-  if (!st.isDirectory()) return `${dir} is not a directory`;
-  // The trap this exists for: a share that is not mounted leaves an ordinary
-  // empty directory on the local disk at exactly the same path. Copies would
-  // land on the very disk they are meant to outlive, and look like they worked.
-  const home = await fsp.stat(ROOT);
-  if (st.dev === home.dev) {
-    return `${dir} is on this box's own disk. Is the NAS mounted? A share that mounted after the dashboard started is not seen until the dashboard is recreated.`;
-  }
-  return null;
 }
 
 async function readCopyState() {
@@ -442,70 +429,42 @@ async function noteCopy(result) {
   return result;
 }
 
-async function copyOffBox(name, secret) {
+async function copyOffBox(name) {
   const dir = copyDir();
   if (!dir) return null;
-
-  const problem = await copyProblem(dir);
-  if (problem) return noteCopy({ ok: false, dir, name, error: problem });
-
-  const src = path.join(BACKUP_DIR, name);
-  const tmp = scratchPath(dir, '.incoming');
-  try {
-    await pipeline(fs.createReadStream(src), fs.createWriteStream(tmp, { mode: 0o600 }));
-    // Read the copy back through the cipher, as the local one was. A copy
-    // nobody has decrypted is a copy nobody knows is whole — and a network
-    // share is exactly where a truncated write goes unreported.
-    await decryptToSink(tmp, deriveKey(secret));
-    await fsp.rename(tmp, path.join(dir, name));
-    await pruneCopies(dir);
-    return noteCopy({ ok: true, dir, name, error: null });
-  } catch (err) {
-    await fsp.rm(tmp, { force: true }).catch(() => {});
-    return noteCopy({ ok: false, dir, name, error: err.message });
+  const keep = (await getSchedule()).retention;
+  let result;
+  if (IN_CONTAINER) {
+    // Required lazily: the CLI loads this file on the host and never takes
+    // this branch.
+    const composeLib = require('./compose');
+    result = await composeLib.copyArchiveOut({ sourceDir: BACKUP_DIR, destDir: dir, name, keep })
+      .catch((err) => ({ ok: false, error: err.message }));
+  } else {
+    result = await copyInto({ srcDir: BACKUP_DIR, destDir: dir, name, keep })
+      .then((r) => ({ ok: true, ...r }))
+      .catch((err) => ({ ok: false, error: err.message }));
   }
+  return noteCopy({ ok: !!result.ok, dir, name, count: result.count || 0, error: result.ok ? null : result.error });
 }
 
 /**
- * The same retention as the local directory, and only ever on files named
- * like our own archives: this directory is somebody's NAS, and anything else
- * in it is theirs.
+ * What the page says about the copy. The last attempt, not a live look: the
+ * dashboard cannot see the folder by design, and starting a container on
+ * every page load to peek at a NAS would be its own problem.
  */
-async function pruneCopies(dir) {
-  const keep = (await getSchedule()).retention;
-  const mine = [];
-  for (const name of await fsp.readdir(dir)) {
-    if (!NAME_RE.test(name)) continue;
-    try {
-      mine.push({ name, created: (await fsp.stat(path.join(dir, name))).mtimeMs });
-    } catch {
-      /* vanished between readdir and stat */
-    }
-  }
-  mine.sort((a, b) => b.created - a.created);
-  for (const old of mine.slice(keep)) await fsp.rm(path.join(dir, old.name), { force: true });
-}
-
-/** What the page says about the copy: configured, working now, and the last attempt. */
 async function copyStatus() {
   const dir = copyDir();
   if (!dir) return { configured: false };
-  const [problem, last] = await Promise.all([copyProblem(dir), readCopyState()]);
-  let count = 0;
-  if (!problem) {
-    try {
-      count = (await fsp.readdir(dir)).filter((n) => NAME_RE.test(n)).length;
-    } catch {
-      /* counted as none */
-    }
-  }
+  const last = await readCopyState();
+  const current = last.dir === dir;
   return {
     configured: true,
     dir,
-    problem,
-    count,
-    lastOk: last.lastOk || null,
-    lastError: last.ok === false && last.dir === dir ? last.error : null,
+    tried: current && !!last.at,
+    problem: current && last.ok === false ? last.error : null,
+    count: current ? (last.count || 0) : 0,
+    lastOk: current ? (last.lastOk || null) : null,
   };
 }
 
