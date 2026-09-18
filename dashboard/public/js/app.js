@@ -905,35 +905,6 @@ function blockedBy(m) {
   return state.modules.find((o) => m.conflicts.includes(o.id) && o.installed) || null;
 }
 
-/**
- * A set of apps meant to work together, shown above their cards with one
- * button that queues all of them. Its title and text are the old all-in-one
- * module's, which is exactly what the set is.
- */
-function renderSets(list) {
-  const box = $('#catalog-sets');
-  if (!box) return;
-  const ids = [...new Set(list.map((m) => m.collection).filter(Boolean))];
-  box.innerHTML = ids.map((set) => {
-    const members = state.modules.filter((m) => m.collection === set && offered(m));
-    if (members.some(blockedBy)) return '';          // the old stack runs here
-    const about = state.modules.find((m) => m.id === set) || {};
-    const missing = members.filter((m) => !m.installed && !state.pending.get(m.id));
-    // The card exists to add what is missing. Once every member is on the box
-    // (or queued), it has nothing left to say that the cards below do not.
-    if (!missing.length) return '';
-    const button = `<button type="button" class="button is-primary is-small" data-queue-set="${escapeHtml(set)}">Add ${missing.length === members.length ? `all ${members.length}` : `the other ${missing.length}`}</button>`;
-    return `<section class="set-card">
-      <div class="set-text">
-        <h3>${escapeHtml(about.title || set)}</h3>
-        <p>${escapeHtml(about.description || '')}</p>
-        <p class="set-members">${members.map((m) => `<span class="${m.installed ? 'is-on' : ''}">${escapeHtml(m.title)}</span>`).join('')}</p>
-      </div>
-      ${button}
-    </section>`;
-  }).join('');
-}
-
 function appActionButton(mod) {
   const id = escapeHtml(mod.id);
   if (state.busy.has(mod.id)) {
@@ -1046,7 +1017,6 @@ function renderApps() {
     .filter((m) => matchesQuery(m, query))
     .sort(SORTS[state.appSort] || SORTS.name);
 
-  renderSets(query ? [] : list);
   $('#catalog-grid').innerHTML = list.map((m) => {
     const art = iconArt(m.icon || (m.theme && m.theme.emoji), monogram(m.title, m.theme && m.theme.color));
     const queued = state.pending.has(m.id)
@@ -4321,16 +4291,6 @@ function queueChange(id) {
   renderApplyBar();
 }
 
-/** Queue every member of a set that is not on the box yet — "Add all six". */
-function queueCollection(collection) {
-  for (const m of state.modules) {
-    if (m.collection !== collection || m.installed || state.busy.has(m.id) || blockedBy(m)) continue;
-    state.pending.set(m.id, true);
-  }
-  renderApps();
-  renderApplyBar();
-}
-
 function cancelPending() {
   state.pending.clear();
   renderApps();
@@ -4490,12 +4450,6 @@ document.addEventListener('click', async (event) => {
   if (queueBtn) {
     event.preventDefault();
     queueChange(queueBtn.dataset.queue);
-    return;
-  }
-  const setBtn = event.target.closest('[data-queue-set]');
-  if (setBtn) {
-    event.preventDefault();
-    queueCollection(setBtn.dataset.queueSet);
     return;
   }
   if (event.target.closest('#sign-out')) { signOut(); return; }

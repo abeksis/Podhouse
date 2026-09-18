@@ -3,9 +3,8 @@
 # Bazarr — subtitles for what Radarr and Sonarr bring in.
 #
 # Until 0.10.9 this app came only inside the Media Stack (modules/media). It is
-# its own module now so it can be installed, updated and removed by itself;
-# "Add the whole set" on the Apps page still installs all six in one go. A box
-# that already runs the Media Stack keeps it — see `conflicts` below.
+# its own module now, installed, updated and removed like any other app. A
+# box that already runs the Media Stack keeps it — see `conflicts` below.
 
 x-homebox:
   id: bazarr
@@ -23,8 +22,6 @@ x-homebox:
   default: false
   # Measured on a running box (192.168.1.77, 2026-09-18), idle.
   ram: "~260MB"
-  # Shown together as one set on the Apps page, with a button that queues all six.
-  collection: "media"
   # The same containers under the old all-in-one module. Two copies of the
   # same container name cannot exist, so this one is not offered while that runs.
   conflicts:

@@ -130,11 +130,10 @@ function normalize(id, meta, dir) {
     docs: typeof m.docs === 'string' && /^https:\/\/[^\s"'<>]+$/.test(m.docs) ? m.docs : null,
     // An SPDX id such as MIT or AGPL-3.0, shown as text.
     license: typeof m.license === 'string' && /^[A-Za-z0-9.+-]{1,32}$/.test(m.license) ? m.license : null,
-    // Modules that cannot run beside this one (the same container names), the
-    // modules that took over from this one, and the set it is shown in.
+    // Modules that cannot run beside this one (the same container names), and
+    // the modules that took over from this one.
     conflicts: idList(m.conflicts),
     replaced_by: idList(m.replaced_by),
-    collection: typeof m.collection === 'string' && ID_RE.test(m.collection) ? m.collection : null,
     icon: m.icon || null,
     category,
     required: m.required === true,

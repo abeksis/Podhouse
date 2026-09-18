@@ -15,8 +15,7 @@ x-homebox:
   ram: "~1.2GB"
   # Since 0.10.9 each of these is its own module. A box that already runs this
   # one keeps it exactly as it is — nothing is moved or recreated. A box that
-  # does not is never offered it: the Apps page lists the six instead, with a
-  # button that installs all of them.
+  # does not is never offered it: the Apps page lists the six instead.
   replaced_by:
     - radarr
     - sonarr
