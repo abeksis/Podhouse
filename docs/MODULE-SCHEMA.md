@@ -8,9 +8,16 @@ services it describes.
 x-homebox:
   id: monitoring            # required — must match the directory name
   title: "Monitoring"       # required — shown everywhere
-  tagline: "Know before your family tells you"   # required — one line
+  tagline: "A fancy self-hosted monitoring tool"   # required — one line
   category: "system"        # required — see the list below
   description: "…"          # a paragraph, shown on the app card
+  # For an app with one upstream project, the three lines above and the three
+  # below are the project's own: its GitHub "About", its README's opening
+  # paragraph, its homepage and licence. scripts/upstream-meta.js fills them
+  # from scripts/upstream.json; the card credits the project under the text.
+  source: "https://github.com/louislam/uptime-kuma"   # https only
+  docs: "https://uptime.kuma.pet"                     # how to use the app
+  license: "MIT"                                      # SPDX id, shown as text
   icon: "uptime-kuma.svg"   # file under dashboard/public/icons; falls back to
                             # a coloured monogram when missing
   added_at: "2026-09-05"
@@ -23,7 +30,8 @@ x-homebox:
     color: "#30d158"
     bg: "rgba(48,209,88,0.12)"
 
-  tips:                     # what you would tell someone who just installed it
+  tips:                     # only what Podhouse does differently, as steps —
+                            # how to use the app itself is the project's docs
     - "Use the box's LAN IP for other apps — localhost means this container"
 
   env_vars:                 # NAMES only, never values

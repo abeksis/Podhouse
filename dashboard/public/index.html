@@ -742,6 +742,18 @@
 
           <div id="backup-no-key" class="alert-box" hidden></div>
           <p class="help" id="backup-copy-note"></p>
+          <!-- The NAS folder lives here, next to the archives it protects. It
+               used to be one line among dozens under Configuration → "Edit
+               .env values", which is where nobody looks for it. -->
+          <form class="copy-form" id="backup-copy-form">
+            <label class="copy-field">
+              <span>Also copy every archive to</span>
+              <input class="input mono" id="backup-copy-dir" name="dir" placeholder="/mnt/nas/podhouse-backups"
+                     spellcheck="false" autocomplete="off">
+            </label>
+            <button type="submit" class="button" id="backup-copy-save">Save</button>
+          </form>
+          <p class="help">A folder on another disk, or on a NAS share already mounted on this box. Leave it empty to keep backups on this box only.</p>
           <p class="help" id="backup-latest"></p>
 
           <div class="row-actions">

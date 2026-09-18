@@ -24,3 +24,7 @@ docs/HOST-CHANGES.md
 
 # The website is built by .github/workflows/site.yml; the output is never committed.
 site/dist/
+
+# scripts/upstream-meta.js cache: GitHub answers, refetchable
+scripts/.upstream-cache.json
+scripts/upstream-review.html

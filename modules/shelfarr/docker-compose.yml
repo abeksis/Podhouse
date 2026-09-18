@@ -6,8 +6,12 @@ x-homebox:
   id: shelfarr
   added_at: "2026-09-09"
   title: "Shelfarr"
-  tagline: "Radarr, but for books"
-  description: "Wanted lists, indexer searches and automatic grabs for ebooks and audiobooks, in the shape the *arr apps taught everyone. It hands finished files to Audiobookshelf or Calibre-Web the same way Sonarr hands episodes to Jellyfin."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Self hosted Ebook and Audiobook management system"
+  description: "A self-hosted ebook and audiobook request and management system for the *arr ecosystem. Think Jellyseerr, but for books. Your users request ebooks and audiobooks; Shelfarr searches your indexers and direct sources, downloads the best release and delivers it to Audiobookshelf — the same request-and-automate workflow the video stack gets from Jellyseerr + Sonarr/Radarr."
+  source: "https://github.com/Pedro-Revez-Silva/shelfarr"
+  docs: "https://shelfarr.org"
+  license: "GPL-3.0"
   category: "media"
   required: false
   default: false

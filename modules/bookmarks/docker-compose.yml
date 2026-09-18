@@ -6,8 +6,12 @@ x-homebox:
   id: bookmarks
   added_at: "2026-09-05"
   title: "Linkding"
-  tagline: "Bookmarks that outlive your browser"
-  description: "A fast, plain bookmark manager with tags, full-text search over saved pages, and browser extensions. Small enough that you forget it is running."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Self-hosted bookmark manager that is designed be to be minimal, fast, and easy to set up using Docker."
+  description: "linkding is a bookmark manager that you can host yourself. It's designed be to be minimal, fast, and easy to set up using Docker."
+  source: "https://github.com/sissbruecker/linkding"
+  docs: "https://linkding.link"
+  license: "MIT"
   icon: "linkding.svg"
   category: "productivity"
   required: false

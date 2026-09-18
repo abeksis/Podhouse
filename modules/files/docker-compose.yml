@@ -7,8 +7,12 @@ x-homebox:
   id: files
   added_at: "2026-09-05"
   title: "File Browser"
-  tagline: "Your files, from any browser"
-  description: "A web file manager over the shared data pool — upload, move, rename, delete, and share a link. It runs as the same user as the media apps, so anything you drop here is immediately visible to them."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Web File Browser"
+  description: "FileBrowser Quantum provides an easy way to access and manage your files from the web. It has a modern responsive interface that has many advanced features to manage users, access, sharing, and file preview and editing."
+  source: "https://github.com/gtsteffaniak/filebrowser"
+  docs: "https://filebrowserquantum.com"
+  license: "Apache-2.0"
   icon: "filebrowser.svg"
   category: "files"
   required: false

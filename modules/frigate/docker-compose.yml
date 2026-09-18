@@ -6,8 +6,12 @@ x-homebox:
   id: frigate
   added_at: "2026-09-09"
   title: "Frigate"
-  tagline: "Cameras that know what they are looking at"
-  description: "Network video recorder with real object detection: it tells you a person, a car or a dog appeared, rather than alerting on every shadow and every branch. Everything is processed and stored here, so no camera footage of your front door is uploaded to anyone."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "NVR with realtime local object detection for IP cameras"
+  description: "A complete and local NVR designed for Home Assistant with AI object detection. Uses OpenCV and Tensorflow to perform realtime object detection locally for IP cameras."
+  source: "https://github.com/blakeblackshear/frigate"
+  docs: "https://frigate.video"
+  license: "MIT"
   icon: "frigate.svg"
   category: "security"
   required: false

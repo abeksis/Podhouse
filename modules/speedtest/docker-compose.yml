@@ -6,8 +6,12 @@ x-homebox:
   id: speedtest
   added_at: "2026-09-09"
   title: "Speedtest Tracker"
-  tagline: "Proof that it slows down at eight"
-  description: "Runs a speed test on a schedule and keeps the results, so 'the internet is slow' becomes a graph with times on it. That is the difference between an argument with your provider and a support ticket they have to answer."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Speedtest Tracker is a self-hosted application that monitors the performance and uptime of your internet connection."
+  description: "Speedtest Tracker is a self-hosted application that monitors the performance and uptime of your internet connection."
+  source: "https://github.com/alexjustesen/speedtest-tracker"
+  docs: "https://speedtest-tracker.dev"
+  license: "MIT"
   icon: "speedtest-tracker.png"
   category: "network"
   required: false

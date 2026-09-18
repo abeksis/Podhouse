@@ -6,8 +6,12 @@ x-homebox:
   id: changedetection
   added_at: "2026-09-09"
   title: "Change Detection"
-  tagline: "Tell me when that page changes"
-  description: "Watches any web page and notifies you when the part you care about changes — a price, a stock line, a council notice, an exam timetable. Point it at a page, select the region visually, choose how often, and it does the checking that would otherwise be you refreshing a tab."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Best and simplest tool for website change detection, web page monitoring, and website change alerts. Perfect for tracking content changes, price drops, restock alerts, and website defacement monitoring—all for free or enjoy our SaaS plan!"
+  description: "Monitor websites for updates — get notified via Discord, Email, Slack, Telegram, Webhook and many more."
+  source: "https://github.com/dgtlmoon/changedetection.io"
+  docs: "https://changedetection.io"
+  license: "Apache-2.0"
   icon: "changedetection.svg"
   category: "productivity"
   required: false

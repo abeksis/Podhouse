@@ -6,8 +6,12 @@ x-homebox:
   id: tailscale
   added_at: "2026-09-09"
   title: "Tailscale"
-  tagline: "Your devices, one network, anywhere"
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "The easiest, most secure way to use WireGuard and 2FA."
   description: "Puts this box and your laptop and your phone on one private WireGuard network, wherever any of them happen to be. No port forwarding, no dynamic DNS, and it works from behind carrier-grade NAT where a normal VPN cannot. Advertise this box as a subnet router and the whole LAN comes with it."
+  source: "https://github.com/tailscale/tailscale"
+  docs: "https://tailscale.com"
+  license: "BSD-3-Clause"
   icon: "tailscale-light.svg"
   category: "network"
   required: false

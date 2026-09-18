@@ -6,8 +6,12 @@ x-homebox:
   id: ersatztv
   added_at: "2026-09-09"
   title: "ErsatzTV"
-  tagline: "Programme your own channels"
-  description: "Schedules your library into live channels and serves them as an IPTV tuner with a full XMLTV guide, so Jellyfin, Plex or a TV app treats them as ordinary channels. Where Tunarr aims at simplicity, this gives you block scheduling, filler between programmes and per-channel logos."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Open-source platform that transforms your personal media library into live, custom TV channels."
+  description: "ErsatzTV lets you transform your media library into a personalized, live TV experience - complete with EPG, channel scheduling, and seamless streaming to all your devices. Rediscover your content, your way."
+  source: "https://github.com/ErsatzTV/legacy"
+  docs: "https://ersatztv.org"
+  license: "Zlib"
   icon: "ersatztv.png"
   category: "media"
   required: false

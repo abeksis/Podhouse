@@ -477,24 +477,53 @@ async function getSchedule() {
     preset: PRESETS[saved.preset] ? saved.preset : DEFAULT_SCHEDULE.preset,
     retention: Math.min(100, Math.max(1, Number(saved.retention) || DEFAULT_SCHEDULE.retention)),
     lastRun: Number(saved.lastRun) || null,
+    enabledAt: Number(saved.enabledAt) || null,
   };
 }
 
 async function setSchedule(input) {
+  const prev = await getSchedule();
+  const enabled = input.enabled === true;
   const next = {
-    enabled: input.enabled === true,
+    enabled,
     preset: PRESETS[input.preset] ? input.preset : DEFAULT_SCHEDULE.preset,
     retention: Math.min(100, Math.max(1, Number(input.retention) || DEFAULT_SCHEDULE.retention)),
-    lastRun: (await getSchedule()).lastRun,
+    lastRun: prev.lastRun,
+    // When it was switched on, so the first 02:00 is counted from then.
+    enabledAt: enabled ? (prev.enabled && prev.enabledAt ? prev.enabledAt : Date.now()) : null,
   };
   await state.writeJson(SCHEDULE_FILE, next);
   return next;
 }
 
+/**
+ * The next 02:00 the preset names, strictly after `after`.
+ *
+ * It used to be "last run plus 24 hours", so a schedule switched on at 15:00
+ * ran at 15:00 every day while the page said 02:00. Local time, from the TZ the
+ * box was installed with, because that is the clock the label is read against.
+ */
+function nextSlot(preset, after) {
+  const from = new Date(after);
+  const at = new Date(from);
+  at.setHours(2, 0, 0, 0);
+  if (preset === 'weekly') {
+    at.setDate(at.getDate() + ((7 - at.getDay()) % 7));      // this Sunday
+    if (at <= from) at.setDate(at.getDate() + 7);
+  } else if (preset === 'monthly') {
+    at.setDate(1);
+    if (at <= from) at.setMonth(at.getMonth() + 1, 1);
+  } else if (at <= from) {
+    at.setDate(at.getDate() + 1);
+  }
+  return at.getTime();
+}
+
 function nextRunAt(schedule) {
   if (!schedule.enabled) return null;
-  const every = PRESETS[schedule.preset].everyMs;
-  return (schedule.lastRun || Date.now()) + every;
+  // Counted from the last run, or from when the schedule was switched on — not
+  // from "now", which would push a never-run schedule forward forever.
+  return nextSlot(schedule.preset, schedule.lastRun || schedule.enabledAt || Date.now());
 }
 
 /**
@@ -507,6 +536,12 @@ function startScheduler() {
     try {
       const schedule = await getSchedule();
       if (!schedule.enabled || inFlight) return;
+      // Switched on by a version that did not record when: take now as that
+      // moment, once, so the first 02:00 after it is the one that runs.
+      if (!schedule.lastRun && !schedule.enabledAt) {
+        await state.writeJson(SCHEDULE_FILE, { ...schedule, enabledAt: Date.now() });
+        return;
+      }
       const due = nextRunAt(schedule);
       if (due && Date.now() >= due) {
         await create({ kind: 'config' });
@@ -565,6 +600,6 @@ function revealKey() {
 }
 
 module.exports = {
-  create, list, remove, verify, prune, status, copyStatus,
+  create, list, remove, verify, prune, status, copyStatus, nextSlot,
   getSchedule, setSchedule, startScheduler,
   revealKey, decryptFile, resolveName, BACKUP_DIR, BackupError, PRESETS, tarArgs, rebuildableExcludes };

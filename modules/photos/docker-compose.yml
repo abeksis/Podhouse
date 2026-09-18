@@ -6,8 +6,12 @@ x-homebox:
   id: photos
   added_at: "2026-09-05"
   title: "Immich"
-  tagline: "Photo backup that stays in your house"
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "High performance self-hosted photo and video management solution."
   description: "Backs up every photo and video from your phone automatically, with albums, a map, timeline scrubbing and face recognition. The mobile apps are good enough that people actually stop paying Google for this."
+  source: "https://github.com/immich-app/immich"
+  docs: "https://immich.app"
+  license: "AGPL-3.0"
   icon: "immich.svg"
   category: "photos"
   required: false

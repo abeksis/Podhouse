@@ -6,8 +6,11 @@ x-homebox:
   id: paperless
   added_at: "2026-09-09"
   title: "Paperless-ngx"
-  tagline: "The filing cabinet, searchable"
-  description: "Drop a scan into a folder and it comes out OCR'd, tagged, dated and full-text searchable. It learns which correspondent and document type to apply from what you have already filed, so after fifty documents it is usually right without being told. Bills, contracts, warranties and letters stop being a box in a cupboard."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "A community-supported supercharged document management system: scan, index and archive all your documents"
+  description: "Paperless-ngx is a document management system that transforms your physical documents into a searchable online archive so you can keep, well, less paper."
+  source: "https://github.com/paperless-ngx/paperless-ngx"
+  license: "GPL-3.0"
   icon: "paperless-ngx.svg"
   category: "productivity"
   required: false

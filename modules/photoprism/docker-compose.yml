@@ -6,8 +6,11 @@ x-homebox:
   id: photoprism
   added_at: "2026-09-09"
   title: "PhotoPrism"
-  tagline: "Your photos, indexed where they lie"
-  description: "Browses and searches a folder of photos you already have, rather than asking you to import them into its own store. Face and object recognition run locally, and it reads the originals read-only — so it can sit alongside Immich on the same library without either one owning it."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "AI-Powered Photos App"
+  description: "PhotoPrism® is an AI-powered, privacy-first app for browsing, organizing, and sharing photos and videos. It helps tag, search, and rediscover media without getting in your way, whether self-hosted or in the cloud."
+  source: "https://github.com/photoprism/photoprism"
+  docs: "https://www.photoprism.app"
   icon: "photoprism.svg"
   category: "photos"
   required: false

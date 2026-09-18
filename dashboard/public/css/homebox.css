@@ -124,8 +124,13 @@ button { font: inherit; color: inherit; }
 ::selection { background: var(--accent-soft); }
 
 .text { color: var(--text-2); margin: 0 0 0.75rem; }
+/* Where an app's description comes from: small, under the text it credits. */
+.sheet-source { color: var(--muted); font-size: 0.82rem; margin: -0.35rem 0 0.9rem; }
 .help { color: var(--muted); font-size: 0.92rem; margin: 0 0 0.75rem; }
 .help.is-warn { color: var(--warn); }
+.copy-form { display: flex; align-items: flex-end; gap: 0.5rem; margin: 0.2rem 0 0.35rem; }
+.copy-field { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 0; font-size: 0.85rem; color: var(--text-2); }
+.copy-form + .help { font-size: 0.82rem; }
 .small-note { color: var(--muted); font-size: 0.85rem; margin-top: 0.75rem; }
 .empty { color: var(--muted); padding: 0.6rem 0; list-style: none; }
 .empty a { font-weight: 600; }
@@ -700,12 +705,30 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .module-art { width: 60px; height: 60px; padding: 10px; border-radius: 16px; background: var(--plate); flex: none; cursor: pointer; font-size: 1.8rem; }
 .module-title { font-size: 1.05rem; cursor: pointer; }
 .module-title:hover { color: var(--accent-text); }
-.module-tagline { color: var(--accent-text); font-size: 0.84rem; margin-top: -0.4rem; }
+.module-tagline { color: var(--accent-text); font-size: 0.84rem; margin-top: -0.4rem; white-space: nowrap; overflow: hidden; }
+.module-tagline > span { display: inline-block; }
+/* Too long for the card: fade at the edge while still, run while hovered.
+   See fitTaglines() in app.js; reduced motion stops it via the global rule. */
+.module-tagline.is-long { mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.module-card:hover .module-tagline.is-long,
+.module-card:focus-within .module-tagline.is-long { mask-image: none; }
+.module-card:hover .module-tagline.is-long > span,
+.module-card:focus-within .module-tagline.is-long > span {
+  animation: tagline-run var(--run-time, 5s) ease-in-out 0.4s infinite alternate;
+}
+@keyframes tagline-run {
+  0%, 12% { transform: translateX(0); }
+  88%, 100% { transform: translateX(var(--run, 0)); }
+}
 .module-state { display: flex; align-items: center; justify-content: center; gap: 0.35rem; font-size: 0.8rem; color: var(--text-2); }
 .module-state.is-idle { color: var(--muted); }
 .module-fact { display: flex; flex-direction: column; font-size: 0.84rem; color: var(--text); line-height: 1.25; }
 .module-fact span { color: var(--muted); font-size: 0.72rem; }
 .module-text { color: var(--text-2); font-size: 0.89rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* The text above is the project's own, so the credit sits right under it. */
+.module-credit { color: var(--muted); font-size: 0.76rem; margin-top: -0.25rem; }
+.module-credit a { color: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
+.module-credit a:hover { color: var(--accent-text); }
 
 .module-toggle {
   flex: none; min-width: 6.5rem; min-height: 32px; padding: 0 0.8rem;

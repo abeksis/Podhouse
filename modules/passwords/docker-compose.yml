@@ -6,8 +6,11 @@ x-homebox:
   id: passwords
   added_at: "2026-09-05"
   title: "Password Vault"
-  tagline: "Bitwarden, hosted by you"
-  description: "Speaks the Bitwarden protocol, so the official mobile apps and browser extensions work against it unchanged — while the vault itself lives here. SQLite backed, so it is one directory to back up."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Unofficial Bitwarden compatible server written in Rust, formerly known as bitwarden_rs"
+  description: "An alternative server implementation of the Bitwarden Client API, written in Rust and compatible with official Bitwarden clients [disclaimer], perfect for self-hosted deployment where running the official resource-heavy service might not be ideal."
+  source: "https://github.com/dani-garcia/vaultwarden"
+  license: "AGPL-3.0"
   icon: "vaultwarden.svg"
   category: "security"
   required: false

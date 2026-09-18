@@ -6,8 +6,12 @@ x-homebox:
   id: budget
   added_at: "2026-09-09"
   title: "Actual Budget"
-  tagline: "Every shekel given a job"
-  description: "Zero-based envelope budgeting — you assign every unit of income to a category until nothing is unallocated, which is what makes it work where a spending tracker does not. Fast, local-first, and syncs to the phone and desktop apps through this server. Your financial history never reaches anyone else's cloud."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "A local-first personal finance app"
+  description: "Actual is a local-first personal finance tool. It is 100% free and open-source, written in NodeJS, it has a synchronization element so that all your changes can move between devices without any heavy lifting."
+  source: "https://github.com/actualbudget/actual"
+  docs: "https://actualbudget.org"
+  license: "MIT"
   icon: "actual-budget.webp"
   category: "productivity"
   required: false

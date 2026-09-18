@@ -6,8 +6,12 @@ x-homebox:
   id: vpn
   added_at: "2026-09-05"
   title: "VPN"
-  tagline: "Reach home from anywhere, safely"
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "The easiest way to run WireGuard VPN + Web-based Admin UI."
   description: "WireGuard with a web UI. Add a device, scan the QR code with the WireGuard app, and your phone is on the home network from anywhere — with nothing else exposed to the internet."
+  source: "https://github.com/wg-easy/wg-easy"
+  docs: "https://wg-easy.github.io/wg-easy/latest"
+  license: "AGPL-3.0"
   icon: "wireguard.svg"
   category: "network"
   required: false

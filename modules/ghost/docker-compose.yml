@@ -6,8 +6,12 @@ x-homebox:
   id: ghost
   added_at: "2026-09-09"
   title: "Ghost"
-  tagline: "Writing, published properly"
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Independent technology for modern publishing, memberships, subscriptions and newsletters."
   description: "A focused publishing platform: a genuinely good editor, fast pages, memberships and email newsletters built in. Where WordPress is a general-purpose CMS you shape into a site, Ghost is a site for writing and already is one."
+  source: "https://github.com/TryGhost/Ghost"
+  docs: "https://ghost.org"
+  license: "MIT"
   icon: "ghost.png"
   category: "productivity"
   required: false

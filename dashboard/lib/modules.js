@@ -99,6 +99,12 @@ function normalize(id, meta, dir) {
     title: m.title || id,
     tagline: m.tagline || '',
     description: m.description || '',
+    // The upstream project's page. https only: it becomes a link on the page,
+    // and a module file is not a place to smuggle a javascript: URL through.
+    source: typeof m.source === 'string' && /^https:\/\/[^\s"'<>]+$/.test(m.source) ? m.source : null,
+    docs: typeof m.docs === 'string' && /^https:\/\/[^\s"'<>]+$/.test(m.docs) ? m.docs : null,
+    // An SPDX id such as MIT or AGPL-3.0, shown as text.
+    license: typeof m.license === 'string' && /^[A-Za-z0-9.+-]{1,32}$/.test(m.license) ? m.license : null,
     icon: m.icon || null,
     category,
     required: m.required === true,

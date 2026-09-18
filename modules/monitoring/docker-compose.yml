@@ -6,8 +6,12 @@ x-homebox:
   id: monitoring
   added_at: "2026-09-05"
   title: "Monitoring"
-  tagline: "Know before your family tells you"
-  description: "Uptime Kuma checks every service on a schedule and notifies you through Telegram, Discord, email, ntfy and 90-odd other channels when one stops answering. It also keeps the history, so you can see whether something is flaky or just went down once."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "A fancy self-hosted monitoring tool"
+  description: "Uptime Kuma is an easy-to-use self-hosted monitoring tool."
+  source: "https://github.com/louislam/uptime-kuma"
+  docs: "https://uptime.kuma.pet"
+  license: "MIT"
   icon: "uptime-kuma.svg"
   category: "system"
   required: false

@@ -6,8 +6,11 @@ x-homebox:
   id: stablediffusion
   added_at: "2026-09-09"
   title: "Stable Diffusion"
-  tagline: "Images, generated here"
-  description: "The AUTOMATIC1111 web interface for Stable Diffusion — text to image, image to image, inpainting, upscaling — running on your own hardware. No subscription, no queue, no content filter deciding what you may ask for, and nothing you generate is uploaded anywhere."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Stable Diffusion web UI"
+  description: "A web interface for Stable Diffusion, implemented using Gradio library."
+  source: "https://github.com/AUTOMATIC1111/stable-diffusion-webui"
+  license: "AGPL-3.0"
   icon: "open-webui.svg"
   category: "productivity"
   required: false

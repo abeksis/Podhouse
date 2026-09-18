@@ -6,8 +6,12 @@ x-homebox:
   id: authelia
   added_at: "2026-09-09"
   title: "Authelia"
-  tagline: "One door, with two locks"
-  description: "An authentication gateway that sits in front of your other apps through the proxy. Half the things in this catalog have no login at all, and several hand admin to whoever opens them first — Authelia puts a single sign-on page with two-factor in front of all of them, so exposing one does not mean exposing it to everyone."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "The Single Sign-On Multi-Factor portal for web apps. OpenID Certified and Post-Quantum Cryptography Ready."
+  description: "Authelia is an open-source authentication and authorization server providing two-factor authentication and single sign-on (SSO) for your applications via a web portal. It acts as a companion for reverse proxies by allowing, denying, or redirecting requests."
+  source: "https://github.com/authelia/authelia"
+  docs: "https://www.authelia.com"
+  license: "Apache-2.0"
   icon: "authelia.svg"
   category: "security"
   required: false

@@ -6,8 +6,12 @@ x-homebox:
   id: cloud
   added_at: "2026-09-05"
   title: "Nextcloud"
-  tagline: "Your own Dropbox, calendar and contacts"
-  description: "File sync across every device, plus calendar, contacts and notes that talk to the apps already on your phone. The full replacement for the parts of Google and Dropbox that hold your own documents."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Nextcloud server, a safe home for all your data"
+  description: "You can store your files, contacts, calendars, and more on a server of your choosing. You keep your files, contacts, calendars, and more synchronized amongst your devices."
+  source: "https://github.com/nextcloud/server"
+  docs: "https://nextcloud.com"
+  license: "AGPL-3.0"
   icon: "nextcloud.svg"
   category: "files"
   required: false

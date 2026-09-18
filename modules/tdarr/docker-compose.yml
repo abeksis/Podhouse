@@ -6,8 +6,10 @@ x-homebox:
   id: tdarr
   added_at: "2026-09-09"
   title: "Tdarr"
-  tagline: "Shrink the library while you sleep"
-  description: "Walks your library and re-encodes what matches rules you write — H.264 to H.265, drop the audio tracks in languages nobody here speaks, remux into MKV. A 500GB library often comes out half the size with no visible difference. It replaces files in place, so it is worth aiming at a copy first."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Tdarr - Distributed transcode automation using FFmpeg/HandBrake + Audio/Video library analytics + video health checking (Windows, macOS, Linux & Docker)"
+  description: "Tdarr V2 is a cross-platform conditional based transcoding application for automating media library transcode/remux management in order to process your media files as required. For example, you can set rules for the required codecs, containers, languages etc that your media should have which helps keeps things organized and can increase compatability with your devices. A common use for Tdarr is to simply convert video files from h264 to h265 (hevc), saving 40%-50% in size."
+  source: "https://github.com/HaveAGitGat/Tdarr"
   icon: "tdarr.svg"
   category: "media"
   required: false

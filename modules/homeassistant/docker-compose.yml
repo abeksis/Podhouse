@@ -6,8 +6,12 @@ x-homebox:
   id: homeassistant
   added_at: "2026-09-09"
   title: "Home Assistant"
-  tagline: "Your house, answering to you"
-  description: "Ties every smart device you own — lights, locks, sensors, vacuums, thermostats, cameras — into one system with automations, and does it locally. Devices that would otherwise each need their own app and their own cloud account keep working when the internet does not."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Open source home automation that puts local control and privacy first."
+  description: "Open source home automation that puts local control and privacy first. Powered by a worldwide community of tinkerers and DIY enthusiasts. Perfect to run on a Raspberry Pi or a local server."
+  source: "https://github.com/home-assistant/core"
+  docs: "https://www.home-assistant.io"
+  license: "Apache-2.0"
   icon: "home-assistant.svg"
   category: "system"
   required: false

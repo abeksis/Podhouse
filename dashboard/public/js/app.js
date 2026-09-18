@@ -266,6 +266,8 @@ function show(page) {
     else el.removeAttribute('aria-current');
   });
   if (target !== 'home') loadModules();
+  // Measured while the page was hidden, every width was zero.
+  if (target === 'apps') fitTaglines($('#catalog-grid'));
   if (target === 'home') loadInsights();
   if (target === 'updates') { loadUpdates(); loadPlatform(); }
   if (target === 'settings') { loadBackups(); loadConfig(); loadCatalog(); loadStorage(); loadResets(); }
@@ -708,7 +710,7 @@ function renderBackupCard(summary) {
   }
 
   const copyFact = !copy.configured
-    ? 'only on this box\'s disk — a NAS folder can be set in Settings'
+    ? 'only on this box\'s disk — a NAS folder can be set in Settings → Backups'
     : copyFailing ? `not reaching ${copy.dir}`
       : copy.ok ? `copied to ${copy.dir}${copy.lastOk ? ` ${ago(copy.lastOk)} ago` : ''}`
         : `the next backup is also copied to ${copy.dir}`;
@@ -1034,6 +1036,33 @@ function renderTips(m) {
   </details>`;
 }
 
+/**
+ * A tagline longer than its card runs sideways instead of being cut off.
+ *
+ * The projects' own one-liners are longer than the ones written for these
+ * cards, and "…" hides exactly the half that says what the app does. Only a
+ * line that really overflows moves, and only while the card is hovered or
+ * focused — sixty cards scrolling at once would be a page nobody can read. The
+ * distance is measured, not guessed, so it stops at the last word.
+ */
+function fitTaglines(root) {
+  if (!root) return;
+  requestAnimationFrame(() => {
+    for (const line of root.querySelectorAll('.module-tagline')) {
+      const text = line.firstElementChild;
+      // Zero wide means not laid out (a hidden page): measuring now would
+      // flag every line as too long. show('apps') measures again.
+      if (!text || !line.clientWidth) continue;
+      const over = text.scrollWidth - line.clientWidth;
+      line.classList.toggle('is-long', over > 4);
+      line.style.setProperty('--run', `${-Math.ceil(over)}px`);
+      // Slow enough to read: about 40px a second, and never under 3s.
+      line.style.setProperty('--run-time', `${Math.max(3, over / 40).toFixed(1)}s`);
+    }
+  });
+}
+window.addEventListener('resize', () => fitTaglines($('#catalog-grid')));
+
 function renderApps() {
   const query = state.appQuery.trim().toLowerCase();
   const list = state.modules
@@ -1061,13 +1090,15 @@ function renderApps() {
       </div>
       <div class="module-body">
         <h3 class="module-title" data-module="${escapeHtml(m.id)}" role="button" tabindex="0">${escapeHtml(m.title)}</h3>
-        ${m.tagline ? `<p class="module-tagline">${escapeHtml(m.tagline)}</p>` : ''}
+        ${m.tagline ? `<p class="module-tagline" title="${escapeHtml(m.tagline)}"><span>${escapeHtml(m.tagline)}</span></p>` : ''}
         <p class="module-text">${escapeHtml(m.description)}</p>
+        ${m.source ? `<p class="module-credit">From <a href="${escapeHtml(m.source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(m.source.replace(/^https:\/\/(www\.)?github\.com\//, ''))} ↗</a>${m.license ? ` · ${escapeHtml(m.license)}` : ''}</p>` : ''}
         ${renderIncludedServices(m)}
         ${renderTips(m)}
       </div>
     </article>`;
   }).join('') || '<p class="empty">No app matches that.</p>';
+  fitTaglines($('#catalog-grid'));
 
   renderStoreStats();
 
@@ -1452,6 +1483,38 @@ async function saveConfig() {
 
 let backupState = null;
 
+/**
+ * Save the NAS folder from the Backups page. It is an ordinary .env value, so
+ * it goes through the same endpoint and the same checks as the Configuration
+ * editor — a relative path, a space or a folder inside Podhouse is refused
+ * there with the reason, and that reason is what is shown here.
+ */
+async function submitCopyDir(event) {
+  event.preventDefault();
+  const button = $('#backup-copy-save');
+  const dir = $('#backup-copy-dir').value.trim();
+  button.disabled = true;
+  try {
+    const res = await fetch('api/config', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ changes: { HB_BACKUP_COPY_DIR: dir } }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      toast(data.error, 'error', 9000);
+      return;
+    }
+    toast(dir ? `Saved. The next backup is also copied to ${dir}.` : 'Saved. Backups stay on this box only.');
+    configSchema = null;
+    await loadBackups();
+  } catch (err) {
+    toast(`Could not save: ${err.message}`, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function loadBackups() {
   try {
     backupState = await (await fetch('api/backup')).json();
@@ -1485,12 +1548,15 @@ function renderBackups() {
   // whole Podhouse folder being deleted, which is how this line came to be.
   const copy = b.copy || {};
   const copyNote = $('#backup-copy-note');
+  // Not while someone is typing in it: a refresh would put the old value back.
+  const copyInput = $('#backup-copy-dir');
+  if (copyInput && document.activeElement !== copyInput) copyInput.value = copy.dir || '';
   copyNote.classList.toggle('is-warn', !!(copy.configured && copy.problem));
   if (!copy.configured) {
     copyNote.textContent = (b.sameDisk
       ? 'These archives are on the disk they protect. They cover a mistake, not a failed drive or a deleted folder. '
       : 'These archives are only on this box. ')
-      + 'To keep a copy on a NAS, set "Also copy every archive to" under Configuration → Backup.';
+      + 'To keep a copy on a NAS, set the folder below.';
   } else if (copy.problem) {
     copyNote.textContent = `Copies are not reaching ${copy.dir}: ${copy.problem}`;
   } else if (!copy.tried) {
@@ -2386,6 +2452,22 @@ function statRow(label, value, level) {
 
 /* ---------------------------------------------------------------- sheet */
 
+/**
+ * Where an app comes from, under its description: the project, its own docs,
+ * its licence. The description above is theirs, so this is the credit for it
+ * — and the docs link is how to use the app, which the project explains
+ * better and keeps more current than a note here would.
+ */
+function sheetSource(mod) {
+  const link = (href, label) => `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)} ↗</a>`;
+  const parts = [
+    mod.source ? link(mod.source, 'Project') : '',
+    mod.docs ? link(mod.docs, 'Docs') : '',
+    mod.license ? `${escapeHtml(mod.license)} licence` : '',
+  ].filter(Boolean);
+  return parts.length ? `<p class="sheet-source">${parts.join(' · ')}</p>` : '';
+}
+
 function openModule(id) {
   const mod = state.modules.find((m) => m.id === id);
   if (!mod) return;
@@ -2403,6 +2485,7 @@ function openModule(id) {
       ${mod.required ? '<span class="badge badge-core">base system</span>' : ''}
     </div>
     <p class="text">${escapeHtml(mod.description)}</p>
+    ${sheetSource(mod)}
 
     <div class="action-row" id="sheet-actions">${actionsFor(mod)}
       ${mod.installed ? `<button type="button" class="button" data-action="update" data-id="${escapeHtml(mod.id)}">Pull updates</button>` : ''}
@@ -2444,7 +2527,7 @@ function openModule(id) {
         </div>
         <div class="sheet-row-actions">${containerActions(c, c.state !== 'stopped')}</div>`).join('')}` : ''}
 
-    ${mod.tips.length ? `<h3>Setup notes</h3><ul class="sheet-tips">${mod.tips.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>` : ''}
+    ${mod.tips.length ? `<h3>${mod.docs ? 'On Podhouse' : 'Setup notes'}</h3><ul class="sheet-tips">${mod.tips.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>` : ''}
 
     <h3>Files</h3>
     <dl class="kv">
@@ -4699,6 +4782,7 @@ $('#storage-kind').addEventListener('change', storageKindChanged);
 $('#storage-check').addEventListener('click', probeStorage);
 $('#storage-mountpoint').addEventListener('input', checkMountpointCollision);
 $('#storage-form').addEventListener('submit', submitStorageForm);
+$('#backup-copy-form').addEventListener('submit', submitCopyDir);
 $('#storage-list').addEventListener('click', (event) => {
   const btn = event.target.closest('[data-unmount]');
   if (btn) detachStorage(btn.dataset.unmount);

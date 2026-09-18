@@ -9,8 +9,12 @@ x-homebox:
   id: portainer
   added_at: "2026-09-17"
   title: "Portainer"
-  tagline: "Docker itself, with a UI"
-  description: "The general-purpose Docker interface: every container, image, network and volume on the box, including the ones Podhouse did not create. Useful when something is wrong at a level below the app, and unnecessary for everyday use — Podhouse already shows logs, restarts apps and applies updates on its own."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Making Docker and Kubernetes management easy."
+  description: "Portainer Community Edition is a free, lightweight container management UI for Docker, Swarm, Podman, Kubernetes, and ACI environments. It is provided as-is, at no cost, for the convenience of homelab operators, hobbyists, students, and anyone experimenting with containers on their own hardware."
+  source: "https://github.com/portainer/portainer"
+  docs: "https://www.portainer.io"
+  license: "Zlib"
   icon: "portainer.svg"
   category: "system"
   required: false

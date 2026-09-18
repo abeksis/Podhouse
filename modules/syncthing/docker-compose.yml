@@ -6,8 +6,12 @@ x-homebox:
   id: syncthing
   added_at: "2026-09-09"
   title: "Syncthing"
-  tagline: "Folders that follow you, privately"
-  description: "Continuous file sync between your own devices — laptop, phone, this box — with no server in the middle and no account anywhere. Every device holds the whole folder, changes propagate directly over the network, and nothing is stored on hardware you do not own."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Open Source Continuous File Synchronization"
+  description: "Syncthing is a continuous file synchronization program. It synchronizes files between two or more computers."
+  source: "https://github.com/syncthing/syncthing"
+  docs: "https://syncthing.net"
+  license: "MPL-2.0"
   icon: "syncthing.svg"
   category: "files"
   required: false

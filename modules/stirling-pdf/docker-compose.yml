@@ -6,8 +6,11 @@ x-homebox:
   id: stirling-pdf
   added_at: "2026-09-09"
   title: "Stirling PDF"
-  tagline: "PDF tools that never leave the house"
-  description: "Merge, split, rotate, compress, sign, OCR, convert to and from Office formats, remove passwords, redact. The same set of things every free PDF site offers — except the document stays on this box instead of being uploaded to a stranger, which for a contract or a payslip is the whole point."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "1 PDF Application on GitHub that lets you edit PDFs on any device anywhere"
+  description: "Stirling PDF is a powerful, open-source PDF editing platform. Run it as a personal desktop app, in the browser, or deploy it on your own servers with a private API. Edit, sign, redact, convert, and automate PDFs without sending documents to external services."
+  source: "https://github.com/Stirling-Tools/Stirling-PDF"
+  docs: "https://stirling.com"
   icon: "stirling-pdf.svg"
   category: "productivity"
   required: false

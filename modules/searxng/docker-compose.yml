@@ -6,8 +6,12 @@ x-homebox:
   id: searxng
   added_at: "2026-09-09"
   title: "SearXNG"
-  tagline: "Search that does not watch you"
-  description: "A metasearch engine: it queries Google, Bing, DuckDuckGo, Wikipedia and dozens of others on your behalf and merges the results, without cookies, tracking or a profile. Set it as your browser's default and every search leaves from this box instead of from you."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "SearXNG is a free internet metasearch engine which aggregates results from various search services and databases. Users are neither tracked nor profiled."
+  description: "SearXNG is a metasearch engine. Users are neither tracked nor profiled."
+  source: "https://github.com/searxng/searxng"
+  docs: "https://docs.searxng.org"
+  license: "AGPL-3.0"
   icon: "searxng.svg"
   category: "network"
   required: false

@@ -1,0 +1,118 @@
+{
+  "_about": "Which GitHub project each module is. scripts/upstream-meta.js reads the description, tagline, docs link and licence from here. null means the module keeps its own wording: bundles of several apps, closed-source apps, game servers (whose GitHub project is the Docker wrapper, not the game), projects not on GitHub, and Podhouse's own modules.",
+  "antivirus": "Cisco-Talos/clamav",
+  "audiobookshelf": {
+    "repo": "advplyr/audiobookshelf",
+    "sentences": 1
+  },
+  "authelia": "authelia/authelia",
+  "automation": "n8n-io/n8n",
+  "backup": "duplicati/duplicati",
+  "bedrock": null,
+  "bookmarks": "sissbruecker/linkding",
+  "bookstack": "BookStackApp/BookStack",
+  "budget": "actualbudget/actual",
+  "changedetection": "dgtlmoon/changedetection.io",
+  "cloud": {
+    "repo": "nextcloud/server",
+    "description": "You can store your files, contacts, calendars, and more on a server of your choosing. You keep your files, contacts, calendars, and more synchronized amongst your devices."
+  },
+  "coolercontrol": null,
+  "core": null,
+  "dashboard": null,
+  "dns": {
+    "repo": "AdguardTeam/AdGuardHome",
+    "description": "AdGuard Home is a network-wide software for blocking ads and tracking. After you set it up, it'll cover ALL your home devices, and you don't need any client-side software for that."
+  },
+  "ebooks": null,
+  "emby": null,
+  "ersatztv": "ErsatzTV/ErsatzTV",
+  "factorio": null,
+  "files": {
+    "repo": "gtsteffaniak/filebrowser",
+    "description": "FileBrowser Quantum provides an easy way to access and manage your files from the web. It has a modern responsive interface that has many advanced features to manage users, access, sharing, and file preview and editing."
+  },
+  "freshrss": "FreshRSS/FreshRSS",
+  "frigate": "blakeblackshear/frigate",
+  "games": null,
+  "ghost": {
+    "repo": "TryGhost/Ghost",
+    "description": null
+  },
+  "git": "go-gitea/gitea",
+  "gotify": {
+    "repo": "gotify/server",
+    "description": null
+  },
+  "headscale": "juanfont/headscale",
+  "homeassistant": "home-assistant/core",
+  "jellyfin": "jellyfin/jellyfin",
+  "jellystat": {
+    "repo": "CyferShepard/Jellystat",
+    "sentences": 1
+  },
+  "kiwix": {
+    "repo": "kiwix/kiwix-tools",
+    "description": null
+  },
+  "localai": null,
+  "matrix": null,
+  "mealie": "mealie-recipes/mealie",
+  "media": null,
+  "metrics": "henrygd/beszel",
+  "monitoring": {
+    "repo": "louislam/uptime-kuma",
+    "sentences": 1
+  },
+  "navidrome": "navidrome/navidrome",
+  "paperless": "paperless-ngx/paperless-ngx",
+  "passwords": "dani-garcia/vaultwarden",
+  "photoprism": "photoprism/photoprism",
+  "photos": {
+    "repo": "immich-app/immich",
+    "description": null
+  },
+  "pi-hole": {
+    "repo": "pi-hole/pi-hole",
+    "description": "The Pi-hole® is a DNS sinkhole that protects your devices from unwanted content without installing any client-side software."
+  },
+  "pinchflat": "kieraneglin/pinchflat",
+  "plex": null,
+  "portainer": "portainer/portainer",
+  "searxng": {
+    "repo": "searxng/searxng",
+    "sentences": 2
+  },
+  "shelfarr": "pedro-revez-silva/shelfarr",
+  "speedtest": "alexjustesen/speedtest-tracker",
+  "stablediffusion": {
+    "repo": "AUTOMATIC1111/stable-diffusion-webui",
+    "description": "A web interface for Stable Diffusion, implemented using Gradio library."
+  },
+  "stirling-pdf": {
+    "repo": "Stirling-Tools/Stirling-PDF",
+    "description": "Stirling PDF is a powerful, open-source PDF editing platform. Run it as a personal desktop app, in the browser, or deploy it on your own servers with a private API. Edit, sign, redact, convert, and automate PDFs without sending documents to external services."
+  },
+  "syncthing": "syncthing/syncthing",
+  "tailscale": {
+    "repo": "tailscale/tailscale",
+    "description": null
+  },
+  "tdarr": "HaveAGitGat/Tdarr",
+  "terraria": null,
+  "tunarr": "chrisbenincasa/tunarr",
+  "tunnel": "cloudflare/cloudflared",
+  "unpackerr": {
+    "repo": "Unpackerr/unpackerr",
+    "sentences": 2
+  },
+  "valheim": null,
+  "vpn": {
+    "repo": "wg-easy/wg-easy",
+    "description": null
+  },
+  "webapp": null,
+  "wizarr": "wizarrrr/wizarr",
+  "wordpress": null,
+  "zomboid": null
+}

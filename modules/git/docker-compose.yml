@@ -6,8 +6,12 @@ x-homebox:
   id: git
   added_at: "2026-09-05"
   title: "Gitea"
-  tagline: "Your own GitHub"
-  description: "Git hosting with pull requests, issues, releases and CI actions, light enough to run beside everything else. Good for the config repos and scripts you would rather not put on someone else's server."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Git with a cup of tea! Painless self-hosted all-in-one software development service, including Git hosting, code review, team collaboration, package registry and CI/CD"
+  description: "The goal of Gitea is to make the easiest, fastest, and most painless way of setting up a self-hosted all-in-one software development service, including Git hosting, code management, code review, issue tracking, project kanban, wiki, team collaboration, package registry and CI/CD which can reuse GitHub Actions."
+  source: "https://github.com/go-gitea/gitea"
+  docs: "https://gitea.com"
+  license: "MIT"
   icon: "gitea.svg"
   category: "productivity"
   required: false

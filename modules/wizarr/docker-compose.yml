@@ -6,8 +6,12 @@ x-homebox:
   id: wizarr
   added_at: "2026-09-09"
   title: "Wizarr"
-  tagline: "Invite links for your media server"
-  description: "Send someone a link and they end up with a working Jellyfin or Plex account, having been shown which app to install and how to sign in. Invitations can expire, be limited to one use, or grant access to only some libraries — instead of you creating accounts by hand and explaining the rest over the phone."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Wizarr is an advanced user invitation and management system for Jellyfin, Plex, Emby etc."
+  description: "Wizarr is an automatic user invitation and management system for Plex, Jellyfin, Emby, Audiobookshelf, Romm, Komga and Kavita. Create a unique invite link and share it with users — they’ll be automatically added to your media server and guided through downloading apps, accessing request systems, and more!"
+  source: "https://github.com/wizarrrr/wizarr"
+  docs: "https://docs.wizarr.dev"
+  license: "MIT"
   icon: "wizarr.svg"
   category: "media"
   required: false

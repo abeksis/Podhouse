@@ -6,8 +6,11 @@ x-homebox:
   id: automation
   added_at: "2026-09-05"
   title: "n8n"
-  tagline: "Glue your services together, visually"
-  description: "A workflow builder with several hundred integrations: watch a folder, call an API, post to Telegram, write to a database, on a schedule or a webhook. The usual home for the small automations that would otherwise be five cron scripts nobody documented."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Fair-code workflow automation platform with native AI capabilities. Combine visual building with custom code, self-host or cloud, 400+ integrations."
+  description: "Fair-code platform to build and deploy AI agents and workflows. Combine a visual canvas with custom code, run it self-hosted or in the cloud, and connect to 1500+ integrations. AI automation you can trust with real work, from prototype to production."
+  source: "https://github.com/n8n-io/n8n"
+  docs: "https://n8n.io"
   icon: "n8n.svg"
   category: "productivity"
   required: false

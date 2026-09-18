@@ -6,8 +6,12 @@ x-homebox:
   id: bookstack
   added_at: "2026-09-09"
   title: "BookStack"
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
   tagline: "Documentation you will actually find again"
-  description: "A wiki with real structure — shelves hold books, books hold chapters, chapters hold pages — instead of a flat pile of documents and a search box. Good for how the house works: which breaker is which, what the router password scheme is, how to restore this box."
+  description: "A platform for storing and organising information and documentation. BookStack is an opinionated documentation platform that provides a pleasant and simple out-of-the-box experience. New users to an instance should find the experience intuitive and only basic word-processing skills should be required to get involved in creating content on BookStack. The platform should provide advanced power features to those that desire it, but they should not interfere with the core simple user experience."
+  source: "https://github.com/BookStackApp/BookStack"
+  docs: "https://codeberg.org/bookstack/bookstack"
+  license: "MIT"
   icon: "bookstack.svg"
   category: "productivity"
   required: false

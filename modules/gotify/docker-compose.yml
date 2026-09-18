@@ -6,8 +6,11 @@ x-homebox:
   id: gotify
   added_at: "2026-09-09"
   title: "Gotify"
-  tagline: "Your own push notifications"
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "A simple server for sending and receiving messages in real-time per WebSocket. (Includes a sleek web-ui)"
   description: "A notification server with an Android app. Anything that can make an HTTP request can send you a push — a backup script, a cron job, Uptime Kuma, a doorbell. No Firebase, no third party, and nothing about what your house is doing leaves the network."
+  source: "https://github.com/gotify/server"
+  docs: "https://gotify.net"
   icon: "gotify.png"
   category: "system"
   required: false

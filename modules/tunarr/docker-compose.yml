@@ -6,8 +6,12 @@ x-homebox:
   id: tunarr
   added_at: "2026-09-09"
   title: "Tunarr"
-  tagline: "Channels, not a menu"
-  description: "Builds live TV channels out of your own library and serves them as an IPTV tuner, so Jellyfin, Plex or any m3u player sees them as ordinary channels. Something is always already playing, which is the part of television that on-demand took away."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Create a classic TV experience using your own media - IPTV backed by Plex/Jellyfin/Emby/NFO"
+  description: "Create your own live TV channels from media on Plex, Jellyfin, Emby, or local files. Tunarr lets you build custom live TV channels out of your existing media libraries — movies, TV episodes, music videos, or local files — and stream them as if they were real broadcast channels."
+  source: "https://github.com/chrisbenincasa/tunarr"
+  docs: "https://tunarr.com"
+  license: "Zlib"
   icon: "tunarr.svg"
   category: "media"
   required: false

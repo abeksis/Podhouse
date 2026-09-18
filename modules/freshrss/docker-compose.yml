@@ -6,8 +6,12 @@ x-homebox:
   id: freshrss
   added_at: "2026-09-09"
   title: "FreshRSS"
-  tagline: "Read what you chose to read"
-  description: "An RSS reader that fetches on a schedule and keeps everything, so a site you follow is a list of articles in the order they were published rather than whatever a feed ranked highest today. Speaks the Google Reader API, so most mobile RSS apps connect to it directly."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "A free, self-hostable news aggregator…"
+  description: "FreshRSS is a self-hosted RSS feed aggregator. It is lightweight, easy to work with, powerful, customizable, and has been translated into many languages."
+  source: "https://github.com/FreshRSS/FreshRSS"
+  docs: "https://freshrss.org"
+  license: "AGPL-3.0"
   icon: "freshrss.svg"
   category: "productivity"
   required: false

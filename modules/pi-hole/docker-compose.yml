@@ -13,8 +13,11 @@ x-homebox:
   id: pi-hole
   added_at: "2026-09-06"
   title: "Pi-hole"
-  tagline: "Ad and tracker blocking for every device at home"
-  description: "Blocks ads and trackers for every device on your network with no browser add-ons or per-device setup. It works as a DNS server: the address book every device uses to find websites. Pi-hole drops the ad addresses so they never load."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "A black hole for Internet advertisements"
+  description: "The Pi-hole® is a DNS sinkhole that protects your devices from unwanted content without installing any client-side software."
+  source: "https://github.com/pi-hole/pi-hole"
+  docs: "https://pi-hole.net"
   category: "network"
   required: false
   ram: "~90MB"

@@ -6,22 +6,33 @@ x-homebox:
   id: metrics
   added_at: "2026-09-09"
   title: "Beszel"
-  tagline: "Every box, one page"
-  description: "CPU, memory, disk, network and temperatures for this box and any other machine you point an agent at, with history and alerts. Uptime Kuma tells you a service stopped answering; Beszel tells you the disk filled up an hour before it did."
+  # The project's own words rather than ours, like every module that has a
+  # single upstream (scripts/upstream-meta.js). Written by hand here: the
+  # description is longer than the first paragraph that script would take.
+  tagline: "Lightweight server monitoring with historical data, docker stats, and alerts."
+  description: "Beszel is a lightweight server monitoring platform that includes Docker statistics, historical data, and alert functions. It has a friendly web interface, simple configuration, and is ready to use out of the box. It supports automatic backup, multi-user, OAuth authentication, and API access."
+  source: "https://github.com/henrygd/beszel"
+  # How to use the app is the project's to explain, and they keep it current.
+  docs: "https://beszel.dev/guide/getting-started"
+  license: "MIT"
   icon: "beszel.svg"
   category: "system"
   required: false
   default: false
-  ram: "~90MB"
+  # Measured, not estimated: hub 44MB + agent 14MB on a running box
+  # (192.168.1.77, 2026-09-18). The Docker filter adds a few MB more.
+  ram: "~60MB"
   theme:
     emoji: "📈"
     color: "#5b8def"
     bg: "rgba(91,141,239,0.12)"
+  # Only what Podhouse does differently, as steps. Using Beszel itself is in
+  # `docs` above. The agent's key is NOT a step any more: setup.sh reads it
+  # from the hub's own key file, and an older note here told people to copy
+  # it by hand.
   tips:
-    - "The hub creates its admin account on the first visit, like Uptime Kuma — nothing is generated for you here"
-    - "The agent on this box is added in the hub as HOST:45876, using the box's LAN address rather than localhost: the hub is in a container and localhost there means the container"
-    - "The agent needs the hub's public key, which the hub only creates on its first start. Install, open the hub, copy the key it shows when adding a system, and Podhouse picks it up from Settings"
-    - "The whole hub is one directory — config/beszel — so moving a Beszel from another machine is a file copy, not an export"
+    - "On the first visit, Beszel asks you to create its admin account."
+    - "To see this box, choose Add System in Beszel and enter this box's address (shown at the top of this page) with port 45876. Not localhost — Beszel runs in a container, where localhost is the container. Ignore the key it shows: Podhouse has already given it to the agent."
   env_vars:
     BESZEL_AGENT_KEY:
       label: "Hub public key for the agent"

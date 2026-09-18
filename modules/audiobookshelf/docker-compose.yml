@@ -6,8 +6,12 @@ x-homebox:
   id: audiobookshelf
   added_at: "2026-09-09"
   title: "Audiobookshelf"
-  tagline: "Audiobooks that remember where you stopped"
-  description: "A server for audiobooks and podcasts with apps on Android and iOS. It keeps your position per book across devices, which is the one thing a music player never gets right for a twenty-hour recording. Also downloads podcasts on a schedule and can read ebooks."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Self-hosted audiobook and podcast server"
+  description: "Audiobookshelf is a self-hosted audiobook and podcast server."
+  source: "https://github.com/advplyr/audiobookshelf"
+  docs: "https://audiobookshelf.org"
+  license: "GPL-3.0"
   icon: "audiobookshelf.svg"
   category: "media"
   required: false

@@ -6,8 +6,12 @@ x-homebox:
   id: tunnel
   added_at: "2026-09-09"
   title: "Cloudflare Tunnel"
-  tagline: "A way in, without a way in"
-  description: "Holds an outbound connection to Cloudflare and serves your apps over it. Nothing is forwarded on your router and no port is opened — the tunnel dials out, so the box stays invisible from the internet. You pick which hostname maps to which app in the Cloudflare dashboard."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Cloudflare Tunnel client"
+  description: "Contains the command-line client for Cloudflare Tunnel, a tunneling daemon that proxies traffic from the Cloudflare network to your origins. This daemon sits between Cloudflare network and your origin (e.g. a webserver). Cloudflare attracts client requests and sends them to you via this daemon, without requiring you to poke holes on your firewall --- your origin can remain as closed as possible."
+  source: "https://github.com/cloudflare/cloudflared"
+  docs: "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel"
+  license: "Apache-2.0"
   icon: "cloudflare.svg"
   category: "system"
   required: false

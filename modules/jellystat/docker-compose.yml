@@ -6,8 +6,11 @@ x-homebox:
   id: jellystat
   added_at: "2026-09-09"
   title: "Jellystat"
-  tagline: "What your Jellyfin actually plays"
-  description: "Statistics for a Jellyfin server: who watched what, how often, which files never get touched, and how much was streamed versus transcoded. It keeps its own history in Postgres, so the record survives a Jellyfin database reset and goes back further than Jellyfin's own activity log."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Jellystat is a free and open source Statistics App for Jellyfin"
+  description: "Jellystat is a free and open source Statistics App for Jellyfin!"
+  source: "https://github.com/CyferShepard/Jellystat"
+  license: "MIT"
   icon: "jellystat.svg"
   category: "media"
   required: false

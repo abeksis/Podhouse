@@ -7,8 +7,12 @@ x-homebox:
   id: dns
   added_at: "2026-09-05"
   title: "AdGuard Home"
-  tagline: "Block ads for every device at once"
-  description: "A DNS server for the whole house. It filters ads and trackers before they are ever requested, on phones and TVs that cannot run an ad blocker, and it is where you point the *.home names Podhouse hands out."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Network-wide ads & trackers blocking DNS server"
+  description: "AdGuard Home is a network-wide software for blocking ads and tracking. After you set it up, it'll cover ALL your home devices, and you don't need any client-side software for that."
+  source: "https://github.com/AdguardTeam/AdGuardHome"
+  docs: "https://adguard.com/adguard-home/overview.html"
+  license: "GPL-3.0"
   icon: "adguard-home.png"
   category: "network"
   required: false

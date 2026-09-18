@@ -6,8 +6,10 @@ x-homebox:
   id: backup
   added_at: "2026-09-09"
   title: "Duplicati"
-  tagline: "The copy that is not in this room"
-  description: "Scheduled, encrypted, incremental backups to somewhere off this box — a NAS, S3, Backblaze, Google Drive, another machine over SFTP. Encrypted before it leaves, so the destination never sees your files. Podhouse's own `homebox backup` protects its config; this is for everything else, and for getting it out of the building."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Store securely encrypted backups in the cloud!"
+  description: "Store securely encrypted backups on cloud storage services! Duplicati is a free, open-source backup client that securely stores encrypted, incremental, and compressed backups on cloud storage services and remote file servers. It supports:"
+  source: "https://github.com/duplicati/duplicati"
   icon: "duplicati.svg"
   category: "system"
   required: false

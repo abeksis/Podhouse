@@ -6,8 +6,12 @@ x-homebox:
   id: kiwix
   added_at: "2026-09-09"
   title: "Kiwix"
-  tagline: "The internet's reference shelf, offline"
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Command line Kiwix tools: kiwix-serve, kiwix-manage, ..."
   description: "Serves ZIM archives — the whole of Wikipedia, Stack Overflow, Project Gutenberg, medical and educational libraries — from local files, searchable, with no connection at all. The full English Wikipedia with images is about 100GB; the text-only version is a tenth of that."
+  source: "https://github.com/kiwix/kiwix-tools"
+  docs: "https://download.kiwix.org/release/kiwix-tools"
+  license: "GPL-3.0"
   icon: "kiwix.svg"
   category: "files"
   required: false

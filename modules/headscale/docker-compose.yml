@@ -6,8 +6,11 @@ x-homebox:
   id: headscale
   added_at: "2026-09-10"
   title: "Headscale"
-  tagline: "Your own Tailscale coordination server"
-  description: "Tailscale's control plane, self-hosted. Your devices still speak the ordinary Tailscale protocol and still connect directly to each other — but the server that decides who is on the network, and holds the keys that prove it, is this box instead of a company's. Comes with a web UI for enrolling devices and issuing pre-auth keys."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "An open source, self-hosted implementation of the Tailscale control server"
+  description: "An open source, self-hosted implementation of the Tailscale control server. Tailscale is a modern VPN built on top of Wireguard. It works like an overlay network between the computers of your networks - using NAT traversal."
+  source: "https://github.com/juanfont/headscale"
+  license: "BSD-3-Clause"
   icon: "headscale.svg"
   category: "network"
   required: false

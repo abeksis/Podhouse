@@ -6,8 +6,12 @@ x-homebox:
   id: unpackerr
   added_at: "2026-09-09"
   title: "Unpackerr"
-  tagline: "Unpacks what the *arr apps leave sitting"
-  description: "Watches Radarr, Sonarr and the rest for downloads that arrived as RAR or multi-part archives, extracts them so the import can proceed, and deletes the extracted copy once the app has taken the file. Without it those downloads sit in the queue as 'Completed' forever."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Extracts downloads for Radarr, Sonarr, Lidarr, Readarr, and/or a Watch folder - Deletes extracted files after import"
+  description: "Unpackerr runs as a daemon on your download host or seedbox. It checks for completed downloads and extracts them so Lidarr, Radarr, Readarr, and Sonarr may import them."
+  source: "https://github.com/Unpackerr/unpackerr"
+  docs: "https://unpackerr.zip"
+  license: "MIT"
   icon: "unpackerr.png"
   category: "media"
   required: false

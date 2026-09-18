@@ -6,8 +6,12 @@ x-homebox:
   id: mealie
   added_at: "2026-09-09"
   title: "Mealie"
-  tagline: "Recipes without the life story"
-  description: "Paste a recipe URL and it imports the ingredients and method, leaving behind the four paragraphs about somebody's childhood summers. Plan a week from what you have saved and it produces the shopping list, grouped the way a supermarket is laid out."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Mealie is a self hosted recipe manager and meal planner with a RestAPI backend and a reactive frontend application built in Vue for a pleasant user experience for the whole family. Easily add recipes into your database by providing the url and mealie will automatically import the relevant data or add a family recipe with the UI editor"
+  description: "Mealie is a self hosted recipe manager, meal planner and shopping list with a RestAPI backend and a reactive frontend built in Vue for a pleasant user experience for the whole family. Easily add recipes into your database by providing the URL and Mealie will automatically import the relevant data, or add a family recipe with the UI editor. Mealie also provides an API for interactions from 3rd party applications."
+  source: "https://github.com/mealie-recipes/mealie"
+  docs: "https://docs.mealie.io"
+  license: "AGPL-3.0"
   icon: "mealie.svg"
   category: "productivity"
   required: false

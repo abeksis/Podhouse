@@ -6,8 +6,12 @@ x-homebox:
   id: navidrome
   added_at: "2026-09-09"
   title: "Navidrome"
-  tagline: "Your music, streamed properly"
-  description: "A fast music server for a library of your own files, with a clean web player and support for the Subsonic API — which means dozens of existing Android, iOS and desktop clients work against it unchanged. Handles a hundred thousand tracks on hardware that would make Plex struggle."
+  # tagline, description, source, docs, license: the project's own, via scripts/upstream-meta.js
+  tagline: "Your Personal Streaming Service"
+  description: "Navidrome is an open source web-based music collection server and streamer. It gives you freedom to listen to your music collection from any browser or mobile device. It's like your personal Spotify!"
+  source: "https://github.com/navidrome/navidrome"
+  docs: "https://www.navidrome.org"
+  license: "GPL-3.0"
   icon: "navidrome.svg"
   category: "media"
   required: false
