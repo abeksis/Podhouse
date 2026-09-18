@@ -919,9 +919,10 @@ function renderSets(list) {
     if (members.some(blockedBy)) return '';          // the old stack runs here
     const about = state.modules.find((m) => m.id === set) || {};
     const missing = members.filter((m) => !m.installed && !state.pending.get(m.id));
-    const button = missing.length
-      ? `<button type="button" class="button is-primary is-small" data-queue-set="${escapeHtml(set)}">Add ${missing.length === members.length ? `all ${members.length}` : `the other ${missing.length}`}</button>`
-      : '<span class="status-text">All in place</span>';
+    // The card exists to add what is missing. Once every member is on the box
+    // (or queued), it has nothing left to say that the cards below do not.
+    if (!missing.length) return '';
+    const button = `<button type="button" class="button is-primary is-small" data-queue-set="${escapeHtml(set)}">Add ${missing.length === members.length ? `all ${members.length}` : `the other ${missing.length}`}</button>`;
     return `<section class="set-card">
       <div class="set-text">
         <h3>${escapeHtml(about.title || set)}</h3>
