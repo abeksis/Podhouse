@@ -642,51 +642,22 @@ async function runContainerAction(name, action) {
   }
 }
 
-function renderNetwork(summary) {
-  const n = summary.network || {};
-  $('#net-address').textContent = summary.host.address;
-  $('#net-facts').innerHTML = [
-    addressRow('Dashboard', n.dashboard, { open: true }),
-    addressRow('Proxy admin', n.proxyAdmin || 'core not running', { open: !!n.proxyAdmin, copy: !!n.proxyAdmin }),
-    addressRow('Hostname', summary.host.name),
-    addressRow('Networks', n.networks, { copy: false }),
-  ].join('');
-}
-
-/** One line of Addresses: label, value, and copy / open where they make sense. */
-function addressRow(label, value, { open = false, copy = true } = {}) {
-  const v = value == null ? '—' : String(value);
-  const buttons = [
-    copy && value ? `<button type="button" class="button is-small copy-btn" data-copy="${escapeHtml(v)}">Copy</button>` : '',
-    open && value ? `<a class="button is-small" href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open ↗</a>` : '',
-  ].join('');
-  return `<div class="address-row">
-      <span class="address-key">${escapeHtml(label)}</span>
-      <span class="address-val mono">${escapeHtml(v)}</span>
-      <span class="address-actions">${buttons}</span>
-    </div>`;
-}
-
 /**
- * Backups on the Overview: one answer in words, the facts behind it, and the
- * button that changes the answer. The button runs a config backup — the
- * small, quick kind; a full one, with the data pool, stays a choice made on
- * the Backups settings page.
+ * The Backups tile at the top of the Overview: when, how many, and where.
+ *
+ * It used to be half of a Backups panel lower on the page that said the same
+ * things at more length; the tile is what is left of it. The detail — next
+ * run, the NAS folder — is in its tooltip, and all of it in Settings → Backups.
  */
-function renderBackupCard(summary) {
+function renderBackupTile(summary) {
   const b = summary.backups || {};
-  const card = $('#safety');
-  $('#safety-count').textContent = b.count ? `${b.count} archive${b.count === 1 ? '' : 's'}` : '';
-
   let level;
-  let answer;
-  if (!b.hasKey) { level = 'bad'; answer = 'Backups cannot run: no encryption key'; }
-  else if (!b.latest) { level = 'warn'; answer = 'Nothing is backed up yet'; }
-  else if (Date.now() - b.latest.created > 7 * 86400000) { level = 'warn'; answer = `Last backup ${ago(b.latest.created)} ago`; }
-  else { level = 'good'; answer = `Backed up ${ago(b.latest.created)} ago`; }
-  // Where the archives live is half the answer. Recent archives that only
-  // exist on this disk are fine until the disk is not; a copy that stopped
-  // reaching the NAS is a warning even when the local side looks healthy.
+  if (!b.hasKey) level = 'bad';
+  else if (!b.latest || Date.now() - b.latest.created > 7 * 86400000) level = 'warn';
+  else level = 'good';
+  // Recent archives that only exist on this disk are fine until the disk is
+  // not; a copy that stopped reaching the NAS is a warning even when the local
+  // side looks healthy.
   const copy = b.copy || {};
   const copyFailing = copy.configured && copy.ok === false;
   if (copyFailing && level === 'good') level = 'warn';
@@ -694,65 +665,20 @@ function renderBackupCard(summary) {
     : copyFailing ? 'NAS copy failing'
       : copy.ok ? 'on the NAS too' : 'NAS copy on the next backup';
 
-  card.dataset.level = level;
-  $('#safety-answer').textContent = answer;
-
-  // The same answer as a number at the top of the page. The tile says when,
-  // the panel below says what to do about it.
   const tile = $('#stat-backup');
-  if (tile) {
-    tile.dataset.level = level;
-    $('#stat-backup-value').textContent = !b.hasKey ? 'No key'
-      : !b.latest ? 'Never' : `${ago(b.latest.created)} ago`;
-    $('#stat-backup-note').textContent = !b.hasKey ? 'backups cannot run'
-      : b.count ? `${b.count} archive${b.count === 1 ? '' : 's'} · ${where}`
-        : 'no archive yet';
-  }
-
-  const copyFact = !copy.configured
-    ? 'only on this box\'s disk — a NAS folder can be set in Settings → Backups'
-    : copyFailing ? `not reaching ${copy.dir}`
-      : copy.ok ? `copied to ${copy.dir}${copy.lastOk ? ` ${ago(copy.lastOk)} ago` : ''}`
-        : `the next backup is also copied to ${copy.dir}`;
-
-  const facts = [
-    b.hasKey ? null : 'add HB_BACKUP_KEY to .env and restart the dashboard',
-    b.count ? copyFact : null,
+  if (!tile) return;
+  tile.dataset.level = level;
+  $('#stat-backup-value').textContent = !b.hasKey ? 'No key'
+    : !b.latest ? 'Never' : `${ago(b.latest.created)} ago`;
+  $('#stat-backup-note').textContent = !b.hasKey ? 'backups cannot run'
+    : b.count ? `${b.count} archive${b.count === 1 ? '' : 's'} · ${where}`
+      : 'no archive yet';
+  tile.title = [
+    copyFailing ? `Not reaching ${copy.dir}` : copy.ok ? `Copied to ${copy.dir}` : null,
     b.scheduled
-      ? (b.nextRun ? `next automatic run in ${duration(Math.max(0, Math.round((b.nextRun - Date.now()) / 1000)))}` : 'on a schedule')
-      : 'no schedule',
-    `${b.appConfigs} app${b.appConfigs === 1 ? ' has' : 's have'} settings worth keeping`,
-    b.diskFree != null ? `${bytes(b.diskFree)} free` : null,
-  ].filter(Boolean);
-  $('#safety-detail').textContent = facts.join(' · ');
-
-  $('#safety-actions').innerHTML = [
-    b.hasKey ? `<button type="button" class="button is-small is-primary" id="safety-backup"${b.running ? ' disabled' : ''}>${b.running ? 'Backing up…' : 'Back up now'}</button>` : '',
-    `<a class="button is-small" href="#settings" data-page="settings" data-stab="backup">${b.scheduled ? 'Backup settings' : 'Set a schedule'}</a>`,
-  ].join('');
-}
-
-/** "Back up now" on the Overview card: a config archive, then a fresh summary. */
-async function backupFromOverview(button) {
-  button.disabled = true;
-  button.textContent = 'Backing up…';
-  try {
-    const res = await fetch('api/backup/create', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: 'config' }),
-    });
-    const data = await res.json();
-    if (!data.ok) toast(`Backup failed: ${data.error}${data.hint ? ` — ${data.hint}` : ''}`, 'error', 12000);
-    else toast(`Backup written: ${data.name || 'archive created'}. Keep the encryption key somewhere else.`, 'success', 7000);
-  } catch (err) {
-    toast(`Backup failed: ${err.message}`, 'error', 8000);
-  } finally {
-    // The live summary redraws this card with the new archive a moment
-    // later; until then, give the button back rather than leave it spinning.
-    button.disabled = false;
-    button.textContent = 'Back up now';
-  }
+      ? (b.nextRun ? `Next automatic run in ${duration(Math.max(0, Math.round((b.nextRun - Date.now()) / 1000)))}` : 'On a schedule')
+      : 'No schedule',
+  ].filter(Boolean).join(' · ');
 }
 
 /** A label over a value, in the Settings fact grids. */
@@ -1161,7 +1087,6 @@ function renderApps() {
     block.hidden = true;
   }
 }
-
 
 /* ------------------------------------------------------------- logs page */
 
@@ -2798,8 +2723,7 @@ function applySummary(summary) {
   renderBoxFacts(summary.metrics);
   if (state.modules.length) renderStoreStats();
   renderSettings();
-  renderNetwork(summary);
-  renderBackupCard(summary);
+  renderBackupTile(summary);
   renderInstallInfo(summary);
 }
 
@@ -4629,8 +4553,6 @@ document.addEventListener('click', async (event) => {
   }
 
   if (event.target.closest('#backup-now')) return createBackup();
-  const overviewBackup = event.target.closest('#safety-backup');
-  if (overviewBackup) return backupFromOverview(overviewBackup);
 
   if (event.target.closest('#key-reveal')) {
     return backupCall('key', {}, (data) => {
@@ -4781,7 +4703,6 @@ document.addEventListener('click', async (event) => {
     if (!ok) return undefined;
     return catalogCall('app/delete', id, `${id} deleted.`);
   }
-
 
   const stab = event.target.closest('[data-stab]');
   if (stab) return showSettingsTab(stab.dataset.stab);
