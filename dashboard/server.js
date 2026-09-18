@@ -407,6 +407,18 @@ async function backupInfo(modules, metrics) {
     running: !!center.running,
     count: center.count,
     latest: center.latest,
+    // A problem RIGHT NOW (the share is not mounted) outranks how the last
+    // attempt went: it is the one that decides whether tonight's copy works.
+    copy: center.copy
+      ? {
+        configured: !!center.copy.configured,
+        dir: center.copy.dir || null,
+        ok: center.copy.configured ? !center.copy.problem && !center.copy.lastError : null,
+        problem: center.copy.problem || center.copy.lastError || null,
+        count: center.copy.count || 0,
+        lastOk: center.copy.lastOk || null,
+      }
+      : { configured: false },
     appConfigs: withConfig,
     dataDir: path.join(state.ROOT, 'data'),
     diskFree: metrics.disk ? metrics.disk.free : null,
@@ -494,6 +506,24 @@ async function needsAttention({ metrics, backups, health }) {
         action: 'page', target: 'backups', verb: 'Back up',
       });
     }
+
+    // The copy off the box. A failing one is a warning in its own right: the
+    // local archives look fine, which is exactly why nobody would notice the
+    // NAS stopped taking them.
+    const copy = backups.copy || {};
+    if (copy.configured && copy.ok === false) {
+      items.push({
+        id: 'backup-copy', level: 'warn',
+        title: 'Backups are not reaching the NAS',
+        detail: copy.problem || 'The last copy did not complete.',
+        action: 'page', target: 'backups', verb: 'Open',
+      });
+    }
+    // No copy configured at all is NOT listed here. Plenty of people run one
+    // box on one disk on purpose, and "Needs you" has no way to be told "I
+    // know" — an item that can never go away teaches people to stop reading
+    // the panel. The Backups tile and card say it instead, where it is a fact
+    // about the backups rather than a demand.
   }
 
   if (metrics && metrics.disk && metrics.disk.percent != null && metrics.disk.percent >= 85) {

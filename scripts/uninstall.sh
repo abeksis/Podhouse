@@ -147,11 +147,37 @@ if [ -f "$HB_ROOT/.env" ]; then
   done
 fi
 
+# The backups get a count and a date of their own. A size ("412M") does not
+# tell anybody that the only copy of every password this box made is in there
+# — and removing the folder that holds them by mistake is how this line came to
+# be written.
+ARCHIVES=0
+NEWEST_AT=""
+if [ -d "$HB_ROOT/backups" ]; then
+  ARCHIVES="$(find "$HB_ROOT/backups" -maxdepth 1 -type f -name 'homebox-*.tar.gz.enc' 2>/dev/null | wc -l | tr -d ' ')"
+  if [ "$ARCHIVES" -gt 0 ]; then
+    newest="$(ls -1t "$HB_ROOT"/backups/homebox-*.tar.gz.enc 2>/dev/null | head -1)"
+    NEWEST_AT="$(date -r "$newest" '+%Y-%m-%d %H:%M' 2>/dev/null || true)"
+  fi
+fi
+COPY_DIR=""
+if [ -f "$HB_ROOT/.env" ]; then
+  COPY_DIR="$(grep -E '^HB_BACKUP_COPY_DIR=' "$HB_ROOT/.env" 2>/dev/null | cut -d= -f2- || true)"
+fi
+
 printf '\n%sThis cannot be undone.%s ' "$BOLD" "$RESET"
 if [ "$KEEP_DATA" -eq 1 ]; then
   printf 'data/ and backups/ are kept.\n'
 else
   printf '%sEvery generated password, all app config and every backup goes.%s\n' "$RED" "$RESET"
+  if [ "$ARCHIVES" -gt 0 ]; then
+    if [ -n "$COPY_DIR" ]; then
+      printf '%s archive(s) in backups/ are deleted. The copies in %s are not touched.\n' "$ARCHIVES" "$COPY_DIR"
+    else
+      warn "$ARCHIVES backup archive(s), the newest from ${NEWEST_AT:-an unknown date}, are deleted — and they exist nowhere else."
+      printf '   Keep them with %s--keep-data%s, or copy %s somewhere first.\n' "$BOLD" "$RESET" "$HB_ROOT/backups"
+    fi
+  fi
 fi
 
 # ---------------------------------------------------------------- 2. confirm

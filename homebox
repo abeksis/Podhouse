@@ -557,7 +557,13 @@ cmd_backup() {
   node_root -e '
     const backup = require(process.argv[1] + "/dashboard/lib/backup.js");
     backup.create({ kind: process.argv[2] })
-      .then((r) => console.log(`${r.name}  ${(r.size / 1048576).toFixed(1)}MB  in ${r.seconds}s`))
+      .then((r) => {
+        console.log(`${r.name}  ${(r.size / 1048576).toFixed(1)}MB  in ${r.seconds}s`);
+        // The archive is good either way; a copy that did not land is said
+        // out loud, and the exit status says it too, so a cron job notices.
+        if (r.copy && r.copy.ok) console.log(`copied to ${r.copy.dir} and checked`);
+        if (r.copy && !r.copy.ok) { console.error(`NOT copied to ${r.copy.dir}: ${r.copy.error}`); process.exitCode = 3; }
+      })
       .catch((e) => { console.error(e.message); if (e.hint) console.error(e.hint); process.exit(1); });
   ' "$HB_ROOT" "$kind"
 }

@@ -682,6 +682,15 @@ function renderBackupCard(summary) {
   else if (!b.latest) { level = 'warn'; answer = 'Nothing is backed up yet'; }
   else if (Date.now() - b.latest.created > 7 * 86400000) { level = 'warn'; answer = `Last backup ${ago(b.latest.created)} ago`; }
   else { level = 'good'; answer = `Backed up ${ago(b.latest.created)} ago`; }
+  // Where the archives live is half the answer. Recent archives that only
+  // exist on this disk are fine until the disk is not; a copy that stopped
+  // reaching the NAS is a warning even when the local side looks healthy.
+  const copy = b.copy || {};
+  const copyFailing = copy.configured && copy.ok === false;
+  if (copyFailing && level === 'good') level = 'warn';
+  const where = !copy.configured ? 'this box only'
+    : copyFailing ? 'NAS copy failing' : 'on the NAS too';
+
   card.dataset.level = level;
   $('#safety-answer').textContent = answer;
 
@@ -693,12 +702,18 @@ function renderBackupCard(summary) {
     $('#stat-backup-value').textContent = !b.hasKey ? 'No key'
       : !b.latest ? 'Never' : `${ago(b.latest.created)} ago`;
     $('#stat-backup-note').textContent = !b.hasKey ? 'backups cannot run'
-      : b.count ? `${b.count} archive${b.count === 1 ? '' : 's'}${b.scheduled ? ' · on a schedule' : ''}`
+      : b.count ? `${b.count} archive${b.count === 1 ? '' : 's'} · ${where}`
         : 'no archive yet';
   }
 
+  const copyFact = !copy.configured
+    ? 'only on this box\'s disk — a NAS folder can be set in Settings'
+    : copyFailing ? `not reaching ${copy.dir}`
+      : `copied to ${copy.dir}${copy.lastOk ? ` ${ago(copy.lastOk)} ago` : ''}`;
+
   const facts = [
     b.hasKey ? null : 'add HB_BACKUP_KEY to .env and restart the dashboard',
+    b.count ? copyFact : null,
     b.scheduled
       ? (b.nextRun ? `next automatic run in ${duration(Math.max(0, Math.round((b.nextRun - Date.now()) / 1000)))}` : 'on a schedule')
       : 'no schedule',
@@ -1463,7 +1478,23 @@ function renderBackups() {
   }
   $('#backup-now').disabled = !b.hasKey || b.running;
   $('#key-reveal').disabled = !b.hasKey;
-  $('#backup-same-disk').hidden = !b.sameDisk;
+  // Where the archives live, said every time: the local directory covers a
+  // mistake, only a copy on another machine covers the disk dying — or the
+  // whole Podhouse folder being deleted, which is how this line came to be.
+  const copy = b.copy || {};
+  const copyNote = $('#backup-copy-note');
+  copyNote.classList.toggle('is-warn', !!(copy.configured && (copy.problem || copy.lastError)));
+  if (!copy.configured) {
+    copyNote.textContent = (b.sameDisk
+      ? 'These archives are on the disk they protect. They cover a mistake, not a failed drive or a deleted folder. '
+      : 'These archives are only on this box. ')
+      + 'To keep a copy on a NAS, set "Also copy every archive to" under Configuration → Backup.';
+  } else if (copy.problem || copy.lastError) {
+    copyNote.textContent = `Copies are not reaching ${copy.dir}: ${copy.problem || copy.lastError}`;
+  } else {
+    copyNote.textContent = `Every archive is also copied to ${copy.dir} and checked there`
+      + ` — ${copy.count} there now${copy.lastOk ? `, the last ${ago(copy.lastOk)} ago` : ''}.`;
+  }
 
   $('#backup-latest').textContent = b.latest
     ? `Newest: ${b.latest.name} — ${bytes(b.latest.size)}, ${ago(b.latest.created)} ago.`

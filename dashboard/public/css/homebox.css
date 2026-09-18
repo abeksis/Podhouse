@@ -125,6 +125,7 @@ button { font: inherit; color: inherit; }
 
 .text { color: var(--text-2); margin: 0 0 0.75rem; }
 .help { color: var(--muted); font-size: 0.92rem; margin: 0 0 0.75rem; }
+.help.is-warn { color: var(--warn); }
 .small-note { color: var(--muted); font-size: 0.85rem; margin-top: 0.75rem; }
 .empty { color: var(--muted); padding: 0.6rem 0; list-style: none; }
 .empty a { font-weight: 600; }

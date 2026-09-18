@@ -153,8 +153,16 @@ An archive contains `.env`, which is every generated password on the box. So:
   open the dashboard can read the key and download the archives.
 - **Restore is a shell operation.** It unpacks to a new directory and touches
   nothing live, so a mis-click cannot overwrite a running app's database.
-- Archives land on the same filesystem they protect. The UI says so; copying
-  them off the box is still a manual job.
+- Archives land on the same filesystem they protect, which covers a mistake
+  but not a dead disk or a deleted folder. Set `HB_BACKUP_COPY_DIR` (Settings →
+  Configuration → Backup) to a folder on another disk or a mounted NAS share,
+  and every archive is copied there and decrypted once more where it landed.
+  The copy is refused, and the page says why, when that folder turns out to be
+  on the box's own disk — which is what an unmounted share looks like.
+- Copies stay encrypted. Whoever can read the NAS folder holds ciphertext; the
+  key is still only in `.env`, so keep a copy of the key somewhere that is not
+  this box either, or the archives on the NAS cannot be opened after the box
+  is gone.
 
 ## Input handling
 

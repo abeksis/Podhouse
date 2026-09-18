@@ -60,21 +60,27 @@ class BackupError extends Error {
 /* ------------------------------------------------------------------ keys */
 
 /**
- * Read HB_BACKUP_KEY out of .env without pulling the rest of the file into
- * memory as a parsed object — nothing else here has any business with the
- * other values.
+ * Read one value out of .env without pulling the rest of the file into memory
+ * as a parsed object — nothing here has any business with the other values.
+ *
+ * Read from the file rather than the environment on purpose: the CLI runs this
+ * module on the host, where the container's environment does not exist, and
+ * the file is the one place both sides agree on.
  */
-function readKeyFromEnv() {
+function readEnvValue(key) {
   try {
+    const prefix = `${key}=`;
     for (const line of fs.readFileSync(ENV_FILE, 'utf8').split(/\r?\n/)) {
-      const m = /^HB_BACKUP_KEY=(.*)$/.exec(line.trim());
-      if (m) return m[1].replace(/^["']|["']$/g, '').trim() || null;
+      const trimmed = line.trim();
+      if (trimmed.startsWith(prefix)) return trimmed.slice(prefix.length).replace(/^["']|["']$/g, '').trim() || null;
     }
   } catch {
-    /* no .env: treated the same as no key */
+    /* no .env: treated the same as the value not being set */
   }
   return null;
 }
+
+const readKeyFromEnv = () => readEnvValue('HB_BACKUP_KEY');
 
 function requireSecret() {
   const secret = readKeyFromEnv();
@@ -116,6 +122,9 @@ async function ensureDir() {
   // archives inside hold .env and state/, so the directory is as sensitive as
   // they are.
   await fsp.chmod(BACKUP_DIR, 0o700).catch(() => {});
+  // Created from inside the container it is root's, and the box's own account
+  // then cannot list the backups it is told to copy somewhere safe.
+  await matchOwner(BACKUP_DIR);
 }
 
 /**
@@ -292,7 +301,10 @@ async function create({ kind = 'config' } = {}) {
     await matchOwner(target);
     const { size } = await fsp.stat(target);
     await prune();
-    return { name, size, kind, seconds: Math.round((Date.now() - started) / 1000) };
+    // After the local archive is final and verified, never instead of it: a
+    // NAS that is down must not cost the box the backup it did manage.
+    const copy = await copyOffBox(name, secret);
+    return { name, size, kind, copy, seconds: Math.round((Date.now() - started) / 1000) };
   } finally {
     await fsp.rm(plain, { force: true });
     inFlight = false;
@@ -371,6 +383,132 @@ async function prune() {
   return removed;
 }
 
+/* --------------------------------------------------- the copy off the box */
+
+/**
+ * A second home for every archive, on another machine.
+ *
+ * The archives above live inside the tree they protect, so a dead disk, or one
+ * `rm -rf /opt/podhouse`, takes the backups along with everything else. That is
+ * not a hypothetical; it is how this came to be written. When
+ * HB_BACKUP_COPY_DIR names a directory — normally a NAS share mounted on the
+ * host — every archive is copied there once it has been verified, and the copy
+ * is verified again where it landed.
+ *
+ * The local archive stays. Restoring from the same disk is fast and works while
+ * the NAS is off; the copy is the one that survives the box.
+ *
+ * A failed copy does not fail the backup. It is recorded and shown instead,
+ * because a share that stopped accepting copies three weeks ago is precisely
+ * the thing nobody notices until the day it matters.
+ */
+const COPY_STATE_FILE = 'backup-copy.json';
+
+function copyDir() {
+  return readEnvValue('HB_BACKUP_COPY_DIR');
+}
+
+/** null when the destination can take a copy right now, otherwise why not. */
+async function copyProblem(dir) {
+  if (!path.isAbsolute(dir)) return `${dir} is not an absolute path`;
+  let st;
+  try {
+    st = await fsp.stat(dir);
+  } catch {
+    return `${dir} does not exist here. If it was just set, the dashboard needs recreating to see it — saving it in Settings does that.`;
+  }
+  if (!st.isDirectory()) return `${dir} is not a directory`;
+  // The trap this exists for: a share that is not mounted leaves an ordinary
+  // empty directory on the local disk at exactly the same path. Copies would
+  // land on the very disk they are meant to outlive, and look like they worked.
+  const home = await fsp.stat(ROOT);
+  if (st.dev === home.dev) {
+    return `${dir} is on this box's own disk. Is the NAS mounted? A share that mounted after the dashboard started is not seen until the dashboard is recreated.`;
+  }
+  return null;
+}
+
+async function readCopyState() {
+  return state.readJson(COPY_STATE_FILE, {});
+}
+
+async function noteCopy(result) {
+  const prev = await readCopyState();
+  await state.writeJson(COPY_STATE_FILE, {
+    ...result,
+    at: Date.now(),
+    lastOk: result.ok ? Date.now() : (prev.lastOk || null),
+  });
+  return result;
+}
+
+async function copyOffBox(name, secret) {
+  const dir = copyDir();
+  if (!dir) return null;
+
+  const problem = await copyProblem(dir);
+  if (problem) return noteCopy({ ok: false, dir, name, error: problem });
+
+  const src = path.join(BACKUP_DIR, name);
+  const tmp = scratchPath(dir, '.incoming');
+  try {
+    await pipeline(fs.createReadStream(src), fs.createWriteStream(tmp, { mode: 0o600 }));
+    // Read the copy back through the cipher, as the local one was. A copy
+    // nobody has decrypted is a copy nobody knows is whole — and a network
+    // share is exactly where a truncated write goes unreported.
+    await decryptToSink(tmp, deriveKey(secret));
+    await fsp.rename(tmp, path.join(dir, name));
+    await pruneCopies(dir);
+    return noteCopy({ ok: true, dir, name, error: null });
+  } catch (err) {
+    await fsp.rm(tmp, { force: true }).catch(() => {});
+    return noteCopy({ ok: false, dir, name, error: err.message });
+  }
+}
+
+/**
+ * The same retention as the local directory, and only ever on files named
+ * like our own archives: this directory is somebody's NAS, and anything else
+ * in it is theirs.
+ */
+async function pruneCopies(dir) {
+  const keep = (await getSchedule()).retention;
+  const mine = [];
+  for (const name of await fsp.readdir(dir)) {
+    if (!NAME_RE.test(name)) continue;
+    try {
+      mine.push({ name, created: (await fsp.stat(path.join(dir, name))).mtimeMs });
+    } catch {
+      /* vanished between readdir and stat */
+    }
+  }
+  mine.sort((a, b) => b.created - a.created);
+  for (const old of mine.slice(keep)) await fsp.rm(path.join(dir, old.name), { force: true });
+}
+
+/** What the page says about the copy: configured, working now, and the last attempt. */
+async function copyStatus() {
+  const dir = copyDir();
+  if (!dir) return { configured: false };
+  const [problem, last] = await Promise.all([copyProblem(dir), readCopyState()]);
+  let count = 0;
+  if (!problem) {
+    try {
+      count = (await fsp.readdir(dir)).filter((n) => NAME_RE.test(n)).length;
+    } catch {
+      /* counted as none */
+    }
+  }
+  return {
+    configured: true,
+    dir,
+    problem,
+    count,
+    lastOk: last.lastOk || null,
+    lastError: last.ok === false && last.dir === dir ? last.error : null,
+  };
+}
+
 /* -------------------------------------------------------------- schedule */
 
 async function getSchedule() {
@@ -444,10 +582,13 @@ async function sameDiskAsData() {
 }
 
 async function status() {
-  const [backups, schedule, sameDisk] = await Promise.all([list(), getSchedule(), sameDiskAsData()]);
+  const [backups, schedule, sameDisk, copy] = await Promise.all([
+    list(), getSchedule(), sameDiskAsData(), copyStatus(),
+  ]);
   const latest = backups[0] || null;
   return {
     directory: BACKUP_DIR,
+    copy,
     hasKey: readKeyFromEnv() != null,
     count: backups.length,
     totalSize: backups.reduce((sum, b) => sum + b.size, 0),
@@ -465,6 +606,6 @@ function revealKey() {
 }
 
 module.exports = {
-  create, list, remove, verify, prune, status,
+  create, list, remove, verify, prune, status, copyStatus,
   getSchedule, setSchedule, startScheduler,
   revealKey, decryptFile, resolveName, BACKUP_DIR, BackupError, PRESETS, tarArgs, rebuildableExcludes };

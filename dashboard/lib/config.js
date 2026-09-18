@@ -78,9 +78,15 @@ const BASE_GROUPS = [
   {
     id: 'backup',
     title: 'Backup',
-    description: 'Change this and every existing archive becomes unreadable.',
+    description: 'Change the key and every existing archive becomes unreadable.',
     keys: [
       { key: 'HB_BACKUP_KEY', label: 'Backup encryption key', secret: true, dangerous: true },
+      {
+        key: 'HB_BACKUP_COPY_DIR',
+        label: 'Also copy every archive to',
+        placeholder: '/mnt/nas/podhouse-backups',
+        hint: 'A folder on ANOTHER disk or a NAS share already mounted on this box. Each archive is copied there and checked after it is made; the local one stays. Empty means backups live only on this box.',
+      },
     ],
   },
 ];
@@ -251,6 +257,24 @@ async function save(changes) {
         + `Put the shared part (e.g. /mnt/media_disk) in Library root, and just the `
         + `folder name here.`,
       );
+    }
+  }
+
+  // Where every archive gets copied. It becomes both halves of a bind mount on
+  // the dashboard, so a colon or a space would break the compose file of the
+  // one container that must always come back up — refused here, before it is
+  // written, rather than discovered when the page does not return.
+  const copyDir = changes.HB_BACKUP_COPY_DIR;
+  if (typeof copyDir === 'string' && copyDir !== '') {
+    if (!copyDir.startsWith('/')) {
+      throw new Error('HB_BACKUP_COPY_DIR needs a full path, e.g. /mnt/nas/podhouse-backups.');
+    }
+    if (/[\s:]/.test(copyDir)) {
+      throw new Error('HB_BACKUP_COPY_DIR cannot contain spaces or colons: it becomes a mount on the dashboard.');
+    }
+    const root = state.ROOT.replace(/\/+$/, '');
+    if (copyDir === root || copyDir.startsWith(`${root}/`)) {
+      throw new Error(`HB_BACKUP_COPY_DIR is inside ${root}, the very thing it is meant to outlive. Pick a folder on another disk or a NAS.`);
     }
   }
 
