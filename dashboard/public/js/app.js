@@ -550,27 +550,11 @@ function launchTile(tile, peak) {
   //   Referer header: 'http://192.168.1.77:8443/' Target origin: '192.168.1.77:8080'
   //
   // Every outbound link on this page carries it, for the same reason.
-  // A service with a first_login note has something to say before it opens —
-  // usually the generated password, which otherwise lives only in .env and a
-  // CLI command. Marked here; the click is intercepted once, and the tick in
-  // that dialog removes the marker for good.
-  //
-  // `data-fl-*` and NOT `data-module`: the document click handler opens the
-  // module drawer for anything matching `[data-module]`, so naming it that
-  // made every marked launcher tile slide the drawer open behind the dialog.
-  // A generic attribute name on a shared document listener is a collision
-  // waiting to happen.
-  let first = '';
-  try {
-    if (tile.first_login && !localStorage.getItem(seenKey(tile.name))) {
-      first = ` data-first-login="1" data-fl-service="${escapeHtml(tile.name)}" data-fl-module="${escapeHtml(tile.module.id)}"`;
-    }
-  } catch { /* localStorage blocked: show it, which is the safe direction */ }
 
   // The link covers the name and figures; the buttons sit outside it, since a
   // button inside an <a> is invalid and its click would also open the app.
   return `<div class="dock-tile${down ? ' is-down' : ''}">
-      <a class="dock-open" href="${escapeHtml(tile.url)}" target="_blank" rel="noopener noreferrer"${first}
+      <a class="dock-open" href="${escapeHtml(tile.url)}" target="_blank" rel="noopener noreferrer"
         title="${escapeHtml(tile.description || tile.friendly_name)}">
         <span class="dock-head">
           <span class="dock-art">${art}</span>
@@ -2632,10 +2616,6 @@ function renderModuleErrors(errors) {
 
 function applySummary(summary) {
   state.summary = summary;
-  // Set before anything renders: the launcher builds its dismissal keys from
-  // it, and a tile drawn under the fallback key would be dismissible into a
-  // slot nothing ever reads again.
-  state.installId = summary.installId || null;
   // The server is the authority on what is mid-install: a page opened after
   // an install started should still show it as busy.
   state.busy = new Set(summary.busy || []);
@@ -3063,40 +3043,7 @@ async function detachStorage(mountpoint) {
   loadStorage();
 }
 
-/* ------------------------------------------------------- first login */
-
-/**
- * "What is the username and password for this app?"
- *
- * Podhouse generates a password for every module that needs one and writes it
- * to .env — and until now the only way to read it was to SSH in and run
- * `homebox secrets <module>`. Installing the Media Stack handed you a
- * qBittorrent you could not sign in to without leaving the dashboard, which
- * is the one thing a dashboard exists to prevent.
- *
- * So the first click on an app's tile shows its generated sign-in before the
- * app opens, with a tick to stop showing it. Everything needed already exists:
- * the module's `env_vars` name the keys, /api/config returns their values
- * behind the session, and `first_login` carries the app's own instructions.
- *
- * Dismissal is per-browser (localStorage) and per-service, because it is a
- * statement about what THIS person has already seen, not about the box.
- */
-/**
- * The dismissal key, scoped to THIS install of the box.
- *
- * localStorage belongs to the browser, so wiping the server cannot clear it.
- * Keyed on the service alone, "don't show this again" outlived a full
- * uninstall and reinstall: the box came back with a brand new generated
- * password and the dialog that exists to show it stayed silent, which reads
- * exactly like the uninstall left something behind.
- *
- * The install id changes whenever state/ is recreated, so a reinstalled box
- * is a different box as far as this is concerned. Falls back to the bare name
- * only before the first summary lands, which at worst shows the dialog once
- * more than needed — the right direction to fail in.
- */
-const seenKey = (service) => `hb-first-login-seen-${state.installId || 'pending'}-${service}`;
+/* --------------------------------------------------------- passwords */
 
 /** Every setting a module declares, with its current value. */
 async function moduleEnv(moduleId) {
@@ -3110,91 +3057,6 @@ async function moduleEnv(moduleId) {
   const group = (configSchema.groups || []).find((g) => g.id === `module-${moduleId}`);
   return group ? group.keys : [];
 }
-
-/**
- * Just the ones that read as a sign-in, for the first-login dialog.
- *
- * A module declares plenty of settings that are not credentials — PUID is
- * not a password, and listing it in a dialog headed "signing in" is noise
- * that makes the two lines that matter harder to find.
- */
-async function moduleCredentials(moduleId) {
-  const keys = await moduleEnv(moduleId);
-  return keys.filter((k) => (k.secret || /USER|NAME|EMAIL/.test(k.key)) && k.value);
-}
-
-/**
- * The first-run dialog for one service. Resolves when it is dismissed.
- */
-async function firstLoginDialog(svc, mod) {
-  const creds = await moduleCredentials(mod.id);
-  const rows = creds.map((c) => `
-    <div class="signin-row">
-      <span class="signin-key">${escapeHtml(c.label || c.key)}</span>
-      <code class="signin-val mono">${escapeHtml(c.value)}</code>
-      <button type="button" class="button is-small copy-btn" data-copy="${escapeHtml(c.value)}">Copy</button>
-    </div>`).join('');
-
-  const body = `
-    ${svc.first_login ? `<p class="signin-hint">${escapeHtml(svc.first_login)}</p>` : ''}
-    ${rows
-      ? `<div class="signin-list">${rows}</div>
-         <p class="signin-note">Created by Podhouse when the app was installed. You can find them again under
-            Settings → Passwords, or on the server with
-            <code class="mono">homebox secrets ${escapeHtml(mod.id)}</code>.</p>`
-      : `<p class="signin-note">Podhouse did not create a login for this app. Whatever
-            ${escapeHtml(svc.friendly_name)} asks for the first time, you choose.</p>`}
-    <label class="signin-skip">
-      <input type="checkbox" id="signin-skip-box">
-      <span>Stop showing this for ${escapeHtml(svc.friendly_name)}</span>
-    </label>`;
-
-  // The dialog removes itself before the promise resolves, so the tick has to
-  // be recorded while the box still exists. Honoured whichever button was
-  // pressed: someone who ticks it and then closes has still said they do not
-  // want to see it again.
-  let dismiss = false;
-  const watch = (event) => {
-    if (event.target.id === 'signin-skip-box') dismiss = event.target.checked;
-  };
-  document.addEventListener('change', watch);
-
-  const ok = await confirmDialog({
-    title: `Your login for ${svc.friendly_name}`,
-    bodyHtml: body,
-    confirmLabel: `Open ${svc.friendly_name}`,
-    cancelLabel: 'Close',
-    wide: true,
-  });
-
-  document.removeEventListener('change', watch);
-  return { open: ok, dismiss };
-}
-
-/**
- * Intercept the first launch of a service that has something to tell you.
- *
- * Bound in the capture phase on the whole document so it runs before the link
- * navigates, and so a tile re-rendered by the 20s poll is still covered —
- * rebinding per tile would lose the handler on every refresh.
- */
-document.addEventListener('click', async (event) => {
-  const link = event.target.closest('.dock-open[data-first-login]');
-  if (!link) return;
-  event.preventDefault();
-
-  const service = link.dataset.flService;
-  const mod = state.modules.find((m) => m.id === link.dataset.flModule);
-  const svc = mod && mod.services.find((s) => s.name === service);
-  if (!svc) { window.open(link.href, '_blank', 'noopener,noreferrer'); return; }
-
-  const { open, dismiss } = await firstLoginDialog(svc, mod);
-  if (dismiss) {
-    try { localStorage.setItem(seenKey(service), '1'); } catch { /* private mode: it just asks again */ }
-    link.removeAttribute('data-first-login');
-  }
-  if (open) window.open(link.href, '_blank', 'noopener,noreferrer');
-});
 
 /**
  * Reveal one secret on the Passwords tab.

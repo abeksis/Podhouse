@@ -331,7 +331,7 @@ textarea.input { resize: vertical; min-height: 5rem; }
 .select-sm { min-height: 32px; font-size: 0.88rem; }
 .input-narrow { width: 7ch; }
 .check { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--text-2); cursor: pointer; }
-.check input, .switch-row input, .erase-option input, .signin-skip input { accent-color: var(--accent); width: 16px; height: 16px; }
+.check input, .switch-row input, .erase-option input { accent-color: var(--accent); width: 16px; height: 16px; }
 
 .chip {
   border: 1px solid var(--line); background: transparent; color: var(--text-2);
@@ -1012,10 +1012,10 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 }
 .stream.has-error { border-color: var(--bad); }
 
-.erase-option, .signin-skip { display: flex; gap: 0.6rem; align-items: flex-start; margin-top: 0.8rem; cursor: pointer; white-space: normal; }
-.erase-option span, .signin-skip span { display: flex; flex-direction: column; }
+.erase-option { display: flex; gap: 0.6rem; align-items: flex-start; margin-top: 0.8rem; cursor: pointer; white-space: normal; }
+.erase-option span { display: flex; flex-direction: column; }
 .erase-option small { color: var(--muted); font-size: 0.82rem; }
-.erase-option input, .signin-skip input { margin-top: 0.2rem; flex: none; }
+.erase-option input { margin-top: 0.2rem; flex: none; }
 
 .plan-intro { margin-bottom: 0.5rem; }
 .plan-list { display: flex; flex-direction: column; gap: 0.7rem; white-space: normal; }
@@ -1031,11 +1031,6 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .plan-meta { margin-top: 0.7rem; color: var(--text); font-weight: 600; font-size: 0.88rem; }
 .plan-wait { margin-top: 0.8rem; background: var(--accent-soft); border-radius: var(--radius-s); padding: 0.55rem 0.7rem; font-size: 0.85rem; }
 
-.signin-hint { background: var(--well); border-radius: var(--radius-s); padding: 0.5rem 0.65rem; margin-bottom: 0.7rem; white-space: normal; }
-.signin-list { display: flex; flex-direction: column; gap: 0.4rem; white-space: normal; }
-.signin-row { display: grid; grid-template-columns: 9rem minmax(0, 1fr) auto; gap: 0.6rem; align-items: center; }
-.signin-key { color: var(--muted); font-size: 0.84rem; }
-.signin-val { background: var(--well); padding: 0.3rem 0.5rem; border-radius: 6px; overflow-wrap: anywhere; }
 .signin-note { color: var(--muted); font-size: 0.84rem; margin-top: 0.7rem; white-space: normal; }
 
 /* ---------------------------------------------------------------- notices */
@@ -1097,8 +1092,6 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   .pending-bar { left: 1rem; right: 1rem; transform: none; border-radius: var(--radius-l); flex-wrap: wrap; }
   .catalog { grid-template-columns: minmax(0, 1fr); }
   .module-card { grid-template-columns: 7rem minmax(0, 1fr); }
-  .signin-row { grid-template-columns: minmax(0, 1fr) auto; }
-  .signin-key { grid-column: 1 / -1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
