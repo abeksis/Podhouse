@@ -417,8 +417,7 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   gap: 1rem;
   align-items: start;
 }
-.area-dock { grid-column: span 8; grid-row: span 2; }
-.area-host { grid-column: span 4; }
+.area-dock { grid-column: 1 / -1; }
 .area-wide { grid-column: 1 / -1; }
 
 /* Your apps */
@@ -501,32 +500,6 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .needs-clear { display: flex; align-items: center; gap: 0.6rem; padding: 0.15rem 0 0.35rem; }
 .needs-clear p { margin: 0; font-size: 0.85rem; color: var(--text-2); }
 .needs-ok { width: 9px; height: 9px; border-radius: 50%; background: var(--good); flex: none; }
-
-/* The numbers, after the tasks have had their say: one quiet strip. */
-.vitals {
-  display: flex; justify-content: space-between; gap: 0.6rem;
-  margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px solid var(--line);
-}
-.area-host > .vitals { margin-top: 0; padding-top: 0; border-top: 0; }
-.vitals div { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
-.vital-top { display: flex; align-items: center; gap: 0.3rem; }
-/* Line glyphs, drawn at text size and in the muted colour: they label the
-   number without competing with it. */
-.vital-ic { width: 13px; height: 13px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.vitals b { font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
-.vitals span { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
-.vitals [data-level="warn"] b { color: var(--warn); }
-.vitals [data-level="bad"] b { color: var(--bad); }
-
-/* This server */
-.box-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
-.box-fact { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; background: var(--surface-2); border-radius: var(--radius); padding: 0.5rem 0.65rem; }
-.box-fact span { color: var(--muted); font-size: 0.74rem; }
-.box-fact b { font-size: 0.95rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.box-fact small { color: var(--muted); font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.box-fact[data-level="warn"] b { color: var(--warn); }
-.box-fact[data-level="bad"] b { color: var(--bad); }
-.box-events-head { margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--line); }
 
 .shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem; margin-top: 0.7rem; }
 .shortcut {
@@ -1091,11 +1064,6 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 
 /* ----------------------------------------------------------------- mobile */
 
-@media (max-width: 1100px) {
-  .area-dock { grid-column: 1 / -1; grid-row: auto; }
-  .area-host { grid-column: 1 / -1; }
-}
-
 @media (max-width: 860px) {
   /* A floating rail makes no sense once it is a top bar: it goes back to
      spanning the full width, flush with the edges. */
@@ -1117,7 +1085,6 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   .topbar { flex-wrap: wrap; gap: 0.5rem 0.8rem; padding: 0.5rem 0.65rem; }
   .topbar-right { margin-left: auto; gap: 0.6rem; }
   .view { padding: 1.1rem 1rem 5rem; }
-  .area-host { grid-column: 1 / -1; }
   .summary-strip { grid-template-columns: minmax(0, 1fr); }
   .form-grid, .form-row, .env-row { grid-template-columns: minmax(0, 1fr); }
   .env-hint { grid-column: 1; }

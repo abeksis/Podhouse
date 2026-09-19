@@ -314,29 +314,6 @@ function renderSideMeters(summary) {
 }
 
 /**
- * The "This box" facts on the Overview. No bars: the sidebar already draws
- * processor, memory and disk as percentages, so these give the absolute
- * figures behind them instead, coloured when the percentage runs high.
- */
-function renderBoxFacts(m) {
-  const mark = (id, pct) => {
-    const lv = level(pct);
-    if (lv) $(id).dataset.level = lv;
-    else delete $(id).dataset.level;
-  };
-  $('#val-uptime').textContent = duration(m.uptime);
-  $('#sub-uptime').textContent = 'awake';
-  $('#val-load').textContent = m.load[0].toFixed(2);
-  $('#sub-load').textContent = `load, ${m.cores} cores`;
-  $('#val-ram').textContent = `${bytes(m.memory.used)} / ${bytes(m.memory.total)}`;
-  $('#sub-ram').textContent = 'memory';
-  $('#val-disk').textContent = m.disk.total ? bytes(m.disk.free) : '--';
-  $('#sub-disk').textContent = m.disk.total ? 'disk free' : '';
-  mark('#fact-ram', m.memory.percent);
-  mark('#fact-disk', m.disk.percent);
-}
-
-/**
  * Clear the layers rebuilds left behind.
  *
  * The only task in the list that acts from here rather than opening a page,
@@ -2698,7 +2675,6 @@ function applySummary(summary) {
   renderTopbar(summary);
   renderHealth(summary);
   renderNeeds(summary.needs);
-  renderBoxFacts(summary.metrics);
   if (state.modules.length) renderStoreStats();
   renderSettings();
   renderBackupTile(summary);
