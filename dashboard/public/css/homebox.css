@@ -727,7 +727,12 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .module-app-art { width: 18px; height: 18px; border-radius: 5px; flex: none; font-size: 0.85rem; }
 .module-app-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .module-app-port { color: var(--muted); font-size: 0.76rem; }
-.module-app-open { font-size: 0.78rem; font-weight: 600; }
+.module-app-open {
+  min-height: 28px; padding: 0 0.65rem;
+  border-color: var(--accent-line); background: var(--accent-soft);
+  color: var(--accent-text); font-size: 0.78rem; font-weight: 600;
+}
+.module-app-open:hover { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--text); }
 .module-notes { color: var(--muted); font-size: 0.82rem; }
 .module-notes summary { cursor: pointer; color: var(--accent-text); font-size: 0.8rem; width: fit-content; }
 .module-notes ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }

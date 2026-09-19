@@ -950,8 +950,8 @@ function renderIncludedServices(m) {
     const st = svc.container && svc.container.state;
     const live = !!st && st !== 'stopped' && st !== 'unhealthy';
     const end = m.installed && svc.url && live
-      ? `<a href="${escapeHtml(svc.url)}" target="_blank" rel="noopener noreferrer" class="module-app-open"
-           title="Open ${escapeHtml(svc.friendly_name)}">open</a>`
+      ? `<a href="${escapeHtml(svc.url)}" target="_blank" rel="noopener noreferrer" class="button is-small module-app-open"
+           title="Open ${escapeHtml(svc.friendly_name)}">Open</a>`
       : (svc.port ? `<span class="module-app-port mono">:${escapeHtml(String(svc.port))}</span>` : '');
     const art = iconArt(svc.icon || (m.theme && m.theme.emoji), monogram(svc.friendly_name));
     return `<li class="module-app"${svc.description ? ` title="${escapeHtml(svc.description)}"` : ''}>
@@ -2447,7 +2447,8 @@ function openModule(id) {
           <span class="sheet-row-desc">${escapeHtml(s.description || (s.internal ? 'internal service' : s.name))}</span>
         </span>
         ${s.container ? `<span class="state-pill" data-state="${escapeHtml(s.container.state)}">${escapeHtml(s.container.state)}</span>` : ''}
-        ${s.url ? `<a class="linkish" href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
+        ${s.url ? `<a class="button is-small module-app-open" href="${escapeHtml(s.url)}" target="_blank"
+          rel="noopener noreferrer" title="Open ${escapeHtml(s.friendly_name)}">Open</a>` : ''}
       </div>
       ${s.first_login ? `<p class="sheet-note">${escapeHtml(s.first_login)}</p>` : ''}
     `).join('')}
