@@ -45,10 +45,10 @@
   --plate: #1f1f24;
   color-scheme: dark;
 
-  /* accent (orange unless data-accent says otherwise) */
-  --accent: #ea6a12;
-  --accent-text: #f29a5c;
-  --accent-on: #140800;
+  /* accent (blue unless data-accent says otherwise) */
+  --accent: #5b8def;
+  --accent-text: #8cb0ff;
+  --accent-on: #ffffff;
 }
 
 :root[data-theme="dim"] {

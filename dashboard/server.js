@@ -102,8 +102,8 @@ const BACKGROUNDS = ['none', 'milky-way', 'fog', 'aurora'];
 const INSIGHT_PANELS = ['transfers', 'queues', 'upcoming'];
 const DEFAULT_PREFS = {
   theme: 'dark',
-  accent: 'orange',
-  background: 'none',
+  accent: 'blue',
+  background: 'fog',
   insights: { enabled: true, transfers: true, queues: true, upcoming: true },
 };
 

@@ -43,7 +43,7 @@ const state = {
   // Mirrors DEFAULT_PREFS in server.js. Only ever seen for the moment before
   // /api/prefs answers, but a mismatch here is a visible flash of the wrong
   // background on every load.
-  prefs: { theme: 'dark', accent: 'orange' },
+  prefs: { theme: 'dark', accent: 'blue', background: 'fog' },
 };
 
 /* ------------------------------------------------------------- utilities */
