@@ -752,6 +752,7 @@ function actionText(entry) {
 // list does not know gets the generic box rather than nothing.
 const CATEGORY_GLYPHS = {
   all: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+  installed: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 2.7 2.7L16.5 9"/>',
   core: '<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/>',
   media: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m10 9 5 3-5 3z"/>',
   photos: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-9 8"/>',
@@ -765,15 +766,26 @@ const CATEGORY_GLYPHS = {
 
 function renderCategories() {
   const used = new Set(state.modules.map((m) => m.category));
-  const tiles = [{ id: 'all', label: 'All' }, ...state.categories.filter((c) => used.has(c.id))];
+  const tiles = [
+    { id: 'all', label: 'All' },
+    { id: 'installed', label: 'Installed' },
+    ...state.categories.filter((c) => used.has(c.id)),
+  ];
   $('#category-chips').innerHTML = tiles.map((c) => {
-    const mods = c.id === 'all' ? state.modules : state.modules.filter((m) => m.category === c.id);
+    const mods = c.id === 'all'
+      ? state.modules
+      : c.id === 'installed'
+        ? state.modules.filter((m) => m.installed)
+        : state.modules.filter((m) => m.category === c.id);
     const installed = mods.filter((m) => m.installed).length;
     const on = state.category === c.id;
+    const count = c.id === 'installed'
+      ? `<b>${mods.length} installed</b>`
+      : `${mods.length} app${mods.length === 1 ? '' : 's'}${installed ? ` · <b>${installed} on</b>` : ''}`;
     return `<button type="button" class="category-tile${on ? ' is-on' : ''}" data-category="${escapeHtml(c.id)}" aria-pressed="${on}">
       <svg viewBox="0 0 24 24" aria-hidden="true">${CATEGORY_GLYPHS[c.id] || CATEGORY_GLYPHS.core}</svg>
       <span class="category-tile-name">${escapeHtml(c.label)}</span>
-      <span class="category-tile-count">${mods.length} app${mods.length === 1 ? '' : 's'}${installed ? ` · <b>${installed} on</b>` : ''}</span>
+      <span class="category-tile-count">${count}</span>
     </button>`;
   }).join('');
 }
@@ -993,7 +1005,8 @@ function renderApps() {
   const query = state.appQuery.trim().toLowerCase();
   const list = state.modules
     .filter(offered)
-    .filter((m) => state.category === 'all' || m.category === state.category)
+    .filter((m) => state.category === 'all'
+      || (state.category === 'installed' ? m.installed : m.category === state.category))
     .filter((m) => matchesQuery(m, query))
     .sort(SORTS[state.appSort] || SORTS.name);
 
