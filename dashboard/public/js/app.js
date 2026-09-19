@@ -816,7 +816,7 @@ function renderStoreStats() {
   const percent = total ? Math.min(100, Math.round((estimate / total) * 100)) : 0;
 
   $('#store-summary').textContent =
-    `${installed.length} of ${state.modules.filter(offered).length} installed · together they ask for about ${bytes(estimate)}`;
+    `${installed.length} installed · ${state.modules.filter(offered).length} available · ${bytes(estimate)} planned memory`;
   renderMemoryPlan(installed, estimate, total, percent);
 }
 
@@ -868,7 +868,14 @@ function renderMemoryPlan(installed, estimate, total, percent) {
 
 const SORTS = {
   name: (a, b) => a.title.localeCompare(b.title),
-  ram: (a, b) => parseRam(b.ram) - parseRam(a.ram),
+  category: (a, b) => {
+    const order = state.categories.map((category) => category.id);
+    const rank = (id) => {
+      const index = order.indexOf(id);
+      return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+    };
+    return (rank(a.category) - rank(b.category)) || a.title.localeCompare(b.title);
+  },
   status: (a, b) => (Number(b.installed) - Number(a.installed)) || a.title.localeCompare(b.title),
 };
 
@@ -1929,7 +1936,7 @@ function moveBookmark(id, delta) {
  *
  * Hiding an app does not stop it, and a personal link to a router is not a
  * fact about this box -- neither belongs in server state that every device
- * and every backup then carries. The App Store editor is the opposite case
+ * and every backup then carries. The App Library editor is the opposite case
  * and is stored on the server.
  */
 const LAUNCHER_KEY = 'homebox-launcher-v1';
@@ -2148,7 +2155,7 @@ async function submitCatalogForm(event) {
       return;
     }
     toast(editing ? `${body.name} updated — it reads that way everywhere now.`
-      : `${body.name} added. Install it from the App Store.`, 'success', 7000);
+      : `${body.name} added. Install it from the App Library.`, 'success', 7000);
     form.hidden = true;
     await loadModules();
     await loadCatalog();
