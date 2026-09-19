@@ -322,22 +322,27 @@ function renderSideMeters(summary) {
  */
 async function pruneImages(button) {
   const was = button.textContent;
+  const result = $('#tools-prune-result');
   button.disabled = true;
   button.textContent = 'Clearing…';
+  if (result && button.id === 'tools-prune') result.textContent = '';
   try {
     const res = await fetch('api/prune-images', { method: 'POST' });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    toast(data.bytes ? `Freed ${bytes(data.bytes)}.` : 'Nothing left to clear.', 'success');
+    const message = data.bytes ? `Freed ${bytes(data.bytes)}.` : 'Nothing to clean up.';
+    toast(message, 'success');
+    if (result && button.id === 'tools-prune') result.textContent = message;
     // The row has nothing left to offer; the next summary confirms it.
     const row = button.closest('.need');
     if (row) row.remove();
     if (!$('#needs').querySelector('.need')) renderNeeds([]);
   } catch (err) {
-    button.disabled = false;
-    button.textContent = was;
+    if (result && button.id === 'tools-prune') result.textContent = `Could not clean up: ${err.message}`;
     toast(`Could not clear: ${err.message}`, 'error');
   }
+  button.disabled = false;
+  button.textContent = was;
 }
 
 /**
@@ -2327,21 +2332,6 @@ function renderSettings() {
     }
   }
 
-  // --- Tools ---
-  const cli = $('#tools-cli');
-  if (cli) {
-    cli.textContent = [
-      'homebox list                    what is available, and what is running',
-      'homebox info <module>           what it is, where it is, how to log in',
-      'homebox install <module>        seed, pull, start, mark enabled',
-      'homebox remove <module> --yes   stop and delete containers, keep data',
-      'homebox remove <module> --yes --purge   ...and delete the data',
-      'homebox update <module>         pull newer images and recreate',
-      'homebox logs <module|container> [lines]',
-      'homebox secrets <module>        print its generated passwords',
-      'homebox status                  every container Podhouse runs',
-    ].join(NL);
-  }
 }
 
 function kvRows(pairs) {
@@ -4479,6 +4469,11 @@ document.addEventListener('click', async (event) => {
   const needPrune = event.target.closest('[data-need-prune]');
   if (needPrune) {
     pruneImages(needPrune);
+    return;
+  }
+  const toolsPrune = event.target.closest('#tools-prune');
+  if (toolsPrune) {
+    pruneImages(toolsPrune);
     return;
   }
   const moduleBtn = event.target.closest('[data-module]');

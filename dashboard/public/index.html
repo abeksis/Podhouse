@@ -809,14 +809,12 @@
     <div class="subpage" data-stab-panel="tools">
       <div class="cols">
         <section class="panel">
-          <div class="panel-head"><h2 class="panel-title">Command line</h2></div>
-          <p class="help">The CLI and this page both run <code class="mono">docker compose</code> underneath, so they always agree about what is installed.</p>
-          <code class="code-block" id="tools-cli"></code>
-        </section>
-        <section class="panel">
-          <div class="panel-head"><h2 class="panel-title">Diagnosis</h2></div>
-          <p class="help">Checks the environment, loads every module and has compose validate each one.</p>
-          <code class="code-block">homebox doctor</code>
+          <div class="panel-head"><h2 class="panel-title">Clean up unused images</h2></div>
+          <p class="help">Deletes leftover Docker image layers from updates and rebuilds. Images used by installed apps, and tagged images kept for rollback, are left alone.</p>
+          <div class="row-actions">
+            <button type="button" class="button" id="tools-prune">Clean up</button>
+            <span class="status-text" id="tools-prune-result" role="status"></span>
+          </div>
         </section>
 
         <!-- UNLOCK AN APP — the way back into an app you are locked out of -->
