@@ -362,7 +362,6 @@
       <button type="button" class="subnav-item" data-stab="catalog">Catalog</button>
       <button type="button" class="subnav-item" data-stab="server">Configuration</button>
       <button type="button" class="subnav-item" data-stab="network">Network</button>
-      <button type="button" class="subnav-item" data-stab="remote">Remote access</button>
       <button type="button" class="subnav-item" data-stab="backup">Backups</button>
       <button type="button" class="subnav-item" data-stab="passwords">Passwords</button>
       <button type="button" class="subnav-item" data-stab="monitoring">Health</button>
@@ -645,23 +644,6 @@
               <tbody id="ports-body"></tbody>
             </table>
           </div>
-        </section>
-      </div>
-    </div>
-
-    <!-- REMOTE ACCESS -->
-    <div class="subpage" data-stab-panel="remote">
-      <div class="cols">
-        <section class="panel">
-          <div class="panel-head"><h2 class="panel-title">Getting in from outside</h2></div>
-          <p class="text">Anyone who can reach port 8443 and knows the dashboard password can install, stop and remove apps. Keep the dashboard on your own network.</p>
-          <p class="text">To reach it from elsewhere, use a VPN — one entrance instead of one per app. Install the <strong>VPN</strong> module and forward UDP 51820 on your router to this box; nothing else needs opening.</p>
-          <div id="remote-vpn-state"></div>
-        </section>
-        <section class="panel">
-          <div class="panel-head"><h2 class="panel-title">Making one app public</h2></div>
-          <p class="help">If an app really has to be on the internet, give it a hostname and a certificate through the proxy, and put a login in front of anything that controls the box.</p>
-          <dl class="kv" id="remote-proxy"></dl>
         </section>
       </div>
     </div>

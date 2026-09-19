@@ -2263,36 +2263,6 @@ function renderSettings() {
       </tr>`).join('') || '<tr><td colspan="3" class="cell-muted">Nothing published yet.</td></tr>';
   }
 
-  // --- Remote access ---
-  const vpnState = $('#remote-vpn-state');
-  if (vpnState) {
-    const vpn = state.modules.find((m) => m.id === 'vpn');
-    if (!vpn) {
-      vpnState.innerHTML = '';
-    } else if (vpn.installed) {
-      vpnState.innerHTML = `<dl class="kv">
-        <dt>VPN module</dt><dd>${escapeHtml(STATUS_LABEL[vpn.status] || vpn.status)}</dd>
-        <dt>Set WG_HOST</dt><dd>the address clients reach from OUTSIDE, in .env</dd>
-      </dl>
-      <p class="help">Blank WG_HOST hands out configs that point nowhere, so set it before adding a device.</p>`;
-    } else {
-      vpnState.innerHTML = `<div class="action-row">
-        <button type="button" class="button is-primary" data-action="install" data-id="vpn">Install VPN</button>
-      </div>`;
-    }
-  }
-
-  const remoteProxy = $('#remote-proxy');
-  if (remoteProxy) {
-    const core = state.modules.find((m) => m.id === 'core');
-    remoteProxy.innerHTML = kvRows([
-      ['Proxy', core && core.installed ? 'Nginx Proxy Manager, running' : 'core not installed'],
-      ['Admin UI', `http://${host}:81`],
-      ['Public ports', '80 and 443'],
-      ['Sign in with', 'homebox secrets core'],
-    ]);
-  }
-
   // --- Passwords ---
   const secretsBody = $('#secrets-body');
   if (secretsBody) {
