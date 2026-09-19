@@ -4506,10 +4506,20 @@ document.addEventListener('click', async (event) => {
     return;
   }
   // "Needs you" rows: a page to open, or the one action that runs from here.
+  // Backup and storage are Settings tabs rather than top-level pages; keeping
+  // that routing here lets the server describe the destination in its own
+  // terms without knowing how the browser navigation is arranged.
   const needPage = event.target.closest('[data-need-page]');
   if (needPage) {
-    location.hash = `#${needPage.dataset.needPage}`;
-    show(needPage.dataset.needPage);
+    const destinations = {
+      backups: { page: 'settings', tab: 'backup' },
+      storage: { page: 'settings', tab: 'server' },
+    };
+    const destination = destinations[needPage.dataset.needPage]
+      || { page: needPage.dataset.needPage };
+    location.hash = `#${destination.page}`;
+    show(destination.page);
+    if (destination.tab) showSettingsTab(destination.tab);
     return;
   }
   const needPrune = event.target.closest('[data-need-prune]');

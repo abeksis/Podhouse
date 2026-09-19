@@ -217,7 +217,8 @@ button { font: inherit; color: inherit; }
 .topbar {
   display: flex; align-items: center; gap: 1rem;
   padding: 0.5rem 0.75rem 0.5rem 0.95rem;
-  margin-bottom: 1rem;
+  max-width: 1920px;
+  margin: 0 auto 1rem;
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius-l);
@@ -255,7 +256,7 @@ button { font: inherit; color: inherit; }
    given. The ceiling is only there for the very wide monitors where a row of
    four tiles would otherwise stretch into a stripe; paragraphs cap themselves
    in characters further down, which is the measure that matters for reading. */
-.screen { display: none; max-width: 1920px; }
+.screen { display: none; max-width: 1920px; margin-inline: auto; }
 .screen.is-shown { display: block; }
 .screen-head { margin: 1.1rem 0 1.4rem; }
 .screen-head h1 { font-size: 1.6rem; letter-spacing: -0.01em; margin-bottom: 0.3rem; }
@@ -506,6 +507,7 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   display: flex; justify-content: space-between; gap: 0.6rem;
   margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px solid var(--line);
 }
+.area-host > .vitals { margin-top: 0; padding-top: 0; border-top: 0; }
 .vitals div { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
 .vital-top { display: flex; align-items: center; gap: 0.3rem; }
 /* Line glyphs, drawn at text size and in the muted colour: they label the

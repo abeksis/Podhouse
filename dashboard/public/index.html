@@ -186,20 +186,15 @@
         <div class="dock" id="dock"></div>
       </section>
 
-      <!-- THIS BOX — the facts the sidebar meters do not already show, the
-           everyday actions, and what the box did while nobody was looking. -->
+      <!-- THIS BOX — the facts the sidebar meters do not already show, and
+           what the box did while nobody was looking. Tasks that need a person
+           live in Settings → Health, beside the rest of the diagnostic detail. -->
       <section class="panel area-host">
         <div class="panel-head">
-          <h2 class="panel-title">Needs you</h2>
-          <span class="panel-note mono" id="host-state">live</span>
+          <h2 class="panel-title">This box</h2>
         </div>
 
-        <!-- What is waiting, each line with the verb that deals with it. The
-             server decides what belongs here (needsAttention) so the page and
-             anything else agree on what "needs you" means. -->
-        <div class="needs" id="needs"></div>
-
-        <!-- The numbers, once the tasks have had their say. -->
+        <!-- The host numbers in one quiet strip. -->
         <div class="vitals" id="vitals">
           <div>
             <span class="vital-top">
@@ -843,6 +838,15 @@
     <!-- HEALTH -->
     <div class="subpage" data-stab-panel="monitoring">
       <div class="cols">
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Needs you</h2>
+            <span class="panel-note mono" id="host-state">live</span>
+          </div>
+          <!-- The server decides what belongs here (needsAttention), and each
+               row carries the action that clears it. -->
+          <div class="needs" id="needs"></div>
+        </section>
         <section class="panel">
           <div class="panel-head"><h2 class="panel-title">Host</h2><span class="panel-note mono">live</span></div>
           <dl class="kv" id="monitoring-host"></dl>
