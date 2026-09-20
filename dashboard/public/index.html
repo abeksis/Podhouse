@@ -113,11 +113,11 @@
       <span class="mono" id="top-address"></span>
     </div>
     <div class="topbar-right">
-      <a class="topbar-chip" id="top-status" href="#home" data-page="home" data-level="unknown">
+      <a class="topbar-chip" id="top-status" href="#home" data-page="home" data-level="unknown" hidden>
         <span class="topbar-dot"></span><span id="top-status-text">Reading&hellip;</span>
       </a>
       <a class="topbar-chip is-waiting" id="top-update" href="#updates" data-page="updates" hidden></a>
-      <span class="conn" id="conn" title="Live connection to the server"><span class="conn-dot"></span><span class="conn-text">connecting</span></span>
+      <span class="conn" id="conn" title="Live connection to the server" hidden><span class="conn-dot"></span><span class="conn-text">connecting</span></span>
       <button type="button" class="linkish" id="sign-out">Sign out</button>
     </div>
   </header>
@@ -131,48 +131,48 @@
          else, and carries the fix when it is not. -->
     <div class="stat-strip">
       <div class="stat stat-health" id="health" data-level="unknown">
-        <span class="stat-label">
-          <svg class="stat-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 3 12 2.5-6h6"/></svg>
-          Status
+        <span class="stat-plate"><svg class="stat-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 3 12 2.5-6h6"/></svg></span>
+        <span class="stat-body">
+          <span class="stat-label">Status</span>
+          <strong class="stat-value" id="health-title">Reading&#8230;</strong>
+          <small class="stat-note" id="health-text">This takes a second.</small>
+          <div class="stat-action" id="health-action"></div>
         </span>
-        <strong class="stat-value" id="health-title">Reading…</strong>
-        <small class="stat-note" id="health-text">This takes a second.</small>
-        <div class="stat-action" id="health-action"></div>
       </div>
       <a class="stat" href="#apps" data-page="apps">
-        <span class="stat-label">
-          <svg class="stat-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
-          Apps
+        <span class="stat-plate"><svg class="stat-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span>
+        <span class="stat-body">
+          <span class="stat-label">Apps</span>
+          <strong class="stat-value" id="stat-apps">--</strong>
+          <small class="stat-note" id="stat-apps-note"></small>
         </span>
-        <strong class="stat-value" id="stat-apps">--</strong>
-        <small class="stat-note" id="stat-apps-note"></small>
       </a>
-      <a class="stat" href="#logs" data-page="logs">
-        <span class="stat-label">
-          <svg class="stat-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6z"/><path d="M4 7.6 12 12l8-4.4M12 12v8.8"/></svg>
-          Containers
+      <a class="stat" href="#logs" data-page="logs" id="stat-containers-tile">
+        <span class="stat-plate"><svg class="stat-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6z"/><path d="M4 7.6 12 12l8-4.4M12 12v8.8"/></svg></span>
+        <span class="stat-body">
+          <span class="stat-label">Containers</span>
+          <strong class="stat-value" id="stat-containers">--</strong>
+          <small class="stat-note" id="stat-containers-note"></small>
         </span>
-        <strong class="stat-value" id="stat-containers">--</strong>
-        <small class="stat-note" id="stat-containers-note"></small>
       </a>
       <a class="stat" href="#updates" data-page="updates" id="stat-updates">
-        <span class="stat-label">
-          <svg class="stat-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>
-          Updates
+        <span class="stat-plate"><svg class="stat-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></span>
+        <span class="stat-body">
+          <span class="stat-label">Updates</span>
+          <strong class="stat-value" id="stat-updates-value">--</strong>
+          <small class="stat-note" id="stat-updates-note"></small>
         </span>
-        <strong class="stat-value" id="stat-updates-value">--</strong>
-        <small class="stat-note" id="stat-updates-note"></small>
       </a>
       <!-- The fifth number is the one that costs the most when nobody looks at
            it. An archive holds every app's settings and every password this box
            generated, and "never" is the state a box sits in by default. -->
       <a class="stat" href="#settings" data-page="settings" data-stab="backup" id="stat-backup">
-        <span class="stat-label">
-          <svg class="stat-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4 19 6v6.2c0 3.9-3 6.5-7 8.4-4-1.9-7-4.5-7-8.4V6z"/><path d="M9 11.8l2.2 2.2L15.2 10"/></svg>
-          Backups
+        <span class="stat-plate"><svg class="stat-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4 19 6v6.2c0 3.9-3 6.5-7 8.4-4-1.9-7-4.5-7-8.4V6z"/><path d="M9 11.8l2.2 2.2L15.2 10"/></svg></span>
+        <span class="stat-body">
+          <span class="stat-label">Backups</span>
+          <strong class="stat-value" id="stat-backup-value">--</strong>
+          <small class="stat-note" id="stat-backup-note"></small>
         </span>
-        <strong class="stat-value" id="stat-backup-value">--</strong>
-        <small class="stat-note" id="stat-backup-note"></small>
       </a>
     </div>
 

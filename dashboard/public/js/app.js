@@ -420,9 +420,18 @@ function renderTopbar(summary) {
   $('#top-host').textContent = host.name || 'this box';
   $('#top-address').textContent = host.address || '';
 
+  // The chip is not on screen while everything is fine.
+  //
+  // It used to sit here reading "All running" next to a green dot, next to a
+  // second green dot reading "connected", above a card that also said all of
+  // them were up. Three ways of saying nothing is happening. A bar that says
+  // "fine" at every moment is a bar you stop reading, so this one is silent
+  // until it is not fine - and then it is the only thing in the row.
   const chip = $('#top-status');
+  const well = health.level === 'good' || health.level === 'unknown';
+  chip.hidden = well;
   chip.dataset.level = health.level;
-  $('#top-status-text').textContent = health.level === 'good' ? 'All running' : health.title;
+  $('#top-status-text').textContent = health.title;
   chip.title = health.sub || '';
 }
 
@@ -447,6 +456,14 @@ function renderHealth(summary) {
   $('#stat-containers').textContent = `${counts.running} up`;
   $('#stat-containers-note').textContent = !counts.containers ? 'none yet'
     : counts.running === counts.containers ? 'all of them' : `of ${counts.containers}`;
+  // The plate colour comes from the same two numbers the note is written from:
+  // all of them up is good, some of them down wants a look, an empty box is
+  // neither and stays neutral.
+  const containerTile = $('#stat-containers-tile');
+  if (containerTile) {
+    if (!counts.containers) delete containerTile.dataset.level;
+    else containerTile.dataset.level = counts.running === counts.containers ? 'good' : 'warn';
+  }
 
   const action = $('#health-action');
   if (health.names && health.names.length) {
@@ -527,6 +544,8 @@ function renderLauncher(modules) {
       <div class="dock-label">${escapeHtml(label[category] || category)}<span>${items.length}</span></div>
       <div class="dock-grid">${items.sort(byMemory).map((t) => launchTile(t, peak)).join('')}</div>
     </div>`).join('');
+
+  syncTileMenu();
 }
 
 /** Memory and CPU summed over a set of containers; nulls when none reported. */
@@ -539,12 +558,36 @@ function appLoad(containers) {
   };
 }
 
+/**
+ * "Up 3 days" -> "up 3d". Docker's own words, shortened to fit a 190px tile.
+ *
+ * The string is what `docker ps` prints, and it is not a number: it can be
+ * "Up About an hour", "Up 25 minutes (healthy)", "Up Less than a second".
+ * Anything this does not recognise returns nothing rather than a guess, and
+ * the tile falls back to saying Running.
+ */
+function upFor(status) {
+  const m = /^Up\s+(.+?)(?:\s*\(.*\))?$/.exec(String(status || '').trim());
+  if (!m) return null;
+  const said = m[1].replace(/^About\s+(an?|one)\s+/i, '1 ').trim();
+  if (/^Less than/i.test(said)) return 'up just now';
+  const n = /^(\d+)\s+(second|minute|hour|day|week|month|year)s?$/i.exec(said);
+  if (!n) return `up ${said.toLowerCase()}`;
+  const unit = { second: 's', minute: 'm', hour: 'h', day: 'd', week: 'w', month: 'mo', year: 'y' };
+  return `up ${n[1]}${unit[n[2].toLowerCase()]}`;
+}
+
 /** One app on the Overview: icon, name, state, and how much it is using. */
 function launchTile(tile, peak) {
   const st = tile.container ? tile.container.state : null;
   const down = st === 'stopped' || st === 'unhealthy';
   const color = tile.color || (tile.module.theme && tile.module.theme.color) || null;
-  const pip = st ? `<span class="dot ${down ? 'is-off' : 'is-on'}" data-state="${escapeHtml(st)}" title="${escapeHtml(st)}"></span>` : '';
+  // The state badge sits on the icon, not in the name row.
+  //
+  // It used to be a dot beside the name with a ring pulsing out of it, which
+  // asked for attention on behalf of the fifteen apps that were FINE and left
+  // the actions no room. On the icon it is out of the way, and it is still.
+  const pip = st ? `<span class="dock-pip" data-state="${escapeHtml(st)}" title="${escapeHtml(st)}"></span>` : '';
   const load = tile.load;
   let usage;
   if (!tile.container) {
@@ -553,7 +596,13 @@ function launchTile(tile, peak) {
     usage = `<div class="dock-usage"><span>${st === 'stopped' ? 'Stopped' : 'Unhealthy'}</span><b>--</b></div><div class="dock-bar"></div>`;
   } else {
     const pct = load ? Math.max(2, Math.round((load.memory / peak) * 100)) : 0;
-    usage = `<div class="dock-usage"><span>Memory${load && load.cpu != null ? ` · CPU ${load.cpu}%` : ''}</span><b>${load ? bytes(load.memory) : '--'}</b></div>
+    // "Memory" was a label for the number sitting next to it, which already
+    // ends in MB. Its place goes to how long the app has been up, the one
+    // thing on this page that answers "did this restart without me?".
+    const up = upFor(tile.container.status);
+    const left = [up, load && load.cpu != null ? `CPU ${load.cpu}%` : null]
+      .filter(Boolean).join(' · ') || 'Running';
+    usage = `<div class="dock-usage"><span>${escapeHtml(left)}</span><b>${load ? bytes(load.memory) : '--'}</b></div>
       <div class="dock-bar"><i style="width:${pct}%"></i></div>`;
   }
 
@@ -585,13 +634,12 @@ function launchTile(tile, peak) {
       <a class="dock-open" href="${escapeHtml(tile.url)}" target="_blank" rel="noopener noreferrer"
         title="${escapeHtml(tile.description || tile.friendly_name)}">
         <span class="dock-head">
-          <span class="dock-art">${art}</span>
+          <span class="dock-art">${art}${pip}</span>
           <span class="dock-name">${escapeHtml(tile.friendly_name)}</span>
-          ${pip}
         </span>
         ${usage}
       </a>
-      ${tile.container ? `<div class="dock-actions">${containerActions(tile.container, st !== 'stopped')}</div>` : ''}
+      ${tile.container ? tileMenuButton(tile.container, st !== 'stopped', tile.url) : ''}
     </div>`;
 }
 
@@ -616,6 +664,135 @@ function containerActions(container, on) {
     <button type="button" class="button is-small" data-container="${id}" data-caction="restart">Restart</button>
     <button type="button" class="button is-small" data-container="${id}" data-caction="stop"
       title="Its data stays; start it again any time">Stop</button>`;
+}
+
+/* --------------------------------------------------- the tile action menu */
+
+/**
+ * The per-tile actions, behind one button.
+ *
+ * Three buttons across a 190px tile cost a divider and a row - 41px on every
+ * tile, and the set cannot grow: a fourth action has nowhere to go. One button
+ * and a menu costs a click and gives the actions room.
+ *
+ * ALWAYS visible, never revealed on hover. A phone has no hover, and this page
+ * is read from one often enough that a control which only exists on a mouse is
+ * not a control. It sits outside the <a>, because a button inside an anchor is
+ * invalid and its click would also open the app.
+ */
+function tileMenuButton(container, on, url) {
+  const id = escapeHtml(container.name);
+  return `<button type="button" class="dock-kebab" data-menu-for="${id}" data-menu-on="${on ? '1' : '0'}"
+      data-menu-url="${escapeHtml(url || '')}"
+      aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${id}" title="Actions">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        <circle cx="8" cy="3.1" r="1.45"/><circle cx="8" cy="8" r="1.45"/><circle cx="8" cy="12.9" r="1.45"/>
+      </svg>
+    </button>`;
+}
+
+/**
+ * What goes in it. The items carry the same data attributes the buttons did,
+ * so the click lands in the handlers that already exist rather than in a
+ * second copy of them.
+ *
+ * Open is first and is a real link, not a button: the tile itself still opens
+ * the app, and this is the same destination for anyone who arrived by keyboard
+ * or opened the menu before noticing the tile was clickable.
+ *
+ * A stopped app leads with Start, and still offers Logs: "why did it stop" is
+ * the question being asked, and the answer is in the log. It has no page worth
+ * opening, so Open is left out rather than offered as a dead link.
+ */
+function tileMenuItems(name, on, url) {
+  const id = escapeHtml(name);
+  if (!on) {
+    return `<button type="button" role="menuitem" class="menu-item is-go" data-container="${id}" data-caction="start">Start</button>
+      <button type="button" role="menuitem" class="menu-item" data-log-for="${id}">Logs</button>`;
+  }
+  const open = url
+    ? `<a role="menuitem" class="menu-item" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open</a>`
+    : '';
+  return `${open}
+    <button type="button" role="menuitem" class="menu-item" data-log-for="${id}">Logs</button>
+    <button type="button" role="menuitem" class="menu-item" data-container="${id}" data-caction="restart">Restart</button>
+    <button type="button" role="menuitem" class="menu-item is-stop" data-container="${id}" data-caction="stop"
+      title="Its data stays; start it again any time">Stop</button>`;
+}
+
+// Which tile's menu is open, by container name — not by element. The launcher
+// re-renders every 20 seconds and sorts by memory, so the button under an open
+// menu is replaced, and may have moved. A name survives that; a node does not.
+let openTileMenu = null;
+
+function tileMenuAnchor(name) {
+  return document.querySelector(`[data-menu-for="${CSS.escape(name)}"]`);
+}
+
+function closeTileMenu(refocus) {
+  if (!openTileMenu) return;
+  const { name, el } = openTileMenu;
+  openTileMenu = null;
+  el.remove();
+  const anchor = tileMenuAnchor(name);
+  if (anchor) {
+    anchor.setAttribute('aria-expanded', 'false');
+    if (refocus) anchor.focus();
+  }
+}
+
+/** Put it under the button, right edges aligned, flipped up when the bottom is close. */
+function placeTileMenu(el, anchor) {
+  const r = anchor.getBoundingClientRect();
+  const gap = 4;
+  const pad = 8;
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  let top = r.bottom + gap;
+  if (top + h > window.innerHeight - pad) top = Math.max(pad, r.top - h - gap);
+  const left = Math.max(pad, Math.min(r.right - w, window.innerWidth - w - pad));
+  // Page coordinates, so the menu scrolls with the tile it belongs to instead
+  // of floating away from it.
+  el.style.top = `${top + window.scrollY}px`;
+  el.style.left = `${left + window.scrollX}px`;
+}
+
+function showTileMenu(anchor) {
+  const name = anchor.dataset.menuFor;
+  if (openTileMenu && openTileMenu.name === name) { closeTileMenu(true); return; }
+  closeTileMenu(false);
+
+  const el = document.createElement('div');
+  el.className = 'menu';
+  el.setAttribute('role', 'menu');
+  el.innerHTML = tileMenuItems(name, anchor.dataset.menuOn === '1', anchor.dataset.menuUrl);
+  document.body.appendChild(el);
+  placeTileMenu(el, anchor);
+  anchor.setAttribute('aria-expanded', 'true');
+  openTileMenu = { name, el };
+
+  el.addEventListener('keydown', (event) => {
+    const items = [...el.querySelectorAll('[role="menuitem"]')];
+    const at = items.indexOf(document.activeElement);
+    if (event.key === 'ArrowDown') { event.preventDefault(); items[(at + 1) % items.length].focus(); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); items[(at - 1 + items.length) % items.length].focus(); }
+    else if (event.key === 'Escape') { event.preventDefault(); closeTileMenu(true); }
+  });
+  const first = el.querySelector('[role="menuitem"]');
+  if (first) first.focus();
+}
+
+/**
+ * After the launcher re-renders: follow the tile, or give up if it is gone.
+ * Without this the menu is left pointing at a button that no longer exists,
+ * which is how a menu ends up hanging in the middle of the page.
+ */
+function syncTileMenu() {
+  if (!openTileMenu) return;
+  const anchor = tileMenuAnchor(openTileMenu.name);
+  if (!anchor) { closeTileMenu(false); return; }
+  anchor.setAttribute('aria-expanded', 'true');
+  placeTileMenu(openTileMenu.el, anchor);
 }
 
 /** Logs / Restart / Stop / Start on one container, from the Overview list. */
@@ -2968,7 +3145,10 @@ function connect() {
   const dot = $('#conn');
 
   source.addEventListener('summary', (event) => {
+    // A live connection is the normal case, and saying so costs a word and a
+    // dot in the corner of every page. It shows itself by going away.
     dot.dataset.state = 'up';
+    dot.hidden = true;
     $('.conn-text', dot).textContent = 'connected';
     applySummary(JSON.parse(event.data));
   });
@@ -2981,6 +3161,7 @@ function connect() {
 
   source.onerror = () => {
     dot.dataset.state = 'down';
+    dot.hidden = false;
     $('.conn-text', dot).textContent = 'reconnecting';
   };
 }
@@ -3702,7 +3883,11 @@ function updateBadge(count, platformVersion) {
   // The Overview's Updates number reads the same two facts as the dot.
   const tile = $('#stat-updates');
   if (tile) {
-    tile.classList.toggle('is-waiting', !!(count || platformVersion));
+    const waiting = !!(count || platformVersion);
+    tile.classList.toggle('is-waiting', waiting);
+    // Nothing waiting is a good state, not a blank one, and the plate says so.
+    if (waiting) delete tile.dataset.level;
+    else tile.dataset.level = 'good';
     $('#stat-updates-value').textContent = platformVersion ? 'Podhouse'
       : count ? `${count} waiting` : 'Up to date';
     $('#stat-updates-note').textContent = platformVersion ? `${platformVersion} is available`
@@ -4625,6 +4810,18 @@ document.addEventListener('click', async (event) => {
     runAction(actionBtn.dataset.id, actionBtn.dataset.action);
     return;
   }
+  // The tile menu, before anything else reads the click. Opening it is a
+  // click of its own; a click anywhere else closes it, INCLUDING a click on
+  // one of its items — which then falls through to the handlers below, since
+  // the items carry the same attributes the buttons used to.
+  const kebab = event.target.closest('[data-menu-for]');
+  if (kebab) {
+    event.preventDefault();
+    showTileMenu(kebab);
+    return;
+  }
+  if (openTileMenu) closeTileMenu(false);
+
   const containerBtn = event.target.closest('[data-container][data-caction]');
   if (containerBtn) {
     event.preventDefault();
@@ -4948,6 +5145,9 @@ $('#log-picker').addEventListener('change', () => loadLogs());
 $('#log-tail').addEventListener('change', () => loadLogs());
 
 document.addEventListener('keydown', (event) => {
+  // The menu first: Escape inside it should close the menu, not the drawer
+  // underneath whatever it is sitting on.
+  if (event.key === 'Escape' && openTileMenu) { closeTileMenu(true); return; }
   if (event.key === 'Escape') closeSheet();
   if (event.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) {
     location.hash = '#apps';

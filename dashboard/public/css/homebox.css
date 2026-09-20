@@ -230,10 +230,16 @@ button { font: inherit; color: inherit; }
 .nav-dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .nav-dot.is-platform { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 25%, transparent); position: relative; }
 /* A Podhouse update waiting is the one dot worth looking at, so it is the one
-   that moves — the same ring the running-app dots use. */
+   that moves. It used to share this ring with every running app; now that the
+   app tiles have stopped pulsing, it is the only thing on the page that does,
+   which is the point — the keyframes live here with their last user. */
 .nav-dot.is-platform::after {
   content: ""; position: absolute; inset: 0; border-radius: 50%;
   background: var(--bad); animation: dot-pulse 2s ease-out infinite;
+}
+@keyframes dot-pulse {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(2.6); opacity: 0; }
 }
 
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 0.9rem; padding: 0 0.3rem; }
@@ -260,7 +266,14 @@ button { font: inherit; color: inherit; }
   border-radius: var(--radius-l);
   box-shadow: var(--shadow);
 }
-.topbar-box { display: flex; align-items: baseline; gap: 0.6rem; min-width: 0; }
+.topbar-box { display: flex; align-items: center; gap: 0.65rem; min-width: 0; }
+/* A hairline between the name and the address: they are two facts about the
+   box, not a heading and its subtitle. It hangs off the address rather than
+   the row, so a box with no address shown does not get a divider to nowhere. */
+.topbar-box span:not(:empty)::before {
+  content: ""; display: inline-block; vertical-align: -2px;
+  width: 1px; height: 13px; margin-right: 0.65rem; background: var(--line-strong);
+}
 .topbar-box strong { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-box span { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 0.85rem; font-size: 0.85rem; }
@@ -279,7 +292,8 @@ button { font: inherit; color: inherit; }
 .topbar-chip.is-waiting { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-text); }
 :root[data-theme="light"] .topbar-chip.is-waiting { color: var(--accent); }
 
-.conn { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); }
+/* Only on screen when the connection is not there; see connect(). */
+.conn { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--warn); font-size: 0.82rem; }
 .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .conn[data-state="up"] .conn-dot { background: var(--good); }
 .conn[data-state="down"] .conn-dot { background: var(--warn); }
@@ -421,31 +435,39 @@ textarea.input { resize: vertical; min-height: 5rem; }
    five when it is not, with no hole left where a tile used to be. */
 .stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.7rem; margin-bottom: 1.1rem; }
 .stat {
-  display: flex; flex-direction: column; gap: 0.1rem; min-width: 0;
-  padding: 0.75rem 0.95rem; border-radius: var(--radius-l);
+  display: flex; align-items: center; gap: 0.75rem; min-width: 0;
+  padding: 0.75rem 0.9rem; border-radius: var(--radius-l);
   border: 1px solid var(--line); background: var(--surface); color: var(--text);
 }
 a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
-.stat-label { display: flex; align-items: center; gap: 0.35rem; color: var(--muted); font-size: 0.76rem; }
-/* Line drawings in the text colour, not little coloured badges: the icon says
-   which number this is, and colour here is reserved for saying something is
-   wrong. */
-.stat-ic { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.stat-body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+/* The plate is what makes this row readable from across the desk, and it is
+   also where the tile says how it is doing: the icon alone was 13px of grey
+   line art that carried neither. Colour is a TINT, never a solid fill - four
+   saturated squares in a row is a toolbar, not a summary. */
+.stat-plate {
+  width: 38px; height: 38px; border-radius: 11px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--plate); color: var(--text-2);
+}
+.stat-ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.stat-label { color: var(--muted); font-size: 0.76rem; }
 .stat-value { font-size: 1.15rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stat-note { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stat-action:not(:empty) { margin-top: 0.45rem; }
+
+/* Apps has no state - it is a count, and a count is never wrong - so it keeps
+   the neutral plate. The other four tint theirs from the level they are
+   already given, which is why nothing here needs new wiring. */
+/* Good gets no colour. Marking the normal state is how a screen ends up with
+   four green squares saying nothing; the plate stays neutral until there is
+   something to say. */
+.stat[data-level="warn"] .stat-plate { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+.stat[data-level="bad"] .stat-plate { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+.stat.is-waiting .stat-plate { background: var(--accent-soft); color: var(--accent-text); }
 .stat.is-waiting .stat-value { color: var(--accent-text); }
-/* The stripe is a warning, so it has no calm colour: this tile is only on
-   screen when something is wrong. */
-.stat-health { border-left: 4px solid var(--line-strong); }
-.stat-health[data-level="warn"] { border-left-color: var(--warn); }
-.stat-health[data-level="warn"] .stat-value { color: var(--warn); }
-.stat-health[data-level="bad"] { border-left-color: var(--bad); }
-.stat-health[data-level="bad"] .stat-value { color: var(--bad); }
-/* Backups is the other tile that can be wrong, and it says so in the number
-   rather than with a stripe: one stripe on the row, and it belongs to Status. */
-#stat-backup[data-level="warn"] .stat-value { color: var(--warn); }
-#stat-backup[data-level="bad"] .stat-value { color: var(--bad); }
+.stat[data-level="warn"] .stat-value { color: var(--warn); }
+.stat[data-level="bad"] .stat-value { color: var(--bad); }
 
 .home-layout {
   display: grid;
@@ -485,24 +507,61 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .dock-art { width: 32px; height: 32px; padding: 5px; border-radius: 9px; background: var(--plate); font-size: 1.05rem; flex: none; }
 .dock-art .art-mono { border-radius: 6px; }
 .dock-name { flex: 1; min-width: 0; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dock-head .dot[data-state="starting"] { background: var(--warn); }
-/* A running app breathes: a ring grows out of the dot and fades. Stopped and
-   unhealthy dots stay still, so the eye goes to what is not moving. */
-.dock-head .dot.is-on { position: relative; }
-.dock-head .dot.is-on::after {
-  content: ""; position: absolute; inset: 0; border-radius: 50%;
-  background: inherit; animation: dot-pulse 2s ease-out infinite;
+/* The state, as a badge on the corner of the app's own icon.
+   It does not pulse. A pulsing dot on every tile is fifteen things asking to
+   be looked at in order to say that nothing is wrong; the ring around it is
+   what lets a still badge read as deliberate rather than as a stray pixel. */
+.dock-art { position: relative; }
+.dock-pip {
+  position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--good); border: 2px solid var(--surface);
 }
-@keyframes dot-pulse {
-  0% { transform: scale(1); opacity: 0.7; }
-  100% { transform: scale(2.6); opacity: 0; }
-}
+.dock-pip[data-state="starting"] { background: var(--warn); }
+.dock-pip[data-state="unhealthy"] { background: var(--bad); }
+/* Stopped is a choice someone made, not a fault: grey, not red. */
+.dock-pip[data-state="stopped"] { background: var(--muted); }
 .dock-usage { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; font-size: 0.72rem; color: var(--muted); }
 .dock-usage b { color: var(--text); font-weight: 600; font-size: 0.8rem; }
 .dock-bar { height: 4px; border-radius: 2px; background: var(--well); overflow: hidden; margin-top: -0.2rem; }
 .dock-bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
 .dock-tile.is-down .dock-open { opacity: 0.6; }
 .dock-tile.is-down .dock-art { filter: grayscale(0.8); }
+
+/* The tile's actions live behind this one button; see tileMenuButton() for
+   why it is always drawn rather than appearing on hover. It is positioned
+   over the tile rather than placed in the head row, because the head row is
+   inside the <a> that opens the app and a button cannot go there. */
+.dock-tile { position: relative; }
+.dock-kebab {
+  position: absolute; top: 0.4rem; right: 0.4rem;
+  width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.dock-kebab svg { fill: currentColor; }
+.dock-kebab:hover, .dock-kebab[aria-expanded="true"] {
+  color: var(--text); background: var(--surface-2); border-color: var(--line-strong);
+}
+/* Room for it, so a long name is cut by the button instead of running under it. */
+.dock-head { padding-right: 24px; }
+
+.menu {
+  position: absolute; z-index: 60; min-width: 132px; padding: 0.25rem;
+  background: var(--bg-raised); border: 1px solid var(--line-strong);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.menu-item {
+  display: block; width: 100%; text-align: left;
+  padding: 0.4rem 0.6rem; border: 0; border-radius: var(--radius-s);
+  background: transparent; color: var(--text); font: inherit; font-size: 0.82rem; cursor: pointer;
+}
+/* Open is an <a> and the rest are buttons; they have to read as one list. */
+.menu-item:hover, .menu-item:focus-visible { background: var(--accent-soft); outline: none; text-decoration: none; color: var(--text); }
+.menu-item.is-go { color: var(--accent-text); }
+.menu-item.is-stop { color: var(--bad); }
+.menu-item.is-stop:hover, .menu-item.is-stop:focus-visible {
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+}
 
 /* Needs you — one row per thing waiting, each with the verb that clears it. */
 .needs { display: flex; flex-direction: column; }
