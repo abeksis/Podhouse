@@ -91,7 +91,7 @@ const VERSION = readVersion();
 
 // Appearance. These lists are the contract with public/css/homebox.css — a
 // name here must have a matching [data-theme=...] or [data-accent=...] block.
-const THEMES = ['dark', 'dim', 'light'];
+const THEMES = ['dark', 'midnight', 'dim', 'light'];
 const ACCENTS = ['orange', 'blue', 'violet', 'teal', 'green', 'amber', 'rose'];
 // Photos behind the page, shipped in public/backgrounds (all CC0; see
 // docs/CREDITS.md). 'none' is the plain canvas.

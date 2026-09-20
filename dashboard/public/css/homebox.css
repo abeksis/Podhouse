@@ -65,6 +65,25 @@
   --shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.6);
 }
 
+/* Midnight: the same near-black as dark, but carrying a little blue, and with
+   the three planes further apart — canvas, rail, card. The floating sidebar
+   made that separation the thing the eye reads first, and the flatter dark
+   palette leaves it to the hairline borders alone. */
+:root[data-theme="midnight"] {
+  --bg: #101117;
+  --bg-raised: #12131a;
+  --surface: #191b24;
+  --surface-2: #232633;
+  --well: #0d0e13;
+  --line: rgba(190, 200, 225, 0.10);
+  --line-strong: rgba(190, 200, 225, 0.20);
+  --text: #eef0f6;
+  --text-2: #c3c8d6;
+  --muted: #8b91a3;
+  --shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.8);
+  --plate: #262a38;
+}
+
 :root[data-theme="light"] {
   --bg: #f4f6fa;
   --bg-raised: #ffffff;
@@ -112,6 +131,7 @@ html { -webkit-text-size-adjust: 100%; }
    files ship with Podhouse — the box works offline — and are CC0. */
 :root { --bg-veil: rgba(9, 9, 11, 0.62); }
 :root[data-theme="dim"] { --bg-veil: rgba(27, 31, 39, 0.66); }
+:root[data-theme="midnight"] { --bg-veil: rgba(16, 17, 23, 0.64); }
 :root[data-theme="light"] { --bg-veil: rgba(244, 246, 250, 0.8); }
 :root[data-bg="milky-way"] { --bg-photo: url("../backgrounds/milky-way.webp"); }
 :root[data-bg="fog"] { --bg-photo: url("../backgrounds/fog.webp"); }
@@ -873,6 +893,8 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .choice-preview[data-theme="dark"] i:last-child { background: #1c1c20; }
 .choice-preview[data-theme="dim"] i:first-child { background: #1b1f27; }
 .choice-preview[data-theme="dim"] i:last-child { background: #2e3542; }
+.choice-preview[data-theme="midnight"] i:first-child { background: #101117; }
+.choice-preview[data-theme="midnight"] i:last-child { background: #191b24; }
 .choice-preview[data-theme="light"] i:first-child { background: #f4f6fa; }
 .choice-preview[data-theme="light"] i:last-child { background: #ffffff; }
 /* Accent previews: the accent itself, and its soft tint. */

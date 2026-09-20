@@ -2972,6 +2972,7 @@ function connect() {
    [data-accent] block in css/homebox.css, and server.js accepts only these. */
 const THEMES = [
   { id: 'dark', label: 'Dark' },
+  { id: 'midnight', label: 'Midnight' },
   { id: 'dim', label: 'Dim' },
   { id: 'light', label: 'Light' },
 ];
