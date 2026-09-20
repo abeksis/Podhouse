@@ -166,9 +166,6 @@ button { font: inherit; color: inherit; }
 .help { color: var(--muted); font-size: 0.92rem; margin: 0 0 0.75rem; }
 .help.is-warn { color: var(--warn); }
 
-.check-line { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.5rem; align-items: start; margin: 0.2rem 0 0.7rem; font-size: 0.85rem; color: var(--text-2); cursor: pointer; }
-#backup-log { max-height: 12rem; overflow: auto; white-space: pre-wrap; }
-
 .dialog-confirm { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.9rem; font-size: 0.85rem; color: var(--text-2); }
 
 /* Putting a backup back: one row per thing that would be written over. */

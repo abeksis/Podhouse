@@ -1842,39 +1842,14 @@ async function createBackup() {
   const original = button.textContent;
   button.disabled = true;
   button.textContent = 'Working…';
-  const quiesce = !!($('#backup-quiesce') && $('#backup-quiesce').checked);
-  const log = $('#backup-log');
-  if (log) { log.textContent = ''; log.hidden = !quiesce; }
   try {
-    // The exact copy stops apps, so it reports each step as it happens; the
-    // ordinary one is quick enough to answer once, at the end.
-    const res = await fetch(`api/backup/create${quiesce ? '/stream' : ''}`, {
+    const res = await fetch('api/backup/create', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: $('#backup-kind').value, quiesce }),
+      body: JSON.stringify({ kind: $('#backup-kind').value }),
     });
-    let data;
-    if (quiesce && res.body) {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const msg = JSON.parse(line);
-          if (msg.line && log) { log.textContent += `${msg.line}\n`; log.scrollTop = log.scrollHeight; }
-          if (msg.done) data = msg;
-        }
-      }
-    } else {
-      data = await res.json();
-    }
-    if (!data || !data.ok) toast(`Backup failed: ${(data && data.error) || 'no answer'}${data && data.hint ? ` — ${data.hint}` : ''}`, 'error', 12000);
+    const data = await res.json();
+    if (!data.ok) toast(`Backup failed: ${data.error}${data.hint ? ` — ${data.hint}` : ''}`, 'error', 12000);
     else toast(`Backup written: ${data.name || 'archive created'}. Keep the encryption key somewhere else.`, 'success', 7000);
   } catch (err) {
     toast(`Backup failed: ${err.message}`, 'error', 8000);

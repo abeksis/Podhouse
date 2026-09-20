@@ -681,14 +681,6 @@
             </select>
           </div>
           <p class="help" id="backup-kind-note"></p>
-          <!-- An app keeps its newest settings in memory: qBittorrent writes
-               its configuration only when it exits, and anything with a
-               database has writes in flight. This is the copy that has them. -->
-          <label class="check-line">
-            <input type="checkbox" id="backup-quiesce">
-            <span>Stop apps while copying, for an exact copy — a few seconds of downtime. Without it, settings changed in the last minutes may not be in the archive.</span>
-          </label>
-          <code class="code-block" id="backup-log" hidden></code>
 
           <div class="archive-list" id="archive-list"></div>
         </section>

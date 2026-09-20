@@ -263,64 +263,10 @@ async function rebuildableExcludes() {
   }
 }
 
-/* --------------------------------------------------- copying apps at rest */
-
-/**
- * Apps that keep their settings in memory.
- *
- * An archive is a copy of files on disk, and a running app's newest settings
- * may not be there yet: qBittorrent writes its configuration when it exits,
- * and every app with a database has writes in flight. Measured here — a save
- * path changed in qBittorrent's own page was not in a backup taken a minute
- * later, and the restore that followed was blamed for it.
- *
- * So this is the exact copy: stop, copy, start. Seconds of downtime, in
- * exchange for an archive that holds what the apps actually know.
- *
- * The dashboard and the proxy are never stopped: one is the process answering
- * this request, the other is how the page is reached from outside.
- */
-const QUIESCE_MARK = 'backup-quiesce.json';
-
-async function stoppableModules() {
-  const docker = require('./docker');
-  const [{ modules }, containers] = await Promise.all([modulesLib.loadAll(), docker.listContainers().catch(() => [])]);
-  const live = modulesLib.withContainers(modules, containers, 'localhost').modules;
-  return live
-    .filter((m) => m.installed && !m.required && m.status !== 'stopped')
-    .map((m) => m.id);
-}
-
-/**
- * Anything left stopped by a backup that died halfway.
- *
- * The marker is written before the first app is stopped and removed after the
- * last one is started, so a crash — or a box losing power mid-backup — leaves
- * a list rather than a mystery. Called once at startup.
- */
-async function resumeAfterQuiesce(log = console.warn) {
-  const mark = await state.readJson(QUIESCE_MARK, null);
-  if (!mark || !Array.isArray(mark.stopped) || !mark.stopped.length) return [];
-  const composeLib = require('./compose');
-  const started = [];
-  for (const id of mark.stopped) {
-    try {
-      await composeLib.start(id);
-      started.push(id);
-    } catch (err) {
-      log(`[homebox] could not start ${id} after an interrupted backup: ${err.message}`);
-    }
-  }
-  await state.writeJson(QUIESCE_MARK, { stopped: [] });
-  if (started.length) log(`[homebox] started ${started.join(', ')} again after an interrupted backup`);
-  return started;
-}
-
-async function create({ kind = 'config', quiesce = false, onLine = null } = {}) {
+async function create({ kind = 'config' } = {}) {
   if (!['config', 'full'].includes(kind)) throw new BackupError(`unknown backup kind: ${kind}`);
   if (inFlight) throw new BackupError('a backup is already running');
   const secret = requireSecret();
-  const say = (line) => { if (onLine) onLine(line); };
 
   inFlight = true;
   const started = Date.now();
@@ -329,27 +275,7 @@ async function create({ kind = 'config', quiesce = false, onLine = null } = {}) 
   const target = path.join(BACKUP_DIR, name);
   const plain = scratchPath(BACKUP_DIR, '.staging') + '.tar.gz';
 
-  let stopped = [];
   try {
-    if (quiesce) {
-      const composeLib = require('./compose');
-      const wanted = await stoppableModules();
-      // Written BEFORE the first stop: if this process dies here, the list of
-      // what is down survives, and the next start brings them back.
-      await state.writeJson(QUIESCE_MARK, { stopped: wanted, at: Date.now() });
-      for (const id of wanted) {
-        try {
-          say(`Stopping ${id}`);
-          await composeLib.stop(id);
-          stopped.push(id);
-        } catch (err) {
-          say(`  ${id} would not stop — copying it as it runs (${err.message})`);
-        }
-      }
-      await state.writeJson(QUIESCE_MARK, { stopped, at: Date.now() });
-      say(stopped.length ? `${stopped.length} app${stopped.length === 1 ? '' : 's'} stopped — copying` : 'Nothing needed stopping — copying');
-    }
-
     // tar to a staging file rather than piping into the cipher: a tar that
     // fails halfway would otherwise produce a perfectly decryptable archive
     // of half a box.
@@ -372,24 +298,6 @@ async function create({ kind = 'config', quiesce = false, onLine = null } = {}) 
       });
     });
 
-    // Started again before the archive is encrypted: the copy on disk is
-    // already complete by here, and every extra second of downtime is paid by
-    // somebody watching a page that will not load.
-    if (stopped.length) {
-      const composeLib = require('./compose');
-      for (const id of stopped) {
-        try {
-          say(`Starting ${id} again`);
-          await composeLib.start(id);
-        } catch (err) {
-          say(`  ${id} did not start: ${err.message}`);
-        }
-      }
-      await state.writeJson(QUIESCE_MARK, { stopped: [] });
-      stopped = [];
-    }
-
-    say('Encrypting');
     await encryptFile(plain, target, secret);
     await matchOwner(target);
     const { size } = await fsp.stat(target);
@@ -399,12 +307,6 @@ async function create({ kind = 'config', quiesce = false, onLine = null } = {}) 
     const copy = await copyOffBox(name);
     return { name, size, kind, copy, seconds: Math.round((Date.now() - started) / 1000) };
   } finally {
-    // Whatever went wrong above, nothing stays stopped because of a backup.
-    if (stopped.length) {
-      const composeLib = require('./compose');
-      for (const id of stopped) await composeLib.start(id).catch(() => {});
-      await state.writeJson(QUIESCE_MARK, { stopped: [] }).catch(() => {});
-    }
     await fsp.rm(plain, { force: true });
     inFlight = false;
   }
@@ -698,6 +600,6 @@ function revealKey() {
 }
 
 module.exports = {
-  create, list, remove, verify, prune, status, copyStatus, nextSlot, resumeAfterQuiesce,
+  create, list, remove, verify, prune, status, copyStatus, nextSlot,
   getSchedule, setSchedule, startScheduler,
   revealKey, requireSecret, decryptFile, resolveName, BACKUP_DIR, BackupError, PRESETS, tarArgs, rebuildableExcludes };

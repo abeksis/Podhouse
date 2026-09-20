@@ -1233,26 +1233,6 @@ const server = http.createServer(async (req, res) => {
           activity.note({ name: made.name, action: 'backup', level: 'info' });
           return sendJson(res, 200, { ok: true, ...made });
         }
-        // The exact copy stops apps while it reads them, so it takes long
-        // enough that a silent wait would read as a hang.
-        if (action === 'create/stream' && req.method === 'POST') {
-          const body = await readBody(req);
-          res.writeHead(200, {
-            'content-type': 'application/x-ndjson; charset=utf-8',
-            'cache-control': 'no-store',
-            'x-accel-buffering': 'no',
-          });
-          const send = (obj) => { if (!res.writableEnded) res.write(`${JSON.stringify(obj)}\n`); };
-          try {
-            const made = await backup.create({ kind: body.kind, quiesce: body.quiesce === true, onLine: (line) => send({ line }) });
-            activity.note({ name: made.name, action: body.quiesce ? 'backup (apps stopped)' : 'backup', level: 'info' });
-            send({ done: true, ok: true, ...made });
-          } catch (err) {
-            activity.note({ name: 'backup', action: 'backup failed', level: 'error' });
-            send({ done: true, ok: false, error: err.message, hint: err.hint || null });
-          }
-          return res.end();
-        }
         if (action === 'delete' && req.method === 'POST') {
           const body = await readBody(req);
           await backup.remove(body.name);
@@ -1479,9 +1459,6 @@ async function main() {
   hostMetrics.start();
   await activity.load();
   backup.startScheduler();
-  // An exact-copy backup stops apps while it reads them. If the box lost power
-  // in that window, they are still down: the list of what to start is on disk.
-  backup.resumeAfterQuiesce().catch(() => {});
   if (await docker.reachable()) {
     activity.start();
     stats.start(async () => {
