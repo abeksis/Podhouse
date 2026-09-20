@@ -1824,17 +1824,6 @@ function renderBackups() {
   $('#schedule-state').textContent = sch.enabled
     ? (sch.nextRun ? `Next run in about ${duration(Math.max(0, Math.round((sch.nextRun - Date.now()) / 1000)))}. Keeping the newest ${sch.retention}.` : '')
     : 'Automatic backups are off.';
-
-  const restore = $('#backup-restore-cmd');
-  const name = b.latest ? b.latest.name : 'homebox-config-YYYYMMDD_HHMMSS.tar.gz.enc';
-  restore.textContent = [
-    '# 1. decrypt (asks for the key you kept elsewhere)',
-    `homebox restore ${name}`,
-    '',
-    '# or by hand, if you only have the archive and the key:',
-    '#   the file is [16-byte IV][AES-256-GCM ciphertext][16-byte tag],',
-    '#   key = scrypt(HB_BACKUP_KEY, "homebox-backup-salt", 32)',
-  ].join(NL);
 }
 
 async function createBackup() {
