@@ -282,12 +282,48 @@ phase backup "Saving state and .env"
 # block. Exposure is not a window here, it is the whole life of the file.
 : > "$ROLLBACK_TARBALL"
 chmod 600 "$ROLLBACK_TARBALL"
+# tar's exit code is not the question. Whether the archive is readable is.
+#
+# An update started from the dashboard BUTTON kept failing here while the same
+# update from the CLI went through, on a box with a clean tree and 68GB free —
+# and the archive it had just written was the same 387KB as every archive that
+# had ever succeeded. The difference is that the button leaves the dashboard
+# running: it is still writing into state/ while tar reads it, and GNU tar
+# answers "file changed as we read it" with exit 1 after writing a perfectly
+# good archive.
+#
+# So the files this update writes WHILE backing up are excluded (they describe
+# the operation in progress, not the box, and rolling them back would mean
+# restoring a half-finished update's notes), and what is left is judged by
+# reading the archive back rather than by the exit status.
+#
+# stderr is kept. It used to go to /dev/null, which is why a failure here said
+# "could not back up state before starting" and nothing else — four times in a
+# row, on a box where nothing was wrong.
+TAR_ERR="$(mktemp)"
+tar_rc=0
+# Named from the variables that create them, so an exclude cannot drift away
+# from the file it is meant to skip.
 tar -czf "$ROLLBACK_TARBALL" -C "$HB_ROOT" \
   --exclude='state/platform-backups' \
   --exclude='state/update-backups' \
   --exclude='state/restore' \
-  state .env 2>/dev/null \
-  || fail "could not back up state before starting"
+  --exclude="state/$(basename "$PROGRESS")" \
+  --exclude="state/$(basename "$LOGFILE")" \
+  --exclude="state/$(basename "$LOCK")" \
+  state .env 2>"$TAR_ERR" || tar_rc=$?
+
+if ! tar -tzf "$ROLLBACK_TARBALL" >/dev/null 2>&1; then
+  [ -s "$TAR_ERR" ] && printf '[self-update] %-10s %s\n' backup "$(head -c 400 "$TAR_ERR" | tr '\n' ' ')"
+  rm -f "$TAR_ERR"
+  fail "could not back up state before starting"
+fi
+if [ "$tar_rc" -ne 0 ]; then
+  # A readable archive with a non-zero exit: say it once, and carry on.
+  printf '[self-update] %-10s tar exited %s and the archive reads back: %s\n' \
+    backup "$tar_rc" "$(head -c 200 "$TAR_ERR" | tr '\n' ' ')"
+fi
+rm -f "$TAR_ERR"
 
 # Keep the last few, oldest first out.
 ls -1t "$BACKUP_DIR"/*.tar.gz 2>/dev/null | tail -n +$((KEEP_BACKUPS + 1)) | while read -r old; do
