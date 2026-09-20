@@ -254,6 +254,14 @@ function tarArgs(kind, excludes = []) {
   // backup of a backup, the same rule as ./backups above, and it is measured
   // in gigabytes rather than in the 14MB the rest of state/ weighs.
   args.push('--exclude=./state/restore', '--exclude=state/restore');
+  // The archives the platform updater takes before it switches version, and
+  // the ones a migration takes before it touches a module. Same rule again,
+  // and scripts/self-update.sh has excluded both from ITS archive since it was
+  // written — this side never did, which did not show while a pre-update
+  // archive weighed 8KB. The moment one of them grew, a config backup was
+  // quietly carrying five of them.
+  args.push('--exclude=./state/platform-backups', '--exclude=state/platform-backups');
+  args.push('--exclude=./state/update-backups', '--exclude=state/update-backups');
   // What each module declares it rebuilds by itself. Full relative paths only;
   // see backupExcludes() in lib/modules.js for why.
   for (const p of excludes) args.push(`--exclude=${p}`);

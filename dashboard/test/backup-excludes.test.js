@@ -34,6 +34,17 @@ test('the backups directory itself is still left out', () => {
   assert.ok(excluded(args, 'backups'));
 });
 
+// Found the hard way, one release after the first fix: a config backup on a
+// box with five pre-update archives was compressing 18GB of them, and the disk
+// went from 43% to 68% while it ran. self-update.sh had always skipped these;
+// this side never had.
+test('every directory that holds other archives is left out', () => {
+  const args = backup.tarArgs('config');
+  for (const dir of ['state/restore', 'state/platform-backups', 'state/update-backups', 'backups']) {
+    assert.ok(excluded(args, dir), `${dir} holds archives and must not go inside one`);
+  }
+});
+
 test('the quiesce marker is still left out', () => {
   const args = backup.tarArgs('config');
   assert.ok(excluded(args, 'state/backup-quiesce.json'));
