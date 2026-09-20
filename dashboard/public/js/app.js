@@ -765,7 +765,11 @@ const CATEGORY_GLYPHS = {
 };
 
 function renderCategories() {
-  const used = new Set(state.modules.map((m) => m.category));
+  // Only what this box can be offered. A module that others replaced is left
+  // out of the list below unless it is installed, so counting it here would
+  // promise an app the page never shows.
+  const shown = state.modules.filter(offered);
+  const used = new Set(shown.map((m) => m.category));
   const tiles = [
     { id: 'all', label: 'All' },
     { id: 'installed', label: 'Installed' },
@@ -773,10 +777,10 @@ function renderCategories() {
   ];
   $('#category-chips').innerHTML = tiles.map((c) => {
     const mods = c.id === 'all'
-      ? state.modules
+      ? shown
       : c.id === 'installed'
-        ? state.modules.filter((m) => m.installed)
-        : state.modules.filter((m) => m.category === c.id);
+        ? shown.filter((m) => m.installed)
+        : shown.filter((m) => m.category === c.id);
     const installed = mods.filter((m) => m.installed).length;
     const on = state.category === c.id;
     const count = c.id === 'installed'
