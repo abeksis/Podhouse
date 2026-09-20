@@ -579,10 +579,20 @@ node_root() {
 }
 
 cmd_backup() {
-  local kind="${1:-config}"
+  local kind="config" quiesce="no"
+  for arg in "$@"; do
+    case "$arg" in
+      --quiesce|--exact) quiesce="yes" ;;
+      config|full) kind="$arg" ;;
+      *) die "usage: homebox backup [config|full] [--quiesce]" ;;
+    esac
+  done
+  # --quiesce stops the apps while their files are read, because an app keeps
+  # its newest settings in memory: qBittorrent writes its configuration only
+  # when it exits. Seconds of downtime for an archive that has everything.
   node_root -e '
     const backup = require(process.argv[1] + "/dashboard/lib/backup.js");
-    backup.create({ kind: process.argv[2] })
+    backup.create({ kind: process.argv[2], quiesce: process.argv[3] === "yes", onLine: (l) => console.log(l) })
       .then((r) => {
         console.log(`${r.name}  ${(r.size / 1048576).toFixed(1)}MB  in ${r.seconds}s`);
         // The archive is good either way; a copy that did not land is said
@@ -591,7 +601,7 @@ cmd_backup() {
         if (r.copy && !r.copy.ok) { console.error(`NOT copied to ${r.copy.dir}: ${r.copy.error}`); process.exitCode = 3; }
       })
       .catch((e) => { console.error(e.message); if (e.hint) console.error(e.hint); process.exit(1); });
-  ' "$HB_ROOT" "$kind"
+  ' "$HB_ROOT" "$kind" "$quiesce"
 }
 
 cmd_backups() {
