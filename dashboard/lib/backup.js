@@ -602,4 +602,4 @@ function revealKey() {
 module.exports = {
   create, list, remove, verify, prune, status, copyStatus, nextSlot,
   getSchedule, setSchedule, startScheduler,
-  revealKey, decryptFile, resolveName, BACKUP_DIR, BackupError, PRESETS, tarArgs, rebuildableExcludes };
+  revealKey, requireSecret, decryptFile, resolveName, BACKUP_DIR, BackupError, PRESETS, tarArgs, rebuildableExcludes };

@@ -89,8 +89,17 @@ function toast(msg, type = 'info', duration = 3500) {
  * Built here rather than with window.confirm, which freezes the page, cannot
  * hold a checkbox or a list, and looks like it belongs to a different program.
  */
+/**
+ * requireText makes the confirm button wait for a word typed by hand.
+ *
+ * For the actions that cannot be undone — erasing an app's data, writing a
+ * backup over a running box — a click is too cheap. A browser prompt() would
+ * do the same job, but it cannot say which box you are on, cannot be styled to
+ * look like the warning it is, and disappears behind the window on a Mac.
+ */
 function confirmDialog({
   title, body, bodyHtml, confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false, wide = false,
+  requireText = null,
 }) {
   return new Promise((resolve) => {
     const layer = document.createElement('div');
@@ -114,6 +123,20 @@ function confirmDialog({
       content.textContent = body;
     }
 
+    let typed = null;
+    if (requireText) {
+      const label = document.createElement('label');
+      label.className = 'dialog-confirm';
+      const hint = document.createElement('span');
+      hint.textContent = `Type ${requireText} to confirm`;
+      typed = document.createElement('input');
+      typed.className = 'input';
+      typed.autocomplete = 'off';
+      typed.spellcheck = false;
+      label.append(hint, typed);
+      content.appendChild(label);
+    }
+
     const row = document.createElement('div');
     row.className = 'dialog-actions';
     const no = document.createElement('button');
@@ -124,6 +147,7 @@ function confirmDialog({
     yes.type = 'button';
     yes.className = `button ${danger ? 'is-danger-solid' : 'is-primary'}`;
     yes.textContent = confirmLabel;
+    if (requireText) yes.disabled = true;
     row.append(no, yes);
 
     box.append(heading, content, row);
@@ -138,13 +162,17 @@ function confirmDialog({
     const onKey = (e) => {
       if (e.key === 'Escape') finish(false);
     };
+    if (typed) {
+      typed.addEventListener('input', () => { yes.disabled = typed.value.trim() !== requireText; });
+      typed.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !yes.disabled) finish(true); });
+    }
     yes.addEventListener('click', () => finish(true));
     no.addEventListener('click', () => finish(false));
     layer.addEventListener('mousedown', (e) => {
       if (e.target === layer) finish(false);
     });
     document.addEventListener('keydown', onKey);
-    yes.focus();
+    (typed || yes).focus();
   });
 }
 
@@ -1458,6 +1486,259 @@ async function submitCopyDir(event) {
   }
 }
 
+/* --------------------------------------------------- putting a backup back */
+
+/**
+ * Four steps, and the middle two are the point: get the archive here, READ it,
+ * CHOOSE what comes back, then apply. The page never offers "restore
+ * everything" — a restore writes over live databases, and the only defence
+ * that works is making the person look at the list first.
+ */
+let restorePlan = null;
+let restoreBusy = false;
+
+function restoreStatus(text, warn = false) {
+  const el = $('#restore-status');
+  if (!el) return;
+  el.hidden = !text;
+  el.textContent = text || '';
+  el.classList.toggle('is-warn', !!warn);
+}
+
+function restoreLog(line) {
+  const box = $('#restore-log');
+  if (!box) return;
+  box.hidden = false;
+  box.textContent += `${line}\n`;
+  box.scrollTop = box.scrollHeight;
+}
+
+/**
+ * An archive staged by an earlier visit.
+ *
+ * Staging keeps the uploaded file and, after a restore, the settings it
+ * replaced — which is the way back. A page reload forgets them, so they are
+ * listed here rather than left to sit on the disk unmentioned.
+ */
+async function renderStagedRestores() {
+  const box = $('#restore-plan');
+  if (!box || restorePlan) return;
+  let staged = [];
+  try {
+    staged = (await (await fetch('api/restore')).json()).staged || [];
+  } catch {
+    return;
+  }
+  if (!staged.length) { box.innerHTML = ''; return; }
+  box.innerHTML = staged.map((s) => `<p class="help">
+      <b>${escapeHtml(s.fileName || 'An archive')}</b> is staged${s.size ? ` (${bytes(s.size)})` : ''}${s.appliedAt ? `, restored ${ago(s.appliedAt)} ago — the settings it replaced are still here` : ''}.
+      <button type="button" class="linkish" data-restore-open="${escapeHtml(s.id)}">Open it</button> ·
+      <button type="button" class="linkish" data-restore-drop="${escapeHtml(s.id)}">Discard</button>
+    </p>`).join('');
+}
+
+/** The archives already on this box, newest first. */
+function renderRestorePicker() {
+  const select = $('#restore-existing');
+  if (!select || !backupState) return;
+  const options = (backupState.backups || []).map((b) =>
+    `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)} — ${bytes(b.size)}, ${ago(b.created)} ago</option>`);
+  select.innerHTML = options.length ? options.join('') : '<option value="">No archive on this box</option>';
+  select.disabled = !options.length;
+  $('#restore-read').disabled = !options.length;
+}
+
+async function restoreCall(action, body) {
+  const res = await fetch(`api/restore/${action}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.hint ? `${data.error} — ${data.hint}` : data.error || 'that did not work');
+  return data;
+}
+
+async function readArchive(id) {
+  restoreStatus('Opening the archive and checking it…');
+  try {
+    const { plan } = await restoreCall('inspect', { id });
+    restorePlan = plan;
+    restoreStatus('');
+    renderRestorePlan();
+  } catch (err) {
+    restorePlan = null;
+    renderRestorePlan();
+    restoreStatus(err.message, true);
+  }
+}
+
+async function stageExistingArchive() {
+  const name = $('#restore-existing').value;
+  if (!name) return;
+  restoreStatus(`Reading ${name}…`);
+  try {
+    const { id } = await restoreCall('from-archive', { name });
+    await readArchive(id);
+  } catch (err) {
+    restoreStatus(err.message, true);
+  }
+}
+
+/**
+ * An upload goes straight into the request body rather than a form: it is one
+ * file, it can be hundreds of megabytes, and the server streams it to disk.
+ */
+async function uploadArchive(file) {
+  if (!file) return;
+  restoreStatus(`Uploading ${file.name} (${bytes(file.size)})… this can take a minute.`);
+  try {
+    const res = await fetch(`api/restore/upload?name=${encodeURIComponent(file.name)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: file,
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'the upload did not finish');
+    await readArchive(data.id);
+  } catch (err) {
+    restoreStatus(err.message, true);
+  }
+}
+
+function renderRestorePlan() {
+  const box = $('#restore-plan');
+  if (!box) return;
+  if (!restorePlan) { box.innerHTML = ''; $('#restore-note').textContent = ''; return; }
+
+  const p = restorePlan;
+  const titleOf = (id) => (state.modules.find((m) => m.id === id) || {}).title || id;
+  const rows = p.apps.map((a) => {
+    const what = a.effect === 'replace'
+      ? `replaces ${a.liveFiles} file${a.liveFiles === 1 ? '' : 's'} (${bytes(a.liveBytes)})${a.liveNewestAt ? `, newest ${ago(a.liveNewestAt)} ago` : ''}`
+      : 'nothing of this app is on the box now';
+    return `<li class="restore-row" data-effect="${escapeHtml(a.effect)}">
+      <label>
+        <input type="checkbox" data-restore-app="${escapeHtml(a.id)}">
+        <span class="restore-name">${escapeHtml(titleOf(a.id))}</span>
+        <span class="restore-what">${escapeHtml(`${a.files} file${a.files === 1 ? '' : 's'} (${bytes(a.bytes)}) — ${what}`)}</span>
+      </label>
+    </li>`;
+  }).join('');
+
+  $('#restore-note').textContent = p.fileName || '';
+  box.innerHTML = `
+    <p class="help">From <b>${escapeHtml(p.fileName || 'this archive')}</b>${p.skippedData ? ' · the media pool in it is not restored from here' : ''}.</p>
+    <ul class="restore-list">${rows || '<li class="restore-row"><span class="restore-what">No app settings in this archive.</span></li>'}</ul>
+    ${p.apps.length > 1 ? '<button type="button" class="linkish" id="restore-all">Choose every app</button>' : ''}
+    <ul class="restore-list restore-extras">
+      ${p.env.present ? `<li class="restore-row" data-effect="replace"><label>
+        <input type="checkbox" id="restore-env">
+        <span class="restore-name">Settings and secrets (.env)</span>
+        <span class="restore-what">Every generated password becomes the one in the backup. Apps keep running on their current values until they are recreated.</span>
+      </label></li>` : ''}
+      ${p.state.present ? `<li class="restore-row" data-effect="replace"><label>
+        <input type="checkbox" id="restore-state">
+        <span class="restore-name">Podhouse's own state</span>
+        <span class="restore-what">${escapeHtml(`${p.state.files} files — the app list, appearance, activity AND the dashboard login. After this you sign in with the password from the backup.`)}</span>
+      </label></li>` : ''}
+    </ul>
+    <div class="row-actions">
+      <button type="button" class="button is-danger-solid" id="restore-apply">Restore what I chose…</button>
+      <button type="button" class="button" id="restore-discard">Discard this archive</button>
+    </div>`;
+}
+
+function restoreChoice() {
+  return {
+    id: restorePlan.id,
+    apps: $$('[data-restore-app]').filter((el) => el.checked).map((el) => el.dataset.restoreApp),
+    env: !!($('#restore-env') && $('#restore-env').checked),
+    state: !!($('#restore-state') && $('#restore-state').checked),
+  };
+}
+
+async function applyRestore() {
+  if (!restorePlan || restoreBusy) return;
+  const choice = restoreChoice();
+  const parts = [
+    ...choice.apps.map((id) => (state.modules.find((m) => m.id === id) || {}).title || id),
+    choice.env ? 'settings and secrets' : null,
+    choice.state ? 'Podhouse\'s own state (including the login)' : null,
+  ].filter(Boolean);
+  if (!parts.length) { restoreStatus('Tick what should come back first.', true); return; }
+
+  // Typed, not clicked. This is the action in Podhouse that writes over data
+  // a box depends on, and a stray click must not be able to reach it.
+  const ok = await confirmDialog({
+    title: 'Write this backup over the box?',
+    danger: true,
+    confirmLabel: 'Restore',
+    requireText: 'restore',
+    bodyHtml: `<p>This replaces <b>${escapeHtml(parts.join(', '))}</b>.</p>
+      <p>Each app it touches is stopped, replaced and started again. A backup of the box
+      as it is right now is taken first, and what gets replaced is kept on the box until
+      you discard this archive.</p>`,
+  });
+  if (!ok) { restoreStatus('Nothing was changed.'); return; }
+
+  restoreBusy = true;
+  $('#restore-apply').disabled = true;
+  $('#restore-log').textContent = '';
+  restoreStatus('Restoring…');
+  try {
+    const res = await fetch('api/restore/apply/stream', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(choice),
+    });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result = null;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line);
+        if (msg.line) restoreLog(msg.line);
+        if (msg.done) result = msg;
+      }
+    }
+    if (result && result.ok) {
+      restoreStatus(`Restored. The settings that were replaced are kept on the box until you discard this archive, and ${result.backup} is the backup taken before it.`);
+      toast('Restore finished');
+    } else {
+      restoreStatus((result && (result.hint ? `${result.error} — ${result.hint}` : result.error)) || 'the restore stopped', true);
+    }
+    await loadBackups();
+    // The apps were stopped and started again, so the live picture is stale.
+    await loadModules(true).catch(() => {});
+  } catch (err) {
+    restoreStatus(`The restore stopped: ${err.message}`, true);
+  } finally {
+    restoreBusy = false;
+    const button = $('#restore-apply');
+    if (button) button.disabled = false;
+  }
+}
+
+async function discardRestore() {
+  if (!restorePlan) return;
+  try {
+    await restoreCall('discard', { id: restorePlan.id });
+  } catch { /* already gone */ }
+  restorePlan = null;
+  renderRestorePlan();
+  $('#restore-log').hidden = true;
+  $('#restore-log').textContent = '';
+  restoreStatus('');
+}
+
 async function loadBackups() {
   try {
     backupState = await (await fetch('api/backup')).json();
@@ -1470,6 +1751,8 @@ async function loadBackups() {
 function renderBackups() {
   const b = backupState;
   if (!b || !$('#archive-list')) return;
+  renderRestorePicker();
+  renderStagedRestores();
 
   $('#backup-summary').textContent = b.count
     ? `${b.count} archive${b.count === 1 ? '' : 's'} · ${bytes(b.totalSize)}`
@@ -2500,6 +2783,12 @@ async function removeDialog(title, id) {
 // settles, so its state is captured on change.
 document.addEventListener('change', (event) => {
   if (event.target.id === 'remove-erase-box') removeDialog.erase = event.target.checked;
+  // Picking a file IS the upload: there is no second "go" button to forget.
+  if (event.target.id === 'restore-file') {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';                       // so the same file can be picked again
+    uploadArchive(file);
+  }
 });
 
 async function runAction(id, action) {
@@ -4377,6 +4666,21 @@ document.addEventListener('click', async (event) => {
   }
 
   if (event.target.closest('#backup-now')) return createBackup();
+  if (event.target.closest('#restore-read')) return stageExistingArchive();
+  const openStaged = event.target.closest('[data-restore-open]');
+  if (openStaged) return readArchive(openStaged.dataset.restoreOpen);
+  const dropStaged = event.target.closest('[data-restore-drop]');
+  if (dropStaged) {
+    return restoreCall('discard', { id: dropStaged.dataset.restoreDrop })
+      .then(() => renderStagedRestores())
+      .catch((err) => restoreStatus(err.message, true));
+  }
+  if (event.target.closest('#restore-apply')) return applyRestore();
+  if (event.target.closest('#restore-discard')) return discardRestore();
+  if (event.target.closest('#restore-all')) {
+    $$('[data-restore-app]').forEach((box) => { box.checked = true; });
+    return undefined;
+  }
 
   if (event.target.closest('#key-reveal')) {
     return backupCall('key', {}, (data) => {

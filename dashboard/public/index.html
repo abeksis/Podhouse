@@ -718,9 +718,33 @@
           <p class="help">A scheduled backup is always a <strong>settings</strong> backup. A media library is too big to copy on a timer, and a job that never finishes is worse than none.</p>
         </section>
 
+        <!-- PUTTING ONE BACK — the careful path, in four steps. Nothing here
+             writes to the box until the plan has been read and confirmed; see
+             lib/restore.js. -->
+        <section class="panel" id="restore-card">
+          <div class="panel-head">
+            <h2 class="panel-title">Put a backup back</h2>
+            <span class="panel-note mono" id="restore-note"></span>
+          </div>
+          <p class="help">
+            Pick an archive and Podhouse opens it, checks it, and shows exactly what it would write
+            over — app by app. Nothing is touched until you confirm, and a fresh backup of the box as
+            it is now is taken first.
+          </p>
+          <div class="row-actions" id="restore-pick">
+            <select id="restore-existing" class="select select-sm" aria-label="An archive on this box"></select>
+            <button type="button" class="button" id="restore-read">Read this archive</button>
+            <label class="button" for="restore-file">Upload an archive…</label>
+            <input type="file" id="restore-file" accept=".enc,application/octet-stream" hidden>
+          </div>
+          <p class="help" id="restore-status" hidden></p>
+          <div id="restore-plan"></div>
+          <code class="code-block" id="restore-log" hidden></code>
+        </section>
+
         <section class="panel">
-          <div class="panel-head"><h2 class="panel-title">Restoring</h2></div>
-          <p class="help">Restoring runs from a shell on purpose: it overwrites live configuration while apps are running, and it needs the key you stored elsewhere.</p>
+          <div class="panel-head"><h2 class="panel-title">Restoring from a shell</h2></div>
+          <p class="help">The same job from a terminal — for a box whose dashboard will not start, or when you would rather unpack an archive and look at it before anything is written.</p>
           <code class="code-block" id="backup-restore-cmd"></code>
         </section>
       </div>

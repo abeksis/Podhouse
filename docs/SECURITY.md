@@ -151,8 +151,23 @@ An archive contains `.env`, which is every generated password on the box. So:
   by a link, a prefetch, or anything that lands in browser history. It is
   still an unauthenticated endpoint on an unauthenticated page: whoever can
   open the dashboard can read the key and download the archives.
-- **Restore is a shell operation.** It unpacks to a new directory and touches
-  nothing live, so a mis-click cannot overwrite a running app's database.
+- **Restoring is four steps, never one click.** `homebox restore` still only
+  unpacks into a new directory and touches nothing. Settings → Backups can now
+  write an archive back, and keeps the same property by construction: the
+  archive is decrypted and authenticated first, unpacked to `state/restore/<id>`
+  outside the live tree, and READ — every app in it, how many files, and what
+  each would write over. Nothing moves until a person ticks the individual
+  apps (plus `.env` and Podhouse's own state as separate opt-ins) and types the
+  word. Applying takes a backup first, stops only the apps it rewrites, moves
+  what it replaces into `state/restore/<id>/replaced`, and starts them again.
+  There is no "restore everything" button.
+- **A restore can only write three kinds of path.** Module config directories,
+  `state/`, and `.env`. Every entry in an archive is checked for an absolute
+  path or a `..` before it is unpacked, because an archive is a file from
+  somewhere else. `data/` — the media pool — is never restored from the page.
+- **The decrypted copy is deleted** as soon as the restore finishes or the
+  archive is discarded; while it exists it is 0600 inside a 0700 directory.
+  What was replaced stays until you discard it, as the way back.
 - Archives land on the same filesystem they protect, which covers a mistake
   but not a dead disk or a deleted folder. Set `HB_BACKUP_COPY_DIR` (Settings →
   Configuration → Backup) to a folder on another disk or a mounted NAS share,

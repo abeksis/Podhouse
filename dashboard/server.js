@@ -37,6 +37,7 @@ const platform = require('./lib/platform');
 const insights = require('./lib/insights');
 const storage = require('./lib/storage');
 const reset = require('./lib/reset');
+const restore = require('./lib/restore');
 const stats = require('./lib/stats');
 const state = require('./lib/state-store');
 
@@ -1263,6 +1264,68 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 404, { error: 'no such endpoint' });
       } catch (err) {
         return sendJson(res, err.name === 'BackupError' ? 400 : 500, { error: err.message, hint: err.hint || null });
+      }
+    }
+
+    // --- putting a backup back ---
+    //
+    // Four steps, each its own request, because each one is a decision: get
+    // the archive here, read what is in it, choose, then apply. Nothing
+    // before the last one writes anything outside state/restore. See
+    // lib/restore.js for why the shape is this careful.
+    if (route.startsWith('/api/restore')) {
+      const action = route.slice('/api/restore'.length).replace(/^\//, '');
+      try {
+        if (!action && req.method === 'GET') return sendJson(res, 200, { staged: await restore.list() });
+
+        if (action === 'upload' && req.method === 'POST') {
+          // Straight from the socket to disk: readBody caps at 16KB, and an
+          // archive is hundreds of megabytes.
+          const id = restore.id16();
+          const name = String(url.searchParams.get('name') || 'uploaded archive').slice(0, 120);
+          const got = await restore.receive(req, id);
+          await restore.writeMeta(id, { createdAt: Date.now(), source: 'upload', fileName: name });
+          return sendJson(res, 200, { ok: true, ...got });
+        }
+        if (action === 'from-archive' && req.method === 'POST') {
+          const body = await readBody(req);
+          const got = await restore.fromExisting(String(body.name || ''));
+          await restore.writeMeta(got.id, { createdAt: Date.now(), source: 'box', fileName: String(body.name || '') });
+          return sendJson(res, 200, { ok: true, ...got });
+        }
+        if (action === 'inspect' && req.method === 'POST') {
+          const body = await readBody(req);
+          return sendJson(res, 200, { ok: true, plan: await restore.inspect(body.id) });
+        }
+        if (action === 'discard' && req.method === 'POST') {
+          const body = await readBody(req);
+          return sendJson(res, 200, await restore.discard(body.id));
+        }
+        // The only route here that changes the box, and it streams: a restore
+        // stops apps, copies over them and starts them again, and watching
+        // that happen is the difference between waiting and worrying.
+        if (action === 'apply/stream' && req.method === 'POST') {
+          const body = await readBody(req);
+          res.writeHead(200, {
+            'content-type': 'application/x-ndjson; charset=utf-8',
+            'cache-control': 'no-store',
+            'x-accel-buffering': 'no',
+          });
+          const send = (obj) => { if (!res.writableEnded) res.write(`${JSON.stringify(obj)}\n`); };
+          try {
+            const done = await restore.apply(body.id, body, (line) => send({ line }));
+            activity.note({ name: 'restore', action: `restored ${done.apps.join(', ') || 'settings'}`, level: 'info' });
+            send({ done: true, ok: true, ...done });
+          } catch (err) {
+            activity.note({ name: 'restore', action: 'restore failed', level: 'error' });
+            send({ done: true, ok: false, error: err.message, hint: err.hint || null });
+          }
+          return res.end();
+        }
+        return sendJson(res, 404, { error: 'no such endpoint' });
+      } catch (err) {
+        const known = err.name === 'RestoreError' || err.name === 'BackupError';
+        return sendJson(res, known ? 400 : 500, { error: err.message, hint: err.hint || null });
       }
     }
 
