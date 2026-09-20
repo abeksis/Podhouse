@@ -11,6 +11,13 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+// The background this browser last showed, set before anything renders: the
+// sign-in screen comes up before the server will say what the box's choice is.
+try {
+  const bg = localStorage.getItem('hb-bg');
+  if (bg && /^[a-z-]{1,24}$/.test(bg)) document.documentElement.dataset.bg = bg;
+} catch { /* storage blocked — the plain canvas it is */ }
+
 const state = {
   summary: null,
   modules: [],
@@ -2749,10 +2756,23 @@ const ACCENTS = [
   { id: 'rose', label: 'Rose' },
 ];
 
+/* Photos behind the page. Each id has a file in public/backgrounds and a
+   [data-bg] block in css/homebox.css; server.js accepts only these. */
+const BACKGROUNDS = [
+  { id: 'none', label: 'None' },
+  { id: 'milky-way', label: 'Milky Way' },
+  { id: 'fog', label: 'Fog' },
+  { id: 'aurora', label: 'Aurora' },
+];
+
 function applyPrefs(prefs) {
   state.prefs = prefs;
   document.documentElement.dataset.theme = prefs.theme;
   document.documentElement.dataset.accent = prefs.accent;
+  document.documentElement.dataset.bg = prefs.background || 'none';
+  // Remembered in this browser too, so the sign-in screen — shown before the
+  // server will hand out prefs — can wear the same picture.
+  try { localStorage.setItem('hb-bg', document.documentElement.dataset.bg); } catch { /* private window */ }
   renderChoices();
   renderInsightToggles();
   // A panel that was just switched off should leave the card now, not at the
@@ -2802,6 +2822,17 @@ function renderChoices() {
 
   themeBox.innerHTML = THEMES.map((t) => choice('theme', t, state.prefs.theme)).join('');
   accentBox.innerHTML = ACCENTS.map((a) => choice('accent', a, state.prefs.accent)).join('');
+
+  const bgBox = $('#bg-choices');
+  if (bgBox) {
+    const current = state.prefs.background || 'none';
+    bgBox.innerHTML = BACKGROUNDS.map((b) => `
+      <button type="button" class="choice${b.id === current ? ' is-chosen' : ''}"
+        data-bg-value="${escapeHtml(b.id)}" aria-pressed="${b.id === current}">
+        <span class="choice-preview bg-preview" data-bg-thumb="${escapeHtml(b.id)}"></span>
+        <span class="choice-name">${escapeHtml(b.label)}</span>
+      </button>`).join('');
+  }
 }
 
 async function savePrefs(patch) {
@@ -4667,6 +4698,8 @@ document.addEventListener('click', async (event) => {
 
   const accentBtn = event.target.closest('[data-accent-value]');
   if (accentBtn) return savePrefs({ accent: accentBtn.dataset.accentValue });
+  const bgBtn = event.target.closest('[data-bg-value]');
+  if (bgBtn) return savePrefs({ background: bgBtn.dataset.bgValue });
 
   if (event.target.closest('#sheet-close') || event.target.closest('#sheet-backdrop')) closeSheet();
 });

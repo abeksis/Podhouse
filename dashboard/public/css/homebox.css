@@ -104,6 +104,23 @@
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
+
+/* A photo behind the page (Settings → Appearance → Background).
+   It shows in the canvas around the floating sidebar and panels, never under
+   text: every surface above it is opaque. A veil in the theme's own colour
+   dims it, so the dark theme stays dark and the light one stays light. The
+   files ship with Podhouse — the box works offline — and are CC0. */
+:root { --bg-veil: rgba(9, 9, 11, 0.62); }
+:root[data-theme="dim"] { --bg-veil: rgba(27, 31, 39, 0.66); }
+:root[data-theme="light"] { --bg-veil: rgba(244, 246, 250, 0.8); }
+:root[data-bg="milky-way"] { --bg-photo: url("../backgrounds/milky-way.webp"); }
+:root[data-bg="fog"] { --bg-photo: url("../backgrounds/fog.webp"); }
+:root[data-bg="aurora"] { --bg-photo: url("../backgrounds/aurora.webp"); }
+:root[data-bg]:not([data-bg="none"]) body {
+  background: linear-gradient(var(--bg-veil), var(--bg-veil)), var(--bg-photo) center / cover fixed, var(--bg);
+}
+/* The sign-in screen wears it too, from the choice this browser remembers. */
+:root[data-bg]:not([data-bg="none"]) .gate { background: transparent; }
 body {
   margin: 0;
   background: var(--bg);
@@ -866,6 +883,10 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .choice-preview[data-theme="light"] i:first-child { background: #f4f6fa; }
 .choice-preview[data-theme="light"] i:last-child { background: #ffffff; }
 /* Accent previews: the accent itself, and its soft tint. */
+.bg-preview { background: var(--bg) center / cover no-repeat; }
+.bg-preview[data-bg-thumb="milky-way"] { background-image: url("../backgrounds/milky-way.webp"); }
+.bg-preview[data-bg-thumb="fog"] { background-image: url("../backgrounds/fog.webp"); }
+.bg-preview[data-bg-thumb="aurora"] { background-image: url("../backgrounds/aurora.webp"); }
 .choice-preview[data-accent] i:first-child { background: var(--accent); }
 .choice-preview[data-accent] i:last-child { background: color-mix(in srgb, var(--accent) 30%, var(--surface)); }
 

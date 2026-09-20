@@ -8,6 +8,14 @@ Podhouse's own code is under the MIT licence (see [LICENSE](LICENSE)).
 
 App icons in `dashboard/public/icons` come from [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons) (fetched with `scripts/fetch-icons.sh`), apart from the Podhouse logo itself. The marks belong to their respective projects.
 
+## Backgrounds
+
+The photos in `dashboard/public/backgrounds` are all CC0, so none of them needs this line — it is here anyway, because somebody took them.
+
+- `aurora.webp` — *May 2024 Aurora Borealis in Winterthur, Switzerland*, by LaJu94, [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:May_2024_Aurora_Borealis_in_Winterthur,_Switzerland_4.jpg), CC0.
+- `milky-way.webp` — *Milky Way*, [StockSnap GU161BVOUD](https://stocksnap.io/photo/GU161BVOUD), CC0.
+- `fog.webp` — *Aerial fog*, [StockSnap ELSYET4O4S](https://stocksnap.io/photo/ELSYET4O4S), CC0.
+
 ## Apps
 
 | Module | Container images |

@@ -59,6 +59,11 @@ const PUBLIC_PATHS = new Set([
   '/css/homebox.css',
   '/js/app.js',
   '/icons/homebox.svg',
+  // The background photos, so the sign-in screen can wear the one this
+  // browser last showed. Public-domain pictures, nothing about the box.
+  '/backgrounds/milky-way.webp',
+  '/backgrounds/fog.webp',
+  '/backgrounds/aurora.webp',
 ]);
 
 const MIME = {
@@ -87,6 +92,9 @@ const VERSION = readVersion();
 // name here must have a matching [data-theme=...] or [data-accent=...] block.
 const THEMES = ['dark', 'dim', 'light'];
 const ACCENTS = ['orange', 'blue', 'violet', 'teal', 'green', 'amber', 'rose'];
+// Photos behind the page, shipped in public/backgrounds (all CC0; see
+// docs/CREDITS.md). 'none' is the plain canvas.
+const BACKGROUNDS = ['none', 'milky-way', 'fog', 'aurora'];
 
 // Which parts the "Right now" panel shows. Defaults to on: the panel hides
 // itself when it has nothing to say, so a box with no media apps never sees
@@ -95,6 +103,7 @@ const INSIGHT_PANELS = ['transfers', 'queues', 'upcoming'];
 const DEFAULT_PREFS = {
   theme: 'dark',
   accent: 'orange',
+  background: 'none',
   insights: { enabled: true, transfers: true, queues: true, upcoming: true },
 };
 
@@ -117,6 +126,7 @@ function cleanPrefs(input) {
   return {
     theme,
     accent: ACCENTS.includes(p.accent) ? p.accent : DEFAULT_PREFS.accent,
+    background: BACKGROUNDS.includes(p.background) ? p.background : DEFAULT_PREFS.background,
     insights,
   };
 }
