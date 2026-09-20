@@ -248,6 +248,12 @@ function tarArgs(kind, excludes = []) {
   // made while this file lists the apps that were stopped; restoring that
   // list later would make an unrelated dashboard start apps unexpectedly.
   args.push('--exclude=./state/backup-quiesce.json', '--exclude=state/backup-quiesce.json');
+  // Where a restore being prepared in the browser is staged: an uploaded
+  // archive and the copy unpacked from it. It is somebody else's backup,
+  // sitting in the tree while they decide what to tick — so including it is a
+  // backup of a backup, the same rule as ./backups above, and it is measured
+  // in gigabytes rather than in the 14MB the rest of state/ weighs.
+  args.push('--exclude=./state/restore', '--exclude=state/restore');
   // What each module declares it rebuilds by itself. Full relative paths only;
   // see backupExcludes() in lib/modules.js for why.
   for (const p of excludes) args.push(`--exclude=${p}`);

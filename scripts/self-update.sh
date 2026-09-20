@@ -285,6 +285,7 @@ chmod 600 "$ROLLBACK_TARBALL"
 tar -czf "$ROLLBACK_TARBALL" -C "$HB_ROOT" \
   --exclude='state/platform-backups' \
   --exclude='state/update-backups' \
+  --exclude='state/restore' \
   state .env 2>/dev/null \
   || fail "could not back up state before starting"
 
