@@ -1842,14 +1842,44 @@ async function createBackup() {
   const original = button.textContent;
   button.disabled = true;
   button.textContent = 'Working…';
+  const quiesce = !!($('#backup-quiesce') && $('#backup-quiesce').checked);
+  const log = $('#backup-log');
+  if (log) { log.textContent = ''; log.hidden = !quiesce; }
   try {
-    const res = await fetch('api/backup/create', {
+    // The exact copy stops apps, so it reports each step as it happens; the
+    // ordinary one is quick enough to answer once, at the end.
+    const res = await fetch(`api/backup/create${quiesce ? '/stream' : ''}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: $('#backup-kind').value }),
+      body: JSON.stringify({ kind: $('#backup-kind').value, quiesce }),
     });
-    const data = await res.json();
-    if (!data.ok) toast(`Backup failed: ${data.error}${data.hint ? ` — ${data.hint}` : ''}`, 'error', 12000);
+    let data;
+    if (quiesce && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const accept = (line) => {
+        if (!line.trim()) return;
+        const msg = JSON.parse(line);
+        if (msg.line && log) { log.textContent += `${msg.line}\n`; log.scrollTop = log.scrollHeight; }
+        if (msg.done || msg.error) data = msg;
+      };
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) accept(line);
+      }
+      // A normal JSON error response (for example, an expired session) has no
+      // trailing newline. The streaming path must still surface its message.
+      buffer += decoder.decode();
+      accept(buffer);
+    } else {
+      data = await res.json();
+    }
+    if (!data || !data.ok) toast(`Backup failed: ${(data && data.error) || 'no answer'}${data && data.hint ? ` — ${data.hint}` : ''}`, 'error', 12000);
     else toast(`Backup written: ${data.name || 'archive created'}. Keep the encryption key somewhere else.`, 'success', 7000);
   } catch (err) {
     toast(`Backup failed: ${err.message}`, 'error', 8000);

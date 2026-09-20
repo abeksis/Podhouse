@@ -244,6 +244,10 @@ function tarArgs(kind, excludes = []) {
   // is on purpose (a backup of backups is the fastest way to fill a disk), but
   // it is a rule, not an accident, and changing it is a size decision.
   args.push('--exclude=./backups', '--exclude=backups');
+  // Runtime recovery state, not box configuration. An exact-copy backup is
+  // made while this file lists the apps that were stopped; restoring that
+  // list later would make an unrelated dashboard start apps unexpectedly.
+  args.push('--exclude=./state/backup-quiesce.json', '--exclude=state/backup-quiesce.json');
   // What each module declares it rebuilds by itself. Full relative paths only;
   // see backupExcludes() in lib/modules.js for why.
   for (const p of excludes) args.push(`--exclude=${p}`);
@@ -263,10 +267,83 @@ async function rebuildableExcludes() {
   }
 }
 
-async function create({ kind = 'config' } = {}) {
+/* --------------------------------------------------- copying apps at rest */
+
+/**
+ * Apps that keep their settings in memory.
+ *
+ * An archive is a copy of files on disk, and a running app's newest settings
+ * may not be there yet: qBittorrent writes its configuration when it exits,
+ * and every app with a database has writes in flight. Measured here — a save
+ * path changed in qBittorrent's own page was not in a backup taken a minute
+ * later, and the restore that followed was blamed for it.
+ *
+ * So this is the exact copy: stop, copy, start. Seconds of downtime, in
+ * exchange for an archive that holds what the apps actually know.
+ *
+ * The dashboard and the proxy are never stopped: one is the process answering
+ * this request, the other is how the page is reached from outside.
+ */
+const QUIESCE_MARK = 'backup-quiesce.json';
+
+async function stoppableModules() {
+  const docker = require('./docker');
+  const [{ modules }, containers] = await Promise.all([modulesLib.loadAll(), docker.listContainers().catch(() => [])]);
+  const live = modulesLib.withContainers(modules, containers, 'localhost').modules;
+  return live
+    .filter((m) => m.installed && !m.required && m.status !== 'stopped')
+    .map((m) => m.id);
+}
+
+/**
+ * Start a set of modules and keep only failures in the recovery marker.
+ *
+ * Clearing the whole marker after one failed start loses the only durable
+ * record of an app the backup left down. A later dashboard restart must retry
+ * those failures rather than assuming the box recovered completely.
+ */
+async function restartQuiesced(ids, report = () => {}) {
+  const composeLib = require('./compose');
+  const started = [];
+  const remaining = [];
+  for (const id of ids) {
+    try {
+      await composeLib.start(id);
+      started.push(id);
+    } catch (err) {
+      remaining.push(id);
+      report(id, err);
+    }
+  }
+  await state.writeJson(QUIESCE_MARK, remaining.length
+    ? { stopped: remaining, at: Date.now() }
+    : { stopped: [] });
+  return { started, remaining };
+}
+
+/**
+ * Anything left stopped by a backup that died halfway.
+ *
+ * The marker is written before the first app is stopped and removed after the
+ * last one is started, so a crash — or a box losing power mid-backup — leaves
+ * a list rather than a mystery. Called once at startup.
+ */
+async function resumeAfterQuiesce(log = console.warn) {
+  const mark = await state.readJson(QUIESCE_MARK, null);
+  if (!mark || !Array.isArray(mark.stopped) || !mark.stopped.length) return [];
+  const { started, remaining } = await restartQuiesced(mark.stopped, (id, err) => {
+    log(`[homebox] could not start ${id} after an interrupted backup: ${err.message}`);
+  });
+  if (started.length) log(`[homebox] started ${started.join(', ')} again after an interrupted backup`);
+  if (remaining.length) log(`[homebox] will retry ${remaining.join(', ')} at the next dashboard start`);
+  return started;
+}
+
+async function create({ kind = 'config', quiesce = false, onLine = null } = {}) {
   if (!['config', 'full'].includes(kind)) throw new BackupError(`unknown backup kind: ${kind}`);
   if (inFlight) throw new BackupError('a backup is already running');
   const secret = requireSecret();
+  const say = (line) => { if (onLine) onLine(line); };
 
   inFlight = true;
   const started = Date.now();
@@ -275,7 +352,27 @@ async function create({ kind = 'config' } = {}) {
   const target = path.join(BACKUP_DIR, name);
   const plain = scratchPath(BACKUP_DIR, '.staging') + '.tar.gz';
 
+  let stopped = [];
   try {
+    if (quiesce) {
+      const composeLib = require('./compose');
+      const wanted = await stoppableModules();
+      // Written BEFORE the first stop: if this process dies here, the list of
+      // what is down survives, and the next start brings them back.
+      await state.writeJson(QUIESCE_MARK, { stopped: wanted, at: Date.now() });
+      for (const id of wanted) {
+        try {
+          say(`Stopping ${id}`);
+          await composeLib.stop(id);
+          stopped.push(id);
+        } catch (err) {
+          say(`  ${id} would not stop — copying it as it runs (${err.message})`);
+        }
+      }
+      await state.writeJson(QUIESCE_MARK, { stopped, at: Date.now() });
+      say(stopped.length ? `${stopped.length} app${stopped.length === 1 ? '' : 's'} stopped — copying` : 'Nothing needed stopping — copying');
+    }
+
     // tar to a staging file rather than piping into the cipher: a tar that
     // fails halfway would otherwise produce a perfectly decryptable archive
     // of half a box.
@@ -298,6 +395,24 @@ async function create({ kind = 'config' } = {}) {
       });
     });
 
+    // Started again before the archive is encrypted: the copy on disk is
+    // already complete by here, and every extra second of downtime is paid by
+    // somebody watching a page that will not load.
+    if (stopped.length) {
+      for (const id of stopped) say(`Starting ${id} again`);
+      const result = await restartQuiesced(stopped, (id, err) => {
+        say(`  ${id} did not start: ${err.message}`);
+      });
+      stopped = result.remaining;
+      if (stopped.length) {
+        throw new BackupError(
+          `could not restart ${stopped.join(', ')}`,
+          'Podhouse will retry once now and again whenever the dashboard starts.'
+        );
+      }
+    }
+
+    say('Encrypting');
     await encryptFile(plain, target, secret);
     await matchOwner(target);
     const { size } = await fsp.stat(target);
@@ -307,6 +422,16 @@ async function create({ kind = 'config' } = {}) {
     const copy = await copyOffBox(name);
     return { name, size, kind, copy, seconds: Math.round((Date.now() - started) / 1000) };
   } finally {
+    // Whatever went wrong above, nothing stays stopped because of a backup.
+    if (stopped.length) {
+      try {
+        const result = await restartQuiesced(stopped);
+        stopped = result.remaining;
+      } catch {
+        // The original marker remains. Startup recovery can safely retry an
+        // already-running module, so preserving it is safer than clearing it.
+      }
+    }
     await fsp.rm(plain, { force: true });
     inFlight = false;
   }
@@ -600,6 +725,6 @@ function revealKey() {
 }
 
 module.exports = {
-  create, list, remove, verify, prune, status, copyStatus, nextSlot,
+  create, list, remove, verify, prune, status, copyStatus, nextSlot, resumeAfterQuiesce,
   getSchedule, setSchedule, startScheduler,
   revealKey, requireSecret, decryptFile, resolveName, BACKUP_DIR, BackupError, PRESETS, tarArgs, rebuildableExcludes };

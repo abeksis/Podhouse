@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/yaml.test.js"
+    "test": "node test/yaml.test.js && node --test test/backup-quiesce.test.js"
   },
   "engines": {
     "node": ">=20"
