@@ -236,12 +236,27 @@ async function stats(request, env, url) {
   const versions = lastFull ? lastFull.versions : {};
   const top = Object.entries(versions).sort((a, b) => b[1] - a[1])[0] || null;
   const total = (k) => daysList.reduce((s, d) => s + d[k], 0);
+  // Links back to this same page, carrying whatever is already in the query
+  // string. Built here rather than in the HTML because only this side has the
+  // request: a hand-written `?days=30&hide=IL` drops the key the page is
+  // behind, so the filter link answered 404 and looked like a dead link.
+  const linkTo = (changes) => {
+    const next = new URLSearchParams(url.search);
+    for (const [k, v] of Object.entries(changes)) {
+      if (v === null) next.delete(k);
+      else next.set(k, v);
+    }
+    const q = next.toString();
+    return q ? `?${q}` : '?';
+  };
+
   const summary = {
     days,
     since,
     today: now,
     split_from: SPLIT_FROM,
     hidden: [...hidden],
+    links: { hide: linkTo({ hide: 'IL' }), showAll: linkTo({ hide: null }) },
     installs: total('install'),
     install_reads: total('install_read'),
     uninstalls: total('uninstall'),
@@ -297,9 +312,10 @@ function statsHtml(s) {
     .map(([k, v]) => `<li><span>${esc(k)}</span><b dir="ltr">${fmt.show(v)}</b></li>`).join('')
     || '<li><span>—</span><b></b></li>';
 
+  const links = s.links || {};
   const hideLink = s.hidden.length
-    ? `<a href="?days=${s.days}">הצג את הכול</a>`
-    : `<a href="?days=${s.days}&amp;hide=IL">בלי ישראל</a>`;
+    ? `<a href="${esc(links.showAll || '?')}">הצג את הכול</a>`
+    : `<a href="${esc(links.hide || '?hide=IL')}">בלי ישראל</a>`;
 
   return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Podhouse · סטטיסטיקה</title><meta name="robots" content="noindex">
