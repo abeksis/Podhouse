@@ -20,6 +20,10 @@ try {
 
 const state = {
   summary: null,
+  // The box's own samples, for Reports. Same bargain as the per-app series:
+  // taken from the refresh that already happens, kept in the tab, and
+  // described on screen as exactly that rather than as history.
+  box: { cpu: [], memory: [], disk: [] },
   // Which app the right-hand panel is showing, and the memory samples
   // collected for each app while this tab has been open.
   picked: null,
@@ -294,7 +298,7 @@ const STATUS_LABEL = {
 
 /* --------------------------------------------------------------- routing */
 
-const PAGES = ['home', 'apps', 'logs', 'updates', 'settings'];
+const PAGES = ['home', 'apps', 'logs', 'reports', 'updates', 'settings'];
 
 function show(page) {
   const target = PAGES.includes(page) ? page : 'home';
@@ -309,6 +313,7 @@ function show(page) {
   // Measured while the page was hidden, every width was zero.
   if (target === 'apps') fitTaglines($('#catalog-grid'));
   if (target === 'home') loadInsights();
+  if (target === 'reports' && state.summary) renderReports(state.summary);
   if (target === 'updates') { loadUpdates(); loadPlatform(); }
   if (target === 'settings') { loadBackups(); loadConfig(); loadCatalog(); loadStorage(); loadResets(); }
   if (target === 'settings' || target === 'home') loadBookmarks();
@@ -329,21 +334,42 @@ document.addEventListener('click', (event) => {
 
 /* ------------------------------------------------------------ home render */
 
-/** Processor, memory and disk at the foot of the sidebar: a number and a thin bar each. */
+/**
+ * The foot of the sidebar: processor, memory and disk, a number and a thin bar
+ * each — and the samples the Reports page draws from.
+ *
+ * The bars are the glance. They say nothing about units or history, and they
+ * are not supposed to: Reports is where the same three numbers get their size
+ * in gigabytes and their last hour. What this has to answer is "is anything
+ * climbing", and a bar answers that without being read.
+ */
 function renderSideMeters(summary) {
-  const { metrics } = summary;
+  $('#side-version').textContent = `v${summary.version}`;
+
+  const m = summary.metrics || {};
   const set = (id, pct) => {
     const el = $(id);
+    if (!el) return;
     $('b', el).textContent = pct == null ? '--' : `${pct}%`;
     $('em', el).style.width = `${pct == null ? 0 : Math.max(0, Math.min(100, pct))}%`;
     const lv = level(pct);
     if (lv) el.dataset.level = lv;
     else delete el.dataset.level;
   };
-  set('#side-cpu', metrics.cpu);
-  set('#side-ram', metrics.memory.percent);
-  set('#side-disk', metrics.disk.percent);
-  $('#side-version').textContent = `v${summary.version}`;
+  set('#side-cpu', m.cpu);
+  set('#side-ram', m.memory && m.memory.percent);
+  set('#side-disk', m.disk && m.disk.percent);
+
+  const push = (key, value) => {
+    if (value == null) return;
+    const s = state.box[key];
+    s.push(value);
+    if (s.length > 180) s.shift();
+  };
+  push('cpu', m.cpu);
+  push('memory', m.memory && m.memory.used);
+  push('disk', m.disk && m.disk.used);
+  if ($('#screen-reports').classList.contains('is-shown')) renderReports(summary);
 }
 
 /**
@@ -1441,14 +1467,9 @@ function renderApps() {
 
   renderStoreStats();
 
-  const block = $('#orphans');
-  if (state.unclaimed.length) {
-    block.hidden = false;
-    $('#orphans-count').textContent = `${state.unclaimed.length}`;
-    $('#orphan-list').innerHTML = state.unclaimed.map((c) => `<span class="orphan mono">${escapeHtml(c.name)}</span>`).join('');
-  } else {
-    block.hidden = true;
-  }
+  // `state.unclaimed` is still read — it is how the Logs page knows about the
+  // containers Podhouse did not create. It just no longer has a panel of its
+  // own on this page; see index.html.
 }
 
 /* ------------------------------------------------------------- logs page */
@@ -5440,3 +5461,160 @@ async function init() {
 }
 
 boot();
+
+/* ------------------------------------------------------------------ reports
+ *
+ * Everything the box can say about itself, in the one place with room for it.
+ *
+ * This page exists because the three meters in the sidebar were the same
+ * numbers the Overview's opening line already gives, squeezed into the
+ * narrowest column on the screen and shown as percentages — and a percentage
+ * does not tell you whether to worry. 28% of a 99GB disk and 28% of a 500GB
+ * disk are different facts.
+ */
+
+/** One card: a figure, what it is out of, and the shape it has been making. */
+function repCard(title, big, sub, series, color, format) {
+  const chart = series.length > 1 ? areaChart(series, color, format) : '';
+  return `
+    <p class="rep-k">${escapeHtml(title)}</p>
+    <p class="rep-v">${escapeHtml(big)}</p>
+    <p class="rep-s">${escapeHtml(sub)}</p>
+    ${chart || '<p class="rep-wait">sampled every 20 seconds &middot; the shape appears once there are two</p>'}`;
+}
+
+/**
+ * A filled curve over a series, with the axis taken from the series itself.
+ *
+ * Same rules as the app panel's trace: the curve passes through every sample,
+ * a range too small to matter is drawn flat rather than magnified, and the
+ * ends fade because the window is arbitrary — the box did not start when you
+ * opened this tab.
+ */
+function areaChart(series, color, format) {
+  const w = 520;
+  const h = 96;
+  const min = Math.min(...series);
+  const max = Math.max(...series);
+  const span = Math.max(max - min, max * 0.04, 1);
+  const base = max - span;
+  const step = w / (series.length - 1);
+  const pts = series.map((v, i) => [i * step, h - ((v - base) / span) * (h - 18) - 9]);
+  const line = smoothPath(pts);
+  const id = `rep-${Math.random().toString(36).slice(2, 8)}`;
+  return `
+    <svg class="rep-chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="${id}-f" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="${escapeHtml(color)}" stop-opacity="0.24"></stop>
+          <stop offset="1" stop-color="${escapeHtml(color)}" stop-opacity="0"></stop>
+        </linearGradient>
+        <linearGradient id="${id}-e" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#000"></stop><stop offset="0.12" stop-color="#fff"></stop>
+          <stop offset="0.95" stop-color="#fff"></stop><stop offset="1" stop-color="#000"></stop>
+        </linearGradient>
+        <mask id="${id}-m"><rect width="${w}" height="${h}" fill="url(#${id}-e)"></rect></mask>
+      </defs>
+      <g mask="url(#${id}-m)">
+        <path d="${line} L ${w},${h} L 0,${h} Z" fill="url(#${id}-f)"></path>
+        <path d="${line}" fill="none" stroke="${escapeHtml(color)}" stroke-width="1.6"
+          stroke-opacity="0.75" stroke-linejoin="round" stroke-linecap="round"
+          vector-effect="non-scaling-stroke"></path>
+      </g>
+    </svg>
+    <p class="rep-foot"><span>${escapeHtml(format(min))}</span><span>${series.length} samples</span><span>${escapeHtml(format(max))}</span></p>`;
+}
+
+function renderReports(summary) {
+  const m = summary.metrics || {};
+  const pct = (n) => `${n}%`;
+
+  $('#rep-sub').textContent = `${summary.host.name || 'this box'} \u00b7 ${state.box.memory.length} samples`
+    + ` since this page was opened \u00b7 up ${duration(m.uptime)}`;
+
+  const mem = $('#rep-memory');
+  if (mem && m.memory) {
+    mem.innerHTML = repCard('Memory', bytes(m.memory.used),
+      `of ${bytes(m.memory.total)} \u00b7 ${bytes(m.memory.available)} free`,
+      state.box.memory, '#5b8def', bytes);
+  }
+  const cpu = $('#rep-cpu');
+  if (cpu) {
+    cpu.innerHTML = repCard('Processor', m.cpu == null ? '--' : `${m.cpu}%`,
+      `${m.cores || '?'} cores \u00b7 load ${(m.load || []).map((n) => n.toFixed(2)).join('  ') || '--'}`,
+      state.box.cpu, '#34d399', pct);
+  }
+  const disk = $('#rep-disk');
+  if (disk && m.disk) {
+    disk.innerHTML = repCard('Disk', m.disk.used == null ? '--' : bytes(m.disk.used),
+      m.disk.total == null ? 'unknown' : `of ${bytes(m.disk.total)} \u00b7 ${bytes(m.disk.free)} free`,
+      state.box.disk, '#fbbf24', bytes);
+  }
+
+  // Network, and - only where the hardware has them - temperature and fans.
+  // A card that is not there is the honest form of "this machine cannot say":
+  // every VM reports no sensors at all, and a row of dashes would read as a
+  // fault in Podhouse rather than as the hypervisor not passing them through.
+  const net = $('#rep-net');
+  if (net) {
+    const n = m.network;
+    net.hidden = !n;
+    if (n) {
+      net.innerHTML = `
+        <p class="rep-k">Network</p>
+        <p class="rep-v">${n.in == null ? '--' : `${bytes(n.in)}<span class="rep-per">/s in</span>`}</p>
+        <p class="rep-s">${n.out == null ? '' : `${bytes(n.out)}/s out · `}${bytes(n.totalIn)} in since boot</p>`;
+    }
+  }
+
+  const temp = $('#rep-temp');
+  if (temp) {
+    const t = m.temperature;
+    const f = m.fans;
+    temp.hidden = !t && !f;
+    if (t || f) {
+      const rows = (t ? t.readings : []).map((r) =>
+        `<div class="rep-sensor"><span>${escapeHtml(r.label)}</span><b>${r.celsius}°C</b></div>`).join('')
+        + (f || []).map((x) =>
+          `<div class="rep-sensor"><span>${escapeHtml(x.label)}</span><b>${x.rpm} rpm</b></div>`).join('');
+      temp.innerHTML = `
+        <p class="rep-k">Temperature</p>
+        <p class="rep-v">${t ? `${t.hottest.celsius}<span class="rep-per">°C</span>` : '--'}</p>
+        <p class="rep-s">${t ? escapeHtml(`${t.hottest.label} on ${t.hottest.chip}`) : 'fans only'}</p>
+        <div class="rep-sensors">${rows}</div>`;
+    }
+  }
+
+
+  // Where the memory goes. Not a duplicate of the Overview: that shows one app
+  // at a time, and the question here is which of them is the box.
+  const rows = [];
+  for (const mod of state.modules) {
+    if (!mod.installed) continue;
+    const used = (mod.containers || []).reduce((sum, c) => sum + (c.memory || 0), 0);
+    if (used > 0) rows.push({ title: mod.title, used, color: (mod.theme && mod.theme.color) || 'var(--accent)' });
+  }
+  rows.sort((a, b) => b.used - a.used);
+  const total = rows.reduce((sum, r) => sum + r.used, 0);
+  const peak = rows.length ? rows[0].used : 1;
+  $('#rep-apps-note').textContent = total ? `${bytes(total)} across ${rows.length}` : '';
+  $('#rep-apps').innerHTML = rows.length
+    ? rows.map((r) => `
+      <div class="rep-row">
+        <span class="rep-row-name">${escapeHtml(r.title)}</span>
+        <span class="rep-row-bar"><i style="width:${Math.max(1, Math.round((r.used / peak) * 100))}%;background:${escapeHtml(r.color)}"></i></span>
+        <span class="rep-row-val">${escapeHtml(bytes(r.used))}</span>
+      </div>`).join('')
+    : '<p class="empty">No app is reporting memory yet.</p>';
+
+  $('#rep-facts').innerHTML = kvRows([
+    ['Host', `${summary.host.name} (${summary.host.address})`],
+    ['Podhouse', `v${summary.version}`],
+    ['Docker', summary.docker ? `${summary.docker.version} \u00b7 API ${summary.docker.apiVersion}` : 'unreachable'],
+    ['Uptime', duration(m.uptime)],
+    ['Processor', `${m.cores || '?'} cores`],
+    ['Disk path', (m.disk && m.disk.path) || '/'],
+    ['Apps', `${summary.counts.installed} installed of ${summary.counts.modules}`],
+    ['Containers', `${summary.counts.running} running of ${summary.counts.containers}`],
+  ]);
+}

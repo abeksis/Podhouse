@@ -71,6 +71,10 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M5 10h14M5 15h9M5 20h6"/></svg>
       <span>Logs</span>
     </a>
+    <a href="#reports" data-page="reports" class="nav-item">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <span>Reports</span>
+    </a>
     <a href="#updates" data-page="updates" class="nav-item">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>
       <span>Updates</span>
@@ -82,6 +86,13 @@
     </a>
   </nav>
 
+  <!-- The bottom of the column: what the box is doing, and the way out.
+       The three meters are the glance — you do not open Reports to learn that
+       the disk is at 28%, you look. Reports is where the same three numbers
+       get their history and their units; here they are a shape and a
+       percentage. Sign out sits under them because it belongs to the session,
+       and the top bar is about the box. It is here and not there — one place
+       each. -->
   <div class="side-foot">
     <div class="side-meters" id="side-meters">
       <div class="side-meter" id="side-cpu" title="Processor load right now">
@@ -97,6 +108,11 @@
         <b>--</b><i><em></em></i>
       </div>
     </div>
+
+    <button type="button" class="side-out" id="sign-out">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 8l-4 4 4 4M6 12h9"/></svg>
+      <span>Log out</span>
+    </button>
   </div>
 </aside>
 
@@ -118,7 +134,9 @@
       </a>
       <a class="topbar-chip is-waiting" id="top-update" href="#updates" data-page="updates" hidden></a>
       <span class="conn" id="conn" title="Live connection to the server" hidden><span class="conn-dot"></span><span class="conn-text">connecting</span></span>
-      <button type="button" class="linkish" id="sign-out">Sign out</button>
+      <!-- Sign out moved to the foot of the sidebar. Two of them would be the
+           same control twice on one screen, and the sidebar is where the rest
+           of "this session" now lives. -->
     </div>
   </header>
 
@@ -267,14 +285,11 @@
 
     <div class="catalog" id="catalog-grid"></div>
 
-    <section class="panel orphans" id="orphans" hidden>
-      <div class="panel-head">
-        <h2 class="panel-title">Containers without a module</h2>
-        <span class="panel-note mono" id="orphans-count"></span>
-      </div>
-      <p class="help">Docker runs these on this box, but Podhouse did not create them, so no module manages them.</p>
-      <div class="orphan-list" id="orphan-list"></div>
-    </section>
+    <!-- "Containers without a module" listed the containers Docker runs that
+         Podhouse did not create. It was a list of names with nothing to do
+         about them, under a catalog of things you CAN do something about.
+         They are still reachable where they are useful: the Logs page lists
+         every container on the box, these included. -->
   </section>
 
 
@@ -307,6 +322,35 @@
   </section>
 
   <!-- ==================== UPDATES ==================== -->
+  <!-- REPORTS — everything about the machine, in the one place that has room
+       for it. The three meters that used to be squeezed into the sidebar are
+       here, said properly and with their history. -->
+  <section id="screen-reports" class="screen">
+    <header class="screen-head">
+      <div>
+        <h1>Reports</h1>
+        <p>Everything the box can say about itself, and how it has been while this page was open.</p>
+        <p class="screen-meta" id="rep-sub">Reading&hellip;</p>
+      </div>
+    </header>
+    <div class="rep-grid">
+      <section class="panel rep-card" id="rep-memory"></section>
+      <section class="panel rep-card" id="rep-cpu"></section>
+      <section class="panel rep-card" id="rep-disk"></section>
+      <section class="panel rep-card" id="rep-net" hidden></section>
+      <!-- Only drawn where the machine actually has sensors. A VM has none. -->
+      <section class="panel rep-card" id="rep-temp" hidden></section>
+    </div>
+    <section class="panel">
+      <div class="panel-head"><h2 class="panel-title">Where the memory goes</h2><span class="panel-note mono" id="rep-apps-note"></span></div>
+      <div id="rep-apps"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2 class="panel-title">This box</h2></div>
+      <dl class="kv" id="rep-facts"></dl>
+    </section>
+  </section>
+
   <section id="screen-updates" class="screen">
     <header class="screen-head with-action">
       <div>

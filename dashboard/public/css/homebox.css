@@ -246,12 +246,27 @@ button { font: inherit; color: inherit; }
 .side-meters { display: flex; flex-direction: column; gap: 0.55rem; }
 .side-meter { display: grid; grid-template-columns: 1fr auto; row-gap: 3px; font-size: 0.8rem; color: var(--muted); }
 .side-meter span { display: inline-flex; align-items: center; gap: 0.4rem; }
+/* The Reports page draws the same three icons, at the same weight. */
 .meter-ic { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .side-meter b { font-family: var(--mono); font-weight: 500; color: var(--text-2); }
 .side-meter i { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
 .side-meter em { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.4s ease; }
 .side-meter[data-level="warn"] em { background: var(--warn); }
 .side-meter[data-level="bad"] em { background: var(--bad); }
+
+/* Log out. Shaped like a nav item so the column has one row language, but
+   quieter than the pages above it — it is the way out, not a destination. */
+.side-out {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.5rem 0.35rem; margin-top: 0.15rem;
+  border: 0; border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: none; color: var(--muted);
+  font: inherit; font-size: 0.85rem; font-weight: 500;
+  text-align: left; cursor: pointer;
+}
+.side-out svg { width: 17px; height: 17px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.side-out:hover { color: var(--text); }
 
 /* The bar across the top of the content column. Same material as the sidebar
    — raised surface, rounded, lifted off the canvas — so the two read as one
@@ -834,9 +849,6 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .module-notes li { margin: 0.15rem 0; }
 .module-notes li::marker { color: var(--accent-text); }
 
-.orphans { margin-top: 1.4rem; }
-.orphan-list { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-.orphan { background: var(--well); border: 1px solid var(--line); border-radius: 6px; padding: 0.1rem 0.5rem; font-size: 0.8rem; }
 
 .pending-bar {
   position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); z-index: 40;
@@ -1354,3 +1366,74 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   color: var(--muted);
 }
 .topbar-box strong { color: var(--text-2); }
+
+/* ===================================================================== */
+/* REPORTS                                                               */
+/* The sidebar's three meters, said properly: how much of how much, with */
+/* the shape each has been making, in a column wide enough to show it.   */
+/* ===================================================================== */
+
+/* The panels on this page stack, and nothing was putting space between them,
+   so "Where the memory goes" and "This box" read as one long panel with two
+   headings inside it. The gap belongs to the page, not to each panel. */
+#screen-reports > .panel + .panel,
+#screen-reports > .rep-grid + .panel { margin-top: 1.1rem; }
+
+.rep-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.9rem;
+}
+.rep-card { padding: 1.1rem 1.2rem 0.9rem; overflow: hidden; }
+.rep-k { margin: 0 0 0.45rem; font-size: 0.66rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.rep-v {
+  margin: 0; font-family: var(--mono); font-size: 1.7rem; font-weight: 500;
+  letter-spacing: -0.03em; line-height: 1.05; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.rep-s { margin: 0.3rem 0 0; font-size: 0.74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Pulled out to the card's edges: a curve that stops at a margin reads as an
+   illustration of a graph rather than a graph. */
+.rep-chart { display: block; width: calc(100% + 2.4rem); margin: 0.9rem -1.2rem 0; height: 96px; }
+.rep-foot {
+  display: flex; justify-content: space-between; margin: 0.35rem 0 0;
+  font-family: var(--mono); font-size: 0.64rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.rep-foot span:nth-child(2) { color: var(--line-strong); }
+.rep-wait { margin: 1.5rem 0 0.6rem; font-size: 0.68rem; color: var(--muted); }
+
+/* Which app IS the box. One row each, measured against the hungriest rather
+   than against total memory — next to 8GB every app is a sliver. */
+/* The rows had a hairline between them and a full-width grey track behind
+   every bar, and the two cancelled each other out: nine identical grey lines
+   with nine coloured lines on top, and no separation you could actually see.
+   The track is gone — a bar that ends where the number ends is its own row —
+   and the rule between rows is the stronger one. */
+.rep-row {
+  display: grid; grid-template-columns: minmax(90px, 170px) 1fr 78px;
+  align-items: center; gap: 1rem; height: 38px;
+  border-bottom: 1px solid var(--line-strong);
+}
+.rep-row:last-child { border-bottom: 0; }
+.rep-row-name { font-size: 0.82rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rep-row-bar { height: 8px; border-radius: 4px; }
+.rep-row-bar i { display: block; height: 100%; border-radius: 4px; opacity: 0.8; }
+.rep-row-val {
+  font-family: var(--mono); font-size: 0.76rem; color: var(--text);
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+
+/* Network, and the sensors a real machine has. */
+.rep-per { font-size: 0.8rem; color: var(--muted); margin-left: 0.25rem; letter-spacing: 0; }
+.rep-sensors { margin-top: 0.9rem; display: flex; flex-direction: column; }
+.rep-sensor {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 0.3rem 0; border-bottom: 1px solid var(--line);
+  font-size: 0.72rem; color: var(--muted);
+}
+.rep-sensor:last-child { border-bottom: 0; }
+.rep-sensor b { font-family: var(--mono); color: var(--text-2); font-weight: 500; font-variant-numeric: tabular-nums; }
+/* The key/value list on this page gets the same treatment as the rows above:
+   a rule per line, so nine facts do not read as one paragraph. */
+#rep-facts > div, #rep-facts dt, #rep-facts dd { border-bottom: 1px solid var(--line); }
+#rep-facts dt, #rep-facts dd { padding: 0.45rem 0; }
