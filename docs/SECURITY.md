@@ -65,12 +65,40 @@ cannot install, remove, restore or change the password.
 Sessions created before this existed have no token and are refused for writes,
 which sends that browser to the login screen once.
 
+## Releases are signed
+
+Releases are annotated git tags, signed with an SSH key (`gpg.format = ssh`).
+The public half is published in the repository at `releases/signers/podhouse.pub`,
+and each box keeps its own copy at `state/release-signer.pub`.
+
+`scripts/self-update.sh` checks the signature after fetching the tag and before
+anything is written to disk, and refuses a tag that does not verify against the
+**pinned** file. It deliberately does not read the key out of the tree being
+installed: a repository that can hand you the code can hand you the key that
+vouches for it, so that check would be a signature verified against itself.
+
+The check reads `git verify-tag`'s **exit status**, not its output. For a valid
+signature by a key that is not allowed, git prints "Good signature" and adds
+"No principal matched" — matching on the text would pass the exact case the
+check exists to stop. Measured: correct key 0, wrong key 1, unsigned tag 1,
+missing signers file 1.
+
+Pinning happens once. A fresh install pins from the clone; a box that predates
+signing pins at the end of its next successful update, and requires a signature
+from the one after that. The key is never overwritten by a release, because a
+key a release can rewrite is not a pinned key.
+
+The private half lives on the maintainer's machine and is not in this
+repository. Losing it means publishing a new key and asking every box to
+re-pin by hand; there is no revocation list.
+
 ## What is still open
 
-- **Release signing.** `scripts/self-update.sh` verifies that a release is not
-  frozen and that the checkout succeeded. It does NOT verify a signature: a compromise
-  of the upstream repository would deliver code this box runs as root. Signing
-  releases and pinning the signer is real work and is not done.
+- **The first update is unverified.** Release signing exists (see below), but a
+  box has to learn the key from somewhere, and it learns it from the tree it
+  installed. Whoever served that first clone is trusted exactly once. Every
+  update after it is checked against the pinned key. There is no way around
+  this without shipping the key by a second channel the box can already trust.
 - **Cross-process auth writes.** Auth changes inside the dashboard are
   serialised, so a login cannot restore a password that was just changed. The
   CLI writes the same file and is not part of that queue; two writers at the

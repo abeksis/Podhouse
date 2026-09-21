@@ -59,6 +59,11 @@ LOCK="$STATE_DIR/platform-update.lock"
 LOGFILE="$STATE_DIR/platform-update.log"
 BACKUP_DIR="$STATE_DIR/platform-backups"
 KEEP_BACKUPS=5
+# The one key this box will accept a release from. Pinned, never read from the
+# tree being installed - see the signature section below for why that matters.
+SIGNER_KEY="$STATE_DIR/release-signer.pub"
+# Where a release publishes the public half, for pinning on first use only.
+SIGNER_IN_TREE="$HB_ROOT/releases/signers/podhouse.pub"
 # /healthz, not /api/summary.
 #
 # Every route on the dashboard is behind a session by default; /healthz is on
@@ -343,9 +348,41 @@ git -C "$HB_ROOT" fetch --depth=1 origin "refs/tags/v${TARGET}:refs/tags/v${TARG
 git -C "$HB_ROOT" rev-parse "v${TARGET}" >/dev/null 2>&1 \
   || fail "release v${TARGET} does not exist"
 
-# Signature verification goes here once tags are signed. Absent a public key
-# there is nothing to check, and pretending otherwise would be worse than the
-# honest gap: git tag -v "v${TARGET}"
+# ------------------------------------------------------------- 2b. signature
+#
+# Releases are SSH-signed annotated tags, and this is where a box decides
+# whether the code it is about to run as root is the code the maintainer
+# published. Without it, anyone who can write to the upstream repository — or
+# sit between this box and GitHub — owns every box in the world.
+#
+# The key is PINNED, in state/, and the box trusts nothing else. It is not read
+# from the tree being installed: a repository that can hand you the code can
+# hand you the key that vouches for it, and a signature checked against a key
+# from the same place is a signature checked against itself.
+#
+# Trust on first use. A box installed before signing existed has no pinned key
+# and cannot suddenly demand one — the tag it is moving to may well be unsigned.
+# So: pinned key present means the signature is REQUIRED and a bad one stops
+# the update; no pinned key means this update is unverified, and the key is
+# pinned at the end of it so that every update after this one is checked. The
+# window is one update wide, once, and it is written down rather than hidden.
+if [ -s "$SIGNER_KEY" ]; then
+  allowed="$(mktemp)"
+  printf 'podhouse %s\n' "$(cat "$SIGNER_KEY")" > "$allowed"
+  # Exit status, not output: `verify-tag` prints "Good signature" for a valid
+  # signature by a key that is NOT allowed, and adds "No principal matched" —
+  # grepping the text would pass exactly the case this exists to stop. Checked
+  # on this git: correct key 0, wrong key 1, unsigned tag 1, no file 1.
+  if git -C "$HB_ROOT" -c gpg.ssh.allowedSignersFile="$allowed" verify-tag "v${TARGET}" >/dev/null 2>&1; then
+    rm -f "$allowed"
+    phase verifying "Signature on v${TARGET} checks out"
+  else
+    rm -f "$allowed"
+    fail "v${TARGET} is not signed by this box's pinned release key - refusing to install it"
+  fi
+else
+  phase verifying "No release key pinned yet - this update is unverified, and the key will be pinned after it"
+fi
 
 # --------------------------------------------------- the authoritative freeze
 #
@@ -453,5 +490,19 @@ for _ in $(seq 1 $((HEALTH_TIMEOUT / 3))); do
   sleep 3
 done
 [ "$ok" -eq 1 ] || rollback "the dashboard did not answer within ${HEALTH_TIMEOUT}s"
+
+# ------------------------------------------------------- 8. pin, on first use
+#
+# Only now, and only if nothing is pinned yet: the update worked, the dashboard
+# came back, so this tree is the one this box runs. From the next update on,
+# the signature is required and this file is the only thing that can satisfy
+# it. Never overwritten - a key that can be replaced by a release is not a
+# pinned key, it is a suggestion.
+if [ ! -s "$SIGNER_KEY" ] && [ -s "$SIGNER_IN_TREE" ]; then
+  if install -m 644 "$SIGNER_IN_TREE" "$SIGNER_KEY" 2>/dev/null; then
+    printf '[self-update] %-10s pinned the release key; updates from here on must be signed by it
+' verifying
+  fi
+fi
 
 finish_ok

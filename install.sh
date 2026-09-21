@@ -280,6 +280,21 @@ env_force() {
   fi
 }
 
+# ---------------------------------------------------------- the release key
+#
+# Pinned once, and thereafter the only key this box accepts a release from.
+# scripts/self-update.sh refuses any tag it does not verify against this file.
+#
+# On a FRESH install the tree was just cloned at a tag, so pinning from it is
+# trust on first use: whoever served that clone is trusted exactly once. On an
+# install.sh run that is part of an update, the file is already there and this
+# does nothing - the key is never replaced by a release, because a key a
+# release can rewrite is not a pinned key.
+if [ -s "$HB_ROOT/releases/signers/podhouse.pub" ] && [ ! -s "$HB_ROOT/state/release-signer.pub" ]; then
+  step "Pinning the release signing key"
+  $SUDO install -m 644 "$HB_ROOT/releases/signers/podhouse.pub" "$HB_ROOT/state/release-signer.pub"
+fi
+
 step "Generating $ENV_FILE"
 if [ ! -f "$ENV_FILE" ]; then
   : > "$ENV_FILE"
