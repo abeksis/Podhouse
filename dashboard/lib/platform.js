@@ -304,6 +304,19 @@ async function check({ force = false } = {}) {
  * Unauthenticated the API allows 60 requests an hour per IP; a six-hourly check
  * that only asks when there is something new spends four a day.
  */
+/**
+ * A signed tag's message ends with the signature itself, and the API hands
+ * back the whole object. Since 0.14.0 every release tag is signed, so the
+ * release notes on the Updates page ended with forty lines of base64 under
+ * "-----BEGIN SSH SIGNATURE-----".
+ *
+ * Both armour headers are matched: the tags are SSH-signed today and the same
+ * text would arrive from a PGP-signed one.
+ */
+function unsign(message) {
+  return String(message).replace(/-----BEGIN (SSH|PGP) SIGNATURE-----[\s\S]*$/, '');
+}
+
 async function releaseNotes(version) {
   const tag = `v${version}`;
 
@@ -340,7 +353,7 @@ async function releaseNotes(version) {
     const res = await get(`https://api.github.com/repos/${REPO}/git/tags/${obj.sha}`);
     if (res.status !== 200) return null;
     const body = JSON.parse(res.body);
-    const message = String(body.message || '').trim();
+    const message = unsign(String(body.message || '')).trim();
     if (!message) return null;
 
     // First line is the headline the way a commit subject is; the rest is the

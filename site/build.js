@@ -172,7 +172,10 @@ function loadReleases() {
       const [tag, date, contents] = r.split('\x1f');
       const lines = (contents || '').split('\n');
       // "Podhouse 0.4.18" is the subject; the notes are what follows.
-      const body = lines.slice(1).join('\n').replace(/-----BEGIN PGP[\s\S]*$/, '').trim();
+      // The signature is part of a signed tag's message. This stripped PGP
+      // armour only, and every tag since 0.14.0 is SSH-signed — so the
+      // changelog on the site carried the base64 too.
+      const body = lines.slice(1).join('\n').replace(/-----BEGIN (SSH|PGP) SIGNATURE-----[\s\S]*$/, '').trim();
       byTag.set(tag, { tag, date, body });
     }
   } catch (err) {
