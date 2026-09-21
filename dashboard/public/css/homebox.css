@@ -74,7 +74,11 @@
   --bg-raised: #12131a;
   --surface: #191b24;
   --surface-2: #232633;
-  --well: #0d0e13;
+  /* The same value as --bg-raised on purpose: a well that was DARKER than the
+     page made every recessed thing on Midnight read as a hole. Matching the
+     raised surface keeps the panels and the things inside them on one level,
+     and the hairline borders do the separating. */
+  --well: #12131a;
   --line: rgba(190, 200, 225, 0.10);
   --line-strong: rgba(190, 200, 225, 0.20);
   --text: #eef0f6;
@@ -636,19 +640,44 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .feed-what { grid-column: 2; color: var(--muted); font-size: 0.82rem; }
 .feed-when { grid-column: 3; grid-row: 1; color: var(--muted); font-family: var(--mono); font-size: 0.75rem; }
 
-/* Links */
-.links { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 0.5rem; }
-.link-card {
-  display: flex; align-items: center; gap: 0.65rem;
-  padding: 0.55rem 0.65rem; border-radius: var(--radius);
-  border: 1px solid var(--line); color: var(--text);
+/* Links — one group at a time, chosen by the tabs above them.
+   The cards have no border of their own: a filled surface is one frame
+   instead of two, and the tab strip already draws the edge they sit under. */
+/* Wrapping, not scrolling: a scroll container drew a scrollbar beside two
+   tabs, which is a control offering to do nothing. */
+.link-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.9rem; border-bottom: 1px solid var(--line); }
+.link-tab {
+  position: relative; flex: none;
+  padding: 0.4rem 0.8rem; margin-bottom: -1px;
+  background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  color: var(--muted); font: inherit; font-size: 0.86rem; cursor: pointer; white-space: nowrap;
 }
-.link-card:hover { border-color: var(--accent-line); text-decoration: none; }
+/* A short rule between one tab and the next. Full height would make each tab
+   look like a cell in a table; this is the height of the text and no more. */
+.link-tab + .link-tab::before {
+  content: ""; position: absolute; left: calc(-0.35rem / 2); top: 50%;
+  width: 1px; height: 15px; margin-top: -8px; background: var(--line);
+}
+.link-tab:hover { color: var(--text-2); }
+.link-tab.is-on { color: var(--text); border-bottom-color: var(--accent); }
+.link-tab b { font-weight: 500; font-size: 0.72rem; color: var(--muted); margin-left: 0.35rem; }
+
+.links { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.55rem; }
+/* Each link is a body you can see, not a name floating on the panel. The
+   fill does the separating and a hairline draws its edge; the fill is what
+   makes it physical, and the line is only there so the edge is exact. */
+.link-card {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.6rem 0.7rem; border-radius: var(--radius);
+  background: var(--well); color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.link-card:hover { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); text-decoration: none; }
 .link-art { width: 34px; height: 34px; padding: 6px; border-radius: 9px; background: var(--plate); flex: none; font-size: 1.1rem; }
 .link-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .link-name { font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.link-sub { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.link-go { width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; flex: none; }
+.link-sub { color: var(--muted); font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Right now */
 .pulse { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
@@ -1299,13 +1328,76 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 /* The header from concept 1, above the index. */
 .stat-strip { display: none; }
 .area-dock .panel-head { display: none; }
-.say { max-width: 1920px; margin: 0 auto 1.7rem; padding: 1.4rem 0.2rem 0; }
-.say-line { margin: 0; font-size: 1.75rem; line-height: 1.32; font-weight: 300; letter-spacing: -0.02em; color: var(--text); }
-.say-line b { font-weight: 500; }
-.say-dim { color: var(--muted); }
-.say[data-level="warn"] .say-line b { color: var(--warn); }
-.say[data-level="bad"] .say-line b { color: var(--bad); }
-.say-under { margin: 1rem 0 0; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* The greeting, on a surface of its own.
+   A wash of the accent from one corner and a soft light behind it. It is
+   decoration and it is meant to be: nothing on this band is a measurement,
+   so there is nothing here for the shape to lie about. The colour comes from
+   whichever accent is set, so it follows the theme rather than fighting it. */
+.say {
+  position: relative;
+  max-width: 1920px; margin: 0 auto 1.4rem;
+  padding: 1.7rem 1.6rem;
+  border-radius: var(--radius-l);
+  /* The wash and the light are both BACKGROUNDS, not an ::after circle that
+     overflows the band. The circle needed `overflow: hidden` to stay inside
+     its corners, and that same rule clipped the Customize panel out of sight
+     — a box cannot both crop its own decoration and let a menu escape it.
+     A radial gradient is painted inside the box by definition, so nothing
+     has to be cropped and the panel can hang below the band. */
+  background:
+    radial-gradient(circle at 94% -40%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 62%),
+    var(--surface);
+}
+.say-line { position: relative; margin: 0; font-size: 1.9rem; line-height: 1.28; font-weight: 300; letter-spacing: -0.025em; color: var(--text); }
+.say-line b { font-weight: 600; }
+.say-tag { position: relative; margin: 0.35rem 0 0; font-size: 0.85rem; color: var(--muted); }
+.say { display: flex; align-items: flex-start; gap: 1rem; }
+.say-text { position: relative; flex: 1; min-width: 0; }
+
+/* Customize. Drawn always, not on hover: a control that only appears under a
+   pointer does not exist on the phone this box is mostly read from. */
+.say-cust {
+  position: relative; flex: none;
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.35rem 0.8rem; border-radius: 999px;
+  border: 1px solid var(--line); background: none; color: var(--muted);
+  font: inherit; font-size: 0.8rem; cursor: pointer;
+}
+.say-cust:hover { color: var(--text); border-color: var(--line-strong); }
+.say-cust[aria-expanded="true"] { color: var(--text); border-color: var(--line-strong); background: var(--bg-raised); }
+.say-cust svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+
+.cust-pop {
+  position: absolute; z-index: 30; right: 1.6rem; top: calc(100% - 1rem);
+  min-width: 250px; padding: 0.75rem 0.85rem;
+  background: var(--bg-raised); border: 1px solid var(--line-strong);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.cust-title { margin: 0 0 0.5rem; font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.cust-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0.1rem; font-size: 0.88rem; cursor: pointer; }
+.cust-row input { accent-color: var(--accent); width: 15px; height: 15px; flex: none; }
+.cust-row span { color: var(--text-2); }
+.cust-row:hover span { color: var(--text); }
+.cust-foot { margin: 0.55rem 0 0; padding-top: 0.5rem; border-top: 1px solid var(--line); font-size: 0.72rem; color: var(--muted); }
+
+/* What Customize switches off. The render functions are untouched: they still
+   decide whether a panel has anything to say, and this decides whether the
+   page was asked for it at all. */
+#screen-home[data-off~="welcome"] .say-text { display: none; }
+#screen-home[data-off~="welcome"] .say { background: none; padding: 0 0 0.3rem; }
+#screen-home[data-off~="welcome"] .cust-pop { right: 0; }
+#screen-home[data-off~="apps"] #apps-panel,
+#screen-home[data-off~="links"] #links-panel,
+#screen-home[data-off~="pulse"] #pulse-panel { display: none; }
+
+@media (max-width: 720px) {
+  .say { padding: 1.25rem 1.1rem; gap: 0.6rem; }
+  .say-line { font-size: 1.5rem; }
+  .cust-pop { right: 1.1rem; left: 1.1rem; min-width: 0; }
+  .say-cust span { display: none; }
+  .say-cust { padding: 0.4rem; }
+}
 
 /* The panel: facts on the left, the shape on the right, the log underneath. */
 /* One column again: nothing sits beside the text any more. */

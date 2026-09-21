@@ -142,17 +142,33 @@
 
   <!-- ==================== OVERVIEW ==================== -->
   <section id="screen-home" class="screen is-shown">
-    <!-- The four numbers open the page, with nothing above them: they line up
-         with the top of the sidebar and make one horizontal edge across the
-         whole window. A greeting sat here and said nothing about the box.
-         Status first: the answer to "is my server OK?" comes before anything
-         else, and carries the fix when it is not. -->
-    <!-- The page answers before it lists. Nobody opens this to find out what
-         is installed; they know. They open it to find out whether the box is
-         fine, so that is the first thing on it. -->
+    <!-- The page greets, and the tiles under it do the reporting.
+         This line used to carry the status sentence and two rows of figures.
+         The figures are all repeated within 200 pixels of it — Apps,
+         Containers, Updates and Backups are the tiles below, memory and disk
+         are the meters in the sidebar — so it was the top of the screen
+         spent on a preview of the screen. A fault does not belong here
+         either: the Status tile says it in its own words and carries the
+         button that fixes it, and the chip in the top bar says it again. -->
     <section class="say" id="say">
-      <p class="say-line"><b id="say-head">Reading&hellip;</b><br><span class="say-dim" id="say-sub">&nbsp;</span></p>
-      <p class="say-under" id="say-under">&nbsp;</p>
+      <div class="say-text">
+        <p class="say-line">Welcome to <b>Podhouse</b></p>
+        <p class="say-tag">Your box, your apps, nothing leaving the house.</p>
+      </div>
+
+      <!-- Customize. It stays here even when the greeting itself is switched
+           off — the band collapses to this button alone, because a control
+           that hides itself cannot be used to bring anything back. -->
+      <button type="button" class="say-cust" id="customize-open" aria-expanded="false" aria-controls="customize-pop">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h8M16 7h4M4 17h4M12 17h8"/><circle cx="14" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
+        <span>Customize</span>
+      </button>
+
+      <div class="cust-pop" id="customize-pop" hidden>
+        <p class="cust-title">Show on this page</p>
+        <div id="customize-list"></div>
+        <p class="cust-foot">Status always shows. It is the answer to &ldquo;is my server OK&rdquo;.</p>
+      </div>
     </section>
 
     <div class="stat-strip">
@@ -205,7 +221,7 @@
     <div class="home-layout">
       <!-- APPS — every installed app with a web page, one click away. This is
            the main Overview workspace, so it uses the full available width. -->
-      <section class="panel area-dock">
+      <section class="panel area-dock" id="apps-panel">
         <div class="panel-head">
           <h2 class="panel-title">Your apps</h2>
           <span class="panel-note mono" id="dock-count"></span>
@@ -224,6 +240,11 @@
           <h2 class="panel-title">Links</h2>
           <span class="panel-note mono" id="links-count"></span>
         </div>
+        <!-- One group at a time. The subtitle you give a link is the group it
+             belongs to, so this costs nothing to maintain, and the panel stays
+             the same height whether there are ten links or fifty. With one
+             group, or none, there are no tabs to show and this stays empty. -->
+        <div class="link-tabs" id="links-tabs" role="tablist" hidden></div>
         <div class="links" id="links-row"></div>
       </section>
 

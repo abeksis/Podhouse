@@ -43,6 +43,9 @@ const state = {
   catalog: null,
   bookmarks: [],
   bookmarkMax: 60,
+  // Which group of links is showing. In memory only: it is a glance at a
+  // panel, not a setting worth keeping anywhere.
+  linkTab: null,
   // Card clicks queue here instead of firing; the apply bar commits the set.
   pending: new Map(),
   busy: new Set(),
@@ -2526,16 +2529,51 @@ function renderQuickAccess() {
   card.hidden = items.length === 0;
   if (!items.length) return;
 
-  $('#links-count').textContent = `${items.length}`;
-  row.innerHTML = items.map((b) => `<a class="link-card" href="${escapeHtml(b.url)}" target="_blank" rel="noopener noreferrer"
+  // The subtitle is the group. It was being printed under every name, which
+  // made "Private Tracker" appear five times and said nothing about any one
+  // of them; as a tab it is written once and does some work. What goes under
+  // the name instead is the address, which is different for every link — and
+  // is the only way to tell PVE-Best from PVE-Master.
+  const groups = [];
+  for (const b of items) {
+    const label = (b.subtitle || '').trim() || 'Other';
+    let g = groups.find((x) => x.label === label);
+    if (!g) groups.push((g = { label, items: [] }));
+    g.items.push(b);
+  }
+
+  const tabs = $('#links-tabs');
+  const many = groups.length > 1;
+  // One group is not a choice, so it gets no tabs and the total goes back in
+  // the head. With tabs, each says its own count and the sum is arithmetic.
+  tabs.hidden = !many;
+  $('#links-count').textContent = many ? '' : `${items.length}`;
+  if (!groups.some((g) => g.label === state.linkTab)) state.linkTab = groups[0].label;
+
+  tabs.innerHTML = !many ? '' : groups.map((g) => `
+    <button type="button" role="tab" class="link-tab${g.label === state.linkTab ? ' is-on' : ''}"
+      aria-selected="${g.label === state.linkTab}" data-link-tab="${escapeHtml(g.label)}">
+      ${escapeHtml(g.label)}<b class="mono">${g.items.length}</b></button>`).join('');
+
+  const shown = (groups.find((g) => g.label === state.linkTab) || groups[0]).items;
+  row.innerHTML = shown.map((b) => `<a class="link-card" href="${escapeHtml(b.url)}" target="_blank" rel="noopener noreferrer"
         title="${escapeHtml(b.url)}">
         <span class="link-art">${iconArt(b.icon, monogram(b.name))}</span>
         <span class="link-text">
           <span class="link-name">${escapeHtml(b.name)}</span>
-          ${b.subtitle ? `<span class="link-sub">${escapeHtml(b.subtitle)}</span>` : ''}
+          <span class="link-sub mono">${escapeHtml(hostOf(b.url))}</span>
         </span>
-        <svg class="link-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16 16 8M10 8h6v6"/></svg>
       </a>`).join('');
+}
+
+/** The part of a link's address worth showing: the host, and a port if it has one. */
+function hostOf(url) {
+  try {
+    const u = new URL(String(url), location.href);
+    return u.port ? `${u.hostname}:${u.port}` : u.hostname;
+  } catch (err) {
+    return String(url || '').replace(/^https?:\/\//, '').split('/')[0];
+  }
 }
 
 function renderQuickEditor() {
@@ -3210,6 +3248,15 @@ async function removeDialog(title, id) {
 // settles, so its state is captured on change.
 document.addEventListener('change', (event) => {
   if (event.target.id === 'remove-erase-box') removeDialog.erase = event.target.checked;
+  // One checkbox, one save. The page changes before the round trip finishes,
+  // because the checkbox is a claim about the page and it should be true by
+  // the time the eye moves back to it.
+  const section = event.target.closest('[data-home-section]');
+  if (section) {
+    const home = { ...((state.prefs && state.prefs.home) || {}) };
+    home[section.dataset.homeSection] = section.checked;
+    savePrefs({ home });
+  }
   // Picking a file IS the upload: there is no second "go" button to forget.
   if (event.target.id === 'restore-file') {
     const file = event.target.files && event.target.files[0];
@@ -3360,36 +3407,59 @@ function applySummary(summary) {
   renderSettings();
   renderBackupTile(summary);
   renderInstallInfo(summary);
-  renderSay(summary);
 }
 
-/** The page answers before it lists. */
-function renderSay(summary) {
-  const el = $('#say');
-  if (!el) return;
-  const { health, counts, host } = summary;
-  const m = summary.metrics || {};
-  const b = summary.backups || {};
-  const needs = (summary.needs || []).length;
+/* ----------------------------------------------------------- customize */
 
-  $('#say-head').textContent = health.level === 'good' ? 'Everything is running.' : health.title;
+/**
+ * The sections of this page a person can switch off, in the order Customize
+ * lists them. The names match HOME_SECTIONS in server.js; anything else the
+ * server drops on the way in, so a typo here fails quietly rather than
+ * writing a preference nothing reads.
+ *
+ * Status is not on the list. A page that can be emptied is a page someone can
+ * hide the answer to "is my server OK" behind, and that answer is the reason
+ * this dashboard exists.
+ */
+const HOME_SECTIONS = [
+  { id: 'welcome', label: 'Welcome' },
+  { id: 'apps', label: 'Your apps' },
+  { id: 'links', label: 'Links' },
+  { id: 'pulse', label: 'Right now' },
+];
 
-  const apps = `${counts.installed} app${counts.installed === 1 ? '' : 's'}`;
-  const waiting = needs
-    ? `${needs} thing${needs === 1 ? ' wants' : 's want'} you`
-    : 'nothing waiting';
-  const backed = !b.hasKey ? 'no backup key set'
-    : !b.latest ? 'never backed up'
-      : `backed up ${ago(b.latest.created)} ago`;
-  $('#say-sub').textContent = `${apps}, ${waiting}, ${backed}.`;
+/** Which sections the stored preferences switch off, as one attribute. */
+function applyHomeSections() {
+  const screen = $('#screen-home');
+  if (!screen) return;
+  const home = (state.prefs && state.prefs.home) || {};
+  const off = HOME_SECTIONS.filter((s) => home[s.id] === false).map((s) => s.id);
+  if (off.length) screen.dataset.off = off.join(' ');
+  else delete screen.dataset.off;
 
-  const bits = [];
-  if (m.memory) bits.push(`${bytes(m.memory.used)} of ${bytes(m.memory.total)} memory`);
-  if (m.disk && m.disk.percent != null) bits.push(`${m.disk.percent}% of the disk`);
-  if (m.uptime) bits.push(`up ${duration(m.uptime)}`);
-  $('#say-under').textContent = bits.join(' · ');
-  el.dataset.level = health.level;
+  const list = $('#customize-list');
+  if (!list) return;
+  list.innerHTML = HOME_SECTIONS.map((s) => `
+    <label class="cust-row">
+      <input type="checkbox" data-home-section="${escapeHtml(s.id)}"${home[s.id] === false ? '' : ' checked'}>
+      <span>${escapeHtml(s.label)}</span>
+    </label>`).join('');
 }
+
+/** Open or shut the Customize panel. */
+function customizeOpen(open) {
+  const button = $('#customize-open');
+  const pop = $('#customize-pop');
+  if (!button || !pop) return;
+  pop.hidden = !open;
+  button.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+/* The greeting is written in index.html and never changes, so nothing
+   renders it any more. It used to carry the status sentence and two rows of
+   figures; every one of those facts is repeated in the tiles below it, in the
+   sidebar meters, or on Reports, and a fault has the Status tile — which owns
+   both the words and the button that fixes it. */
 
 function renderInstallInfo(summary) {
   $('#install-info').innerHTML = `
@@ -3466,6 +3536,7 @@ function applyPrefs(prefs) {
   try { localStorage.setItem('hb-bg', document.documentElement.dataset.bg); } catch { /* private window */ }
   renderChoices();
   renderInsightToggles();
+  applyHomeSections();
   // A panel that was just switched off should leave the card now, not at the
   // next poll — the checkbox is a claim about the page and it should be true
   // by the time the eye moves back to it.
@@ -5060,6 +5131,17 @@ document.addEventListener('click', async (event) => {
     queueChange(queueBtn.dataset.queue);
     return;
   }
+  const cust = event.target.closest('#customize-open');
+  if (cust) {
+    customizeOpen($('#customize-pop').hidden);
+    return;
+  }
+  // Anywhere else shuts it, the way every other menu on this page behaves —
+  // except inside the panel itself, where the clicks are the point.
+  if (!event.target.closest('#customize-pop')) customizeOpen(false);
+
+  const linkTab = event.target.closest('[data-link-tab]');
+  if (linkTab) { state.linkTab = linkTab.dataset.linkTab; renderQuickAccess(); return; }
   if (event.target.closest('#sign-out')) { signOut(); return; }
   if (event.target.closest('#pending-cancel')) { cancelPending(); return; }
   if (event.target.closest('#pending-apply')) { applyPending(); return; }

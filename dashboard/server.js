@@ -102,11 +102,22 @@ const BACKGROUNDS = ['none', 'milky-way', 'fog', 'aurora'];
 // itself when it has nothing to say, so a box with no media apps never sees
 // it and a box with them gets the numbers without looking for a switch.
 const INSIGHT_PANELS = ['transfers', 'queues', 'upcoming'];
+/**
+ * The parts of the Overview a person can switch off, and the order Customize
+ * lists them in. Status is NOT on the list on purpose: a page that can be
+ * emptied completely is a page someone can lock themselves out of the answer
+ * to "is my server OK", and that answer is what this dashboard is for.
+ */
+const HOME_SECTIONS = ['welcome', 'apps', 'links', 'pulse'];
+
 const DEFAULT_PREFS = {
   theme: 'dark',
   accent: 'blue',
   background: 'fog',
   insights: { enabled: true, transfers: true, queues: true, upcoming: true },
+  // Everything on by default: a box someone has just installed should show
+  // what it can do, not the least it can do.
+  home: Object.fromEntries(HOME_SECTIONS.map((name) => [name, true])),
 };
 
 /**
@@ -121,6 +132,12 @@ function cleanPrefs(input) {
   // than trusted: these come from an API body, and `"false"` is truthy.
   const insights = { enabled: i.enabled !== false };
   for (const name of INSIGHT_PANELS) insights[name] = i[name] !== false;
+  // Same treatment for the Overview's own sections, and the same reason: a
+  // name this version does not know is dropped rather than carried through
+  // to a page that would act on it.
+  const h = p.home && typeof p.home === 'object' ? p.home : {};
+  const home = {};
+  for (const name of HOME_SECTIONS) home[name] = h[name] !== false;
   // A prefs.json from before 0.4.20 names a light theme ("light-forest") and
   // a background instead of an accent; the light ones keep being light.
   const theme = THEMES.includes(p.theme) ? p.theme
@@ -130,6 +147,7 @@ function cleanPrefs(input) {
     accent: ACCENTS.includes(p.accent) ? p.accent : DEFAULT_PREFS.accent,
     background: BACKGROUNDS.includes(p.background) ? p.background : DEFAULT_PREFS.background,
     insights,
+    home,
   };
 }
 
