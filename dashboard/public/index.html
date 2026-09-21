@@ -783,12 +783,16 @@
           <p class="help">Created once by <code class="mono">install.sh</code> in <code class="mono">.env</code> (mode 600) and never changed afterwards — a key that changes makes stored data unreadable.</p>
           <p class="help">Each value stays hidden until you ask for it, so this page can be shown or shared without leaking them all. From a shell:</p>
           <code class="code-block">homebox secrets &lt;module&gt;</code>
+          <!-- One row per value in .env, not one per app that reads it. .env is
+               a single file for the whole box, so a key two apps share is one
+               password - and listing it twice made it look like two. -->
           <div class="scroll-x spaced">
             <table class="grid-table">
-              <thead><tr><th>Module</th><th>Name</th><th>Value</th></tr></thead>
+              <thead><tr><th>Name</th><th>Used by</th><th>Value</th></tr></thead>
               <tbody id="secrets-body"></tbody>
             </table>
           </div>
+          <p class="help">Settings that are not passwords &mdash; user IDs, addresses, a game server&rsquo;s difficulty &mdash; are not listed here. They live in Configuration, under &ldquo;Edit .env values&rdquo;.</p>
         </section>
       </div>
     </div>

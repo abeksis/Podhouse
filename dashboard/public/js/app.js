@@ -2751,26 +2751,46 @@ function renderSettings() {
   // --- Passwords ---
   const secretsBody = $('#secrets-body');
   if (secretsBody) {
-    const rows = [];
+    // One row per VALUE, not per app that reads one.
+    //
+    // .env is a single file for the whole box, so a key declared by six
+    // modules is six rows for one password. PUID was listed six times and
+    // HB_QBIT_PASS twice — once for the old Media Stack and once for the
+    // qBittorrent module that replaced it — which read as duplicates rather
+    // than as what it is: apps sharing a value.
+    //
+    // Only what is installed, and only what the module calls a secret. An app
+    // that was never installed has nothing in .env to show, and a user ID or
+    // a URL is a setting; Configuration edits those.
+    const byKey = new Map();
     for (const mod of state.modules) {
-      for (const name of mod.env_vars) rows.push({ mod, name });
+      if (!mod.installed) continue;
+      for (const v of mod.envVarDetails || []) {
+        if (v.type !== 'secret') continue;
+        if (!byKey.has(v.name)) byKey.set(v.name, { name: v.name, owner: mod.id, apps: [] });
+        byKey.get(v.name).apps.push(mod.title);
+      }
     }
-    $('#secrets-meta').textContent = `${rows.length} across ${new Set(rows.map((r) => r.mod.id)).size} modules`;
+    const rows = [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+    const shared = rows.filter((r) => r.apps.length > 1).length;
+    $('#secrets-meta').textContent = rows.length
+      ? `${rows.length} password${rows.length === 1 ? '' : 's'}${shared ? `, ${shared} shared` : ''}`
+      : '';
     // The value, not a command to go and run. This page used to list the
     // names and tell you to SSH in — which meant the answer to "what is my
     // qBittorrent password" was never on the screen showing your passwords.
     // /api/config already returns these behind the same session gate.
     secretsBody.innerHTML = rows.map((r) => `
       <tr>
-        <td class="cell-strong">${escapeHtml(r.mod.title)}</td>
-        <td class="cell-muted">${escapeHtml(r.name)}</td>
+        <td class="cell-strong mono">${escapeHtml(r.name)}</td>
+        <td class="cell-muted">${escapeHtml(r.apps.join(', '))}</td>
         <td class="cell-muted">
-          <span class="masked" data-secret="${escapeHtml(r.mod.id)}:${escapeHtml(r.name)}">
+          <span class="masked" data-secret="${escapeHtml(r.owner)}:${escapeHtml(r.name)}">
             <span class="masked-dots">••••••••</span>
             <button type="button" class="button is-small reveal">Show</button>
           </span>
         </td>
-      </tr>`).join('') || '<tr><td colspan="3" class="cell-muted">No module declares a secret.</td></tr>';
+      </tr>`).join('') || '<tr><td colspan="3" class="cell-muted">No installed app has a generated password.</td></tr>';
   }
 
   // --- Monitoring ---
