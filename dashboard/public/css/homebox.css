@@ -1204,19 +1204,34 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 /* Nine equal boxes give nine things equal weight, which is the same as giving
    none of them any. So: a quiet list of names, and one panel with the room to
    say what an app is and what you can do to it. */
-.split { display: grid; grid-template-columns: minmax(180px, 240px) 1fr; gap: 1.6rem; align-items: start; }
-@media (max-width: 800px) { .split { grid-template-columns: 1fr; } }
-
-.index { display: flex; flex-direction: column; gap: 1.1rem; }
-/* No box around a category. A frame tells the eye a new thing starts here,
-   and four of them down one narrow column is four interruptions in a list
-   that is already a list. The label and the space do it instead. */
-.index .dock-group { background: transparent; border: 0; padding: 0; }
-.index .dock-label {
-  font-size: 0.64rem; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--muted); margin: 0 0.1rem 0.3rem;
+/* The page must not grow with the number of apps.
+   With sixteen installed the index was an 800px column and two thirds of the
+   right-hand side was empty, so the whole Overview scrolled for a list. The
+   region has a height now and the LIST scrolls inside it: sixteen apps and
+   sixty apps make the same page. */
+.split {
+  display: grid; grid-template-columns: minmax(190px, 250px) 1fr;
+  gap: 1.6rem; align-items: stretch;
+  height: clamp(420px, calc(100vh - 290px), 760px);
 }
-.index .dock-label span { letter-spacing: 0; }
+@media (max-width: 800px) {
+  .split { grid-template-columns: 1fr; height: auto; }
+  .index { max-height: 340px; }
+}
+
+.index {
+  display: flex; flex-direction: column;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding-right: 0.4rem;
+  /* A scrollbar that is there when it is needed and quiet when it is not. */
+  scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent;
+}
+.index::-webkit-scrollbar { width: 6px; }
+.index::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
+.index::-webkit-scrollbar-track { background: transparent; }
+/* No categories either. See renderLauncher: eight headings and the space
+   above each of them were most of the height, and an index is for finding a
+   name. */
 .ix {
   display: flex; align-items: center; gap: 0.6rem; width: 100%;
   padding: 0.5rem 0.4rem; border: 0; border-bottom: 1px solid var(--line);
@@ -1234,7 +1249,11 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .ix .dock-pip { position: static; width: 7px; height: 7px; border: 0; flex: none; }
 .ix.is-down .ix-art { filter: grayscale(0.85); opacity: 0.6; }
 
-.detail { background: var(--bg-raised); border-radius: var(--radius-l); padding: 1.3rem 1.4rem; min-width: 0; }
+.detail {
+  background: var(--bg-raised); border-radius: var(--radius-l);
+  padding: 1.3rem 1.4rem; min-width: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+}
 .dt-head { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 1rem; }
 .dt-art { width: 46px; height: 46px; padding: 8px; border-radius: 13px; background: var(--plate); flex: none; font-size: 1.3rem; }
 .dt-name { margin: 0; font-size: 1.25rem; font-weight: 500; letter-spacing: -0.01em; }
@@ -1284,7 +1303,12 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   padding-left: 0.85rem; border-left: 2px solid var(--line-strong);
 }
 
-.dt-log { margin-top: 1.4rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+/* Open, the log takes the room that was empty under a short description
+   instead of adding to the page. */
+.dt-log {
+  margin-top: 1.4rem; border-top: 1px solid var(--line); padding-top: 1rem;
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+}
 .dt-log-head {
   margin: 0 0 0.6rem; font-size: 0.66rem; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--muted);
@@ -1295,7 +1319,7 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   background: var(--well); color: var(--text-2);
   font-family: var(--mono); font-size: 0.72rem; line-height: 1.7;
   white-space: pre-wrap; word-break: break-word;
-  max-height: 260px; overflow: auto;
+  flex: 1; min-height: 0; overflow: auto;
 }
 
 /* The top bar takes the voice the eyebrow had.

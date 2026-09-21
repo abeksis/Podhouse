@@ -524,34 +524,17 @@ function renderLauncher(modules) {
     return;
   }
 
-  // Grouped by category, in the catalog's own order, so the launcher keeps a
-  // stable shape as apps come and go instead of reshuffling on every render.
-  const order = state.categories.map((c) => c.id);
-  const label = Object.fromEntries(state.categories.map((c) => [c.id, c.label]));
-  label._custom = 'Your links';
-  const groups = new Map();
-  for (const tile of tiles) {
-    const key = tile.module.category;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(tile);
-  }
-  const sorted = [...groups.entries()].sort(
-    (a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99)
-  );
-
-  // Bars are measured against the hungriest app on the box, not against total
-  // memory: next to 12GB nearly every app is a sliver and the board says nothing.
+  // One list, in alphabetical order, with no category headings.
+  //
+  // Categories cost more than they gave here. Sixteen apps came with eight
+  // labels and the space above each of them, which is most of why the column
+  // was 800px long — and an index is for FINDING something, which you do by
+  // name. Grouping helps when you are browsing a catalog you do not know; the
+  // Apps page is that, and this is not.
+  const byName = (a, b) => a.friendly_name.localeCompare(b.friendly_name);
   const peak = Math.max(1, ...tiles.map((t) => (t.load && t.load.memory) || 0));
-  const byMemory = (a, b) => ((b.load && b.load.memory) || 0) - ((a.load && a.load.memory) || 0);
 
-  $('#dock').innerHTML = sorted.map(([category, items]) => `
-    <div class="dock-group">
-      <!-- No count. The rows under the label are the count, and they are
-           already on screen — a number beside "Media" is the page telling you
-           something you can see. -->
-      <div class="dock-label">${escapeHtml(label[category] || category)}</div>
-      <div class="dock-grid">${items.sort(byMemory).map((t) => launchTile(t, peak)).join('')}</div>
-    </div>`).join('');
+  $('#dock').innerHTML = tiles.slice().sort(byName).map((t) => launchTile(t, peak)).join('');
 
   // A short history, kept only in this tab.
   //
@@ -569,7 +552,7 @@ function renderLauncher(modules) {
 
   // Nothing picked yet, or the picked app is gone: take the first one, so the
   // panel is never an empty rectangle asking to be clicked.
-  const all = tiles.slice().sort(byMemory);
+  const all = tiles.slice().sort(byName);
   if (!all.some((t) => tileKey(t.module.id, t.name) === state.picked)) {
     state.picked = all.length ? tileKey(all[0].module.id, all[0].name) : null;
     $('#dock').querySelectorAll('.ix').forEach((el) => {
