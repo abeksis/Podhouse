@@ -20,6 +20,11 @@ try {
 
 const state = {
   summary: null,
+  // Which app the right-hand panel is showing, and the memory samples
+  // collected for each app while this tab has been open.
+  picked: null,
+  series: new Map(),
+  logOpen: false,
   modules: [],
   unclaimed: [],
   categories: [],
@@ -541,11 +546,201 @@ function renderLauncher(modules) {
 
   $('#dock').innerHTML = sorted.map(([category, items]) => `
     <div class="dock-group">
-      <div class="dock-label">${escapeHtml(label[category] || category)}<span>${items.length}</span></div>
+      <!-- No count. The rows under the label are the count, and they are
+           already on screen — a number beside "Media" is the page telling you
+           something you can see. -->
+      <div class="dock-label">${escapeHtml(label[category] || category)}</div>
       <div class="dock-grid">${items.sort(byMemory).map((t) => launchTile(t, peak)).join('')}</div>
     </div>`).join('');
 
+  // A short history, kept only in this tab.
+  //
+  // The box samples memory every 20 seconds anyway; nothing was keeping the
+  // samples. Sixty of them is twenty minutes, which is enough to see a leak
+  // starting or a restart, and it costs one number per app per refresh.
+  for (const t of tiles) {
+    if (!t.load) continue;
+    const key = tileKey(t.module.id, t.name);
+    const series = state.series.get(key) || [];
+    series.push(t.load.memory);
+    if (series.length > 60) series.shift();
+    state.series.set(key, series);
+  }
+
+  // Nothing picked yet, or the picked app is gone: take the first one, so the
+  // panel is never an empty rectangle asking to be clicked.
+  const all = tiles.slice().sort(byMemory);
+  if (!all.some((t) => tileKey(t.module.id, t.name) === state.picked)) {
+    state.picked = all.length ? tileKey(all[0].module.id, all[0].name) : null;
+    $('#dock').querySelectorAll('.ix').forEach((el) => {
+      el.classList.toggle('is-on', el.dataset.pick === state.picked);
+    });
+  }
+  renderDetail(all.find((t) => tileKey(t.module.id, t.name) === state.picked) || null, peak);
+
   syncTileMenu();
+}
+
+/**
+ * The right-hand side: one app, with the room to say what it is.
+ *
+ * Three things share it. The identity and the facts on the left, because that
+ * is what you looked for. A graph on the right, because the empty half of this
+ * panel was the first thing anybody noticed about it. And the log underneath,
+ * closed, because it is the thing you want SECOND and it is twenty lines long.
+ */
+function renderDetail(tile, peak) {
+  const el = $('#detail');
+  if (!el) return;
+  if (!tile) { el.innerHTML = '<p class="empty">No apps yet.</p>'; return; }
+
+  const st = tile.container ? tile.container.state : null;
+  const down = st === 'stopped' || st === 'unhealthy';
+  const load = tile.load;
+  const color = tile.color || (tile.module.theme && tile.module.theme.color) || null;
+  const art = iconArt(
+    tile.customIcon || tile.icon || (tile.module.theme && tile.module.theme.emoji),
+    monogram(tile.friendly_name, color),
+  );
+  const up = tile.container ? (upFor(tile.container.status) || '--') : '--';
+  const facts = [
+    ['memory', load ? bytes(load.memory) : '--'],
+    ['cpu', load && load.cpu != null ? `${load.cpu}%` : '--'],
+    ['up', up.replace(/^up /, '')],
+    ['port', tile.port_map ? String(tile.port_map) : '--'],
+  ];
+
+  const tipList = (tile.module.tips || []).slice(0, 2);
+  const tips = tipList.length
+    ? `<ul class="dt-tips">${tipList.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>`
+    : '';
+  const linkOut = [];
+  if (tile.module.docs) linkOut.push(`<a class="dt-link" href="${escapeHtml(tile.module.docs)}" target="_blank" rel="noopener noreferrer">Docs</a>`);
+  if (tile.module.source) linkOut.push(`<a class="dt-link" href="${escapeHtml(tile.module.source)}" target="_blank" rel="noopener noreferrer">Source</a>`);
+
+  const name = tile.container ? tile.container.name : null;
+  el.innerHTML = `
+    <div class="dt-top">
+      <div class="dt-main">
+        <div class="dt-head">
+          <span class="dt-art">${art}</span>
+          <div class="dt-title">
+            <p class="dt-name">${escapeHtml(tile.friendly_name)}</p>
+            <p class="dt-state" data-level="${down ? 'bad' : 'good'}">${escapeHtml(st || 'link')}</p>
+          </div>
+        </div>
+        <p class="dt-desc">${escapeHtml(tile.description || tile.module.description || '')}</p>
+        <div class="dt-facts">
+          ${facts.map(([k, v]) => `<div><span>${k}</span><b>${escapeHtml(v)}</b></div>`).join('')}
+        </div>
+        <div class="dt-acts">
+          <a class="button is-primary is-small" href="${escapeHtml(tile.url)}" target="_blank" rel="noopener noreferrer">Open</a>
+          ${name ? `<button type="button" class="button is-small${state.logOpen ? ' is-on' : ''}" data-inline-log="${escapeHtml(name)}">Logs</button>
+          <button type="button" class="button is-small" data-container="${escapeHtml(name)}" data-caction="restart">Restart</button>
+          <button type="button" class="button is-small is-danger" data-container="${escapeHtml(name)}" data-caction="${down ? 'start' : 'stop'}">${down ? 'Start' : 'Stop'}</button>` : ''}
+          ${linkOut.join('')}
+        </div>
+      </div>
+      <div class="dt-chart">${memoryChart(tileKey(tile.module.id, tile.name), color)}</div>
+    </div>
+    ${tips}
+    ${name && state.logOpen
+      ? `<div class="dt-log"><p class="dt-log-head">Last lines <span id="dt-log-name">${escapeHtml(name)}</span></p><pre id="dt-log" class="dt-log-body">reading…</pre></div>`
+      : ''}`;
+
+  if (name && state.logOpen) loadDetailLog(name);
+}
+
+/**
+ * Memory, for as long as this tab has been open.
+ *
+ * Drawn by hand rather than with a charting library: the box has to work with
+ * no internet, this project ships no npm dependencies, and the whole thing is
+ * a path through sixty numbers. The axis is the app's own range, not the
+ * box's — the question here is "is this one growing", not "is it the biggest".
+ */
+function memoryChart(key, color) {
+  const series = state.series.get(key) || [];
+  if (series.length < 2) {
+    return `<p class="dt-chart-wait">memory is sampled every 20 seconds<br>the shape appears once there are two</p>`;
+  }
+  const w = 260;
+  const h = 96;
+  const min = Math.min(...series);
+  const max = Math.max(...series);
+  // How much movement counts as movement.
+  //
+  // A chart that scales to its own noise turns a steady 200MB into a mountain
+  // range, and you stop believing it. A chart that flattens everything shows
+  // nothing. This is the dial between those, and it is set low enough that a
+  // real few-hundred-kilobyte drift is visible while an app that is genuinely
+  // still draws as still. If min and max print the same number, the line is
+  // straight on purpose — the alternative is inventing a shape.
+  const span = Math.max(max - min, max * 0.025, 1);
+  const base = max - span;
+  const step = w / (series.length - 1);
+  const pts = series.map((v, i) => [i * step, h - ((v - base) / span) * (h - 10) - 5]);
+  const line = smoothPath(pts);
+  const stroke = color || 'var(--accent)';
+  return `
+    <svg class="dt-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <path d="${line} L ${w},${h} L 0,${h} Z" fill="${escapeHtml(stroke)}" opacity="0.13"></path>
+      <path d="${line}" fill="none" stroke="${escapeHtml(stroke)}" stroke-width="1.8"
+        stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></path>
+    </svg>
+    <p class="dt-chart-foot"><span>${escapeHtml(bytes(min))}</span><span>${series.length} samples</span><span>${escapeHtml(bytes(max))}</span></p>`;
+}
+
+/**
+ * A curve through the points, not a run of straight segments.
+ *
+ * Catmull-Rom converted to cubic beziers: each control point is derived from
+ * the neighbours, so the curve passes THROUGH every sample rather than near
+ * it. That matters here — a smoothing that misses the points would round a
+ * spike away, and a spike is the one thing on this chart worth seeing.
+ */
+function smoothPath(pts) {
+  if (pts.length < 3) return `M ${pts.map((p) => p.map((n) => n.toFixed(1)).join(',')).join(' L ')}`;
+  const d = [`M ${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`];
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d.push(`C ${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`);
+  }
+  return d.join(' ');
+}
+
+/**
+ * The tail of the selected app's log, in the panel.
+ *
+ * Deliberately small and not live: this answers "is it saying anything
+ * alarming", and the Logs page answers everything else. A follow here would
+ * mean a second event stream open for as long as the Overview is on screen.
+ */
+async function loadDetailLog(name) {
+  const view = $('#dt-log');
+  if (!view) return;
+  try {
+    const res = await fetch(`api/logs?name=${encodeURIComponent(name)}&tail=40`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    // Docker's timestamp prefix is dropped here — the column it costs is worth
+    // more than the second it gives, at this size.
+    const lines = String(data.text || '').trim().split(/\r?\n/)
+      .map((l) => l.replace(/^\S+Z\s/, ''))
+      .filter(Boolean)
+      .slice(-14);
+    if ($('#dt-log-name') && $('#dt-log-name').textContent !== name) return;
+    view.textContent = lines.length ? lines.join('\n') : '(nothing yet)';
+  } catch (err) {
+    view.textContent = `could not read the log: ${err.message}`;
+  }
 }
 
 /** Memory and CPU summed over a set of containers; nulls when none reported. */
@@ -588,23 +783,9 @@ function launchTile(tile, peak) {
   // asked for attention on behalf of the fifteen apps that were FINE and left
   // the actions no room. On the icon it is out of the way, and it is still.
   const pip = st ? `<span class="dock-pip" data-state="${escapeHtml(st)}" title="${escapeHtml(st)}"></span>` : '';
-  const load = tile.load;
-  let usage;
-  if (!tile.container) {
-    usage = '<div class="dock-usage"><span>Link</span></div>';
-  } else if (down) {
-    usage = `<div class="dock-usage"><span>${st === 'stopped' ? 'Stopped' : 'Unhealthy'}</span><b>--</b></div><div class="dock-bar"></div>`;
-  } else {
-    const pct = load ? Math.max(2, Math.round((load.memory / peak) * 100)) : 0;
-    // "Memory" was a label for the number sitting next to it, which already
-    // ends in MB. Its place goes to how long the app has been up, the one
-    // thing on this page that answers "did this restart without me?".
-    const up = upFor(tile.container.status);
-    const left = [up, load && load.cpu != null ? `CPU ${load.cpu}%` : null]
-      .filter(Boolean).join(' · ') || 'Running';
-    usage = `<div class="dock-usage"><span>${escapeHtml(left)}</span><b>${load ? bytes(load.memory) : '--'}</b></div>
-      <div class="dock-bar"><i style="width:${pct}%"></i></div>`;
-  }
+  // The figures used to be built here, one set per tile. They live in the
+  // panel now, for the one app being looked at, so a row carries a name and a
+  // state and nothing else.
 
   // A per-browser override wins, then the service's own icon, then the
   // module's emoji — a user-added module has no icon file to point at, so the
@@ -630,17 +811,15 @@ function launchTile(tile, peak) {
 
   // The link covers the name and figures; the buttons sit outside it, since a
   // button inside an <a> is invalid and its click would also open the app.
-  return `<div class="dock-tile${down ? ' is-down' : ''}">
-      <a class="dock-open" href="${escapeHtml(tile.url)}" target="_blank" rel="noopener noreferrer"
-        title="${escapeHtml(tile.description || tile.friendly_name)}">
-        <span class="dock-head">
-          <span class="dock-art">${art}${pip}</span>
-          <span class="dock-name">${escapeHtml(tile.friendly_name)}</span>
-        </span>
-        ${usage}
-      </a>
-      ${tile.container ? tileMenuButton(tile.container, st !== 'stopped', tile.url) : ''}
-    </div>`;
+  // One quiet line in an index. Everything about the app itself
+  // lives in the panel beside it, so nine apps stop competing for attention.
+  const key = tileKey(tile.module.id, tile.name);
+  return `<button type="button" class="ix${down ? ' is-down' : ''}${state.picked === key ? ' is-on' : ''}"
+      data-pick="${escapeHtml(key)}">
+      <span class="ix-art">${art}</span>
+      <span class="ix-name">${escapeHtml(tile.friendly_name)}</span>
+      ${pip}
+    </button>`;
 }
 
 /* ------------------------------------------------- network & maintenance */
@@ -3149,6 +3328,35 @@ function applySummary(summary) {
   renderSettings();
   renderBackupTile(summary);
   renderInstallInfo(summary);
+  renderSay(summary);
+}
+
+/** The page answers before it lists. */
+function renderSay(summary) {
+  const el = $('#say');
+  if (!el) return;
+  const { health, counts, host } = summary;
+  const m = summary.metrics || {};
+  const b = summary.backups || {};
+  const needs = (summary.needs || []).length;
+
+  $('#say-head').textContent = health.level === 'good' ? 'Everything is running.' : health.title;
+
+  const apps = `${counts.installed} app${counts.installed === 1 ? '' : 's'}`;
+  const waiting = needs
+    ? `${needs} thing${needs === 1 ? ' wants' : 's want'} you`
+    : 'nothing waiting';
+  const backed = !b.hasKey ? 'no backup key set'
+    : !b.latest ? 'never backed up'
+      : `backed up ${ago(b.latest.created)} ago`;
+  $('#say-sub').textContent = `${apps}, ${waiting}, ${backed}.`;
+
+  const bits = [];
+  if (m.memory) bits.push(`${bytes(m.memory.used)} of ${bytes(m.memory.total)} memory`);
+  if (m.disk && m.disk.percent != null) bits.push(`${m.disk.percent}% of the disk`);
+  if (m.uptime) bits.push(`up ${duration(m.uptime)}`);
+  $('#say-under').textContent = bits.join(' · ');
+  el.dataset.level = health.level;
 }
 
 function renderInstallInfo(summary) {
@@ -4834,6 +5042,21 @@ document.addEventListener('click', async (event) => {
   // click of its own; a click anywhere else closes it, INCLUDING a click on
   // one of its items — which then falls through to the handlers below, since
   // the items carry the same attributes the buttons used to.
+  const inlineLog = event.target.closest('[data-inline-log]');
+  if (inlineLog) {
+    event.preventDefault();
+    state.logOpen = !state.logOpen;
+    renderLauncher(state.modules);
+    return;
+  }
+
+  const pick = event.target.closest('[data-pick]');
+  if (pick) {
+    state.picked = pick.dataset.pick;
+    renderLauncher(state.modules);
+    return;
+  }
+
   const kebab = event.target.closest('[data-menu-for]');
   if (kebab) {
     event.preventDefault();

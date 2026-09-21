@@ -271,8 +271,8 @@ button { font: inherit; color: inherit; }
    box, not a heading and its subtitle. It hangs off the address rather than
    the row, so a box with no address shown does not get a divider to nowhere. */
 .topbar-box span:not(:empty)::before {
-  content: ""; display: inline-block; vertical-align: -2px;
-  width: 1px; height: 13px; margin-right: 0.65rem; background: var(--line-strong);
+  content: ""; display: inline-block; vertical-align: -1px;
+  width: 1px; height: 11px; margin-right: 0.6rem; background: var(--line-strong);
 }
 .topbar-box strong { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-box span { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
@@ -1194,3 +1194,124 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ===================================================================== */
+/* THE OVERVIEW — an index, and one app at a time.                       */
+/* Replaced a grid of equal cards. Nine equal boxes give nine things      */
+/* equal weight, which is the same as giving none of them any.           */
+/* ===================================================================== */
+
+/* Nine equal boxes give nine things equal weight, which is the same as giving
+   none of them any. So: a quiet list of names, and one panel with the room to
+   say what an app is and what you can do to it. */
+.split { display: grid; grid-template-columns: minmax(180px, 240px) 1fr; gap: 1.6rem; align-items: start; }
+@media (max-width: 800px) { .split { grid-template-columns: 1fr; } }
+
+.index { display: flex; flex-direction: column; gap: 1.1rem; }
+/* No box around a category. A frame tells the eye a new thing starts here,
+   and four of them down one narrow column is four interruptions in a list
+   that is already a list. The label and the space do it instead. */
+.index .dock-group { background: transparent; border: 0; padding: 0; }
+.index .dock-label {
+  font-size: 0.64rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0.1rem 0.3rem;
+}
+.index .dock-label span { letter-spacing: 0; }
+.ix {
+  display: flex; align-items: center; gap: 0.6rem; width: 100%;
+  padding: 0.5rem 0.4rem; border: 0; border-bottom: 1px solid var(--line);
+  background: transparent; color: var(--muted); font: inherit; font-size: 0.85rem;
+  text-align: left; cursor: pointer;
+}
+.ix:last-child { border-bottom: 0; }
+.ix:hover { color: var(--text-2); }
+.ix.is-on { color: var(--text); }
+/* The selected row is marked by a rule on its leading edge rather than a
+   filled block: a highlight bar competes with the panel it is pointing at. */
+.ix.is-on { box-shadow: inset 2px 0 0 var(--accent); }
+.ix-art { width: 22px; height: 22px; padding: 3px; border-radius: 6px; background: var(--plate); flex: none; font-size: 0.72rem; }
+.ix-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ix .dock-pip { position: static; width: 7px; height: 7px; border: 0; flex: none; }
+.ix.is-down .ix-art { filter: grayscale(0.85); opacity: 0.6; }
+
+.detail { background: var(--bg-raised); border-radius: var(--radius-l); padding: 1.3rem 1.4rem; min-width: 0; }
+.dt-head { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 1rem; }
+.dt-art { width: 46px; height: 46px; padding: 8px; border-radius: 13px; background: var(--plate); flex: none; font-size: 1.3rem; }
+.dt-name { margin: 0; font-size: 1.25rem; font-weight: 500; letter-spacing: -0.01em; }
+.dt-state { margin: 0.15rem 0 0; font-size: 0.72rem; color: var(--muted); }
+.dt-state[data-level="bad"] { color: var(--bad); }
+.dt-desc { margin: 0 0 1.4rem; font-size: 0.82rem; line-height: 1.6; color: var(--text-2); max-width: 62ch; }
+.dt-facts { display: flex; flex-wrap: wrap; gap: 1.8rem; margin-bottom: 1.4rem; }
+.dt-facts span { display: block; font-size: 0.66rem; color: var(--muted); margin-bottom: 0.2rem; }
+.dt-facts b { font-family: var(--mono); font-size: 1rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.dt-acts { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+
+/* The header from concept 1, above the index. */
+.stat-strip { display: none; }
+.area-dock .panel-head { display: none; }
+.say { max-width: 1920px; margin: 0 auto 1.7rem; padding: 1.4rem 0.2rem 0; }
+.say-line { margin: 0; font-size: 1.75rem; line-height: 1.32; font-weight: 300; letter-spacing: -0.02em; color: var(--text); }
+.say-line b { font-weight: 500; }
+.say-dim { color: var(--muted); }
+.say[data-level="warn"] .say-line b { color: var(--warn); }
+.say[data-level="bad"] .say-line b { color: var(--bad); }
+.say-under { margin: 1rem 0 0; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* The panel: facts on the left, the shape on the right, the log underneath. */
+.dt-top { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 1.8rem; align-items: start; }
+@media (max-width: 980px) { .dt-top { grid-template-columns: 1fr; } }
+.dt-main { min-width: 0; }
+.dt-chart { min-width: 0; }
+.dt-spark { display: block; width: 100%; height: 96px; }
+.dt-chart-foot {
+  display: flex; justify-content: space-between; margin: 0.5rem 0 0;
+  font-family: var(--mono); font-size: 0.66rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.dt-chart-foot span:nth-child(2) { color: var(--line-strong); }
+.dt-chart-wait {
+  margin: 0; padding: 1.6rem 0; text-align: center; line-height: 1.6;
+  font-size: 0.7rem; color: var(--muted);
+  border: 1px dashed var(--line); border-radius: var(--radius);
+}
+.dt-link { font-size: 0.78rem; color: var(--muted); align-self: center; margin-left: 0.3rem; }
+.dt-link:hover { color: var(--accent-text); }
+.button.is-on { border-color: var(--accent-line); color: var(--accent-text); background: var(--accent-soft); }
+
+.dt-tips { margin: 1.3rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.dt-tips li {
+  font-size: 0.76rem; line-height: 1.55; color: var(--text-2);
+  padding-left: 0.85rem; border-left: 2px solid var(--line-strong);
+}
+
+.dt-log { margin-top: 1.4rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.dt-log-head {
+  margin: 0 0 0.6rem; font-size: 0.66rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+}
+.dt-log-head span { font-family: var(--mono); letter-spacing: 0; text-transform: none; color: var(--text-2); margin-left: 0.4rem; }
+.dt-log-body {
+  margin: 0; padding: 0.85rem 1rem; border-radius: var(--radius);
+  background: var(--well); color: var(--text-2);
+  font-family: var(--mono); font-size: 0.72rem; line-height: 1.7;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 260px; overflow: auto;
+}
+
+/* The top bar takes the voice the eyebrow had.
+   The name and the address were a heading and a note in two different sizes,
+   two weights and two families — three ways of saying "two facts about this
+   box". They are one thing now, set small and spaced, with a middle dot doing
+   the separating that a hairline used to do. */
+.topbar-box span:not(:empty)::before { content: none; }
+.topbar-box { gap: 0.45rem; }
+.topbar-box strong,
+.topbar-box span {
+  font-family: var(--font);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.topbar-box strong { color: var(--text-2); }
