@@ -372,6 +372,13 @@ async function releaseNotes(version) {
 
 /* ---------------------------------------------------------------- status */
 
+/** Notes with the tag's signature taken off, whatever wrote them. */
+function cleanNotes(notes) {
+  if (!notes || typeof notes !== 'object') return notes || null;
+  const body = notes.body ? unsign(notes.body).trim() : null;
+  return { ...notes, body: body || null };
+}
+
 async function status() {
   const [cached, progress, history] = await Promise.all([
     readJson(CACHE_FILE, null),
@@ -410,6 +417,16 @@ async function status() {
 
   return {
     ...base,
+    // Cleaned on the way OUT as well as in.
+    //
+    // Fixing the fetch was not enough: every box that ever checked has the
+    // signature sitting in its cache file already, and the cache is only
+    // rewritten when the next check runs — up to six hours later, and the
+    // check that wrote it may have run with the old code seconds before the
+    // update swapped this file in. That is exactly what happened on the box
+    // that found this. So the page is served clean text whatever the file
+    // says, and the file corrects itself at the next check.
+    notes: cleanNotes(base.notes),
     current,
     updateAvailable: available,
     running: isRunning(progress),
