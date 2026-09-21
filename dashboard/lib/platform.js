@@ -486,9 +486,9 @@ async function upgrade({ to = null } = {}) {
   // `docker run` refused with exit 125 because the dashboard's own image had
   // been collected, and the box showed a stuck update for the rest of the day.
   try {
-    await storage.onHostDetached(['bash', `${ROOT}/scripts/self-update.sh`, target], {
-      name: HELPER_NAME,
-    });
+    // One named operation, carrying a version. The web process can no longer
+    // say "run this on the host" at all — see lib/storage.js.
+    await storage.selfUpdate(target);
   } catch (err) {
     const why = err && err.message ? err.message : String(err);
     await writeJson(PROGRESS_FILE, {

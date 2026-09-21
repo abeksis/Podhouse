@@ -10,12 +10,13 @@
 
 const http = require('http');
 
-const SOCKET = process.env.DOCKER_SOCKET || '/var/run/docker.sock';
+// Read-only in the dashboard, the real socket in the worker and the CLI.
+const endpoint = require('./docker-endpoint');
 
 function request(path, { raw = false, timeout = 15000, method = 'GET' } = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request(
-      { socketPath: SOCKET, path, method, headers: { Host: 'docker' } },
+      endpoint.options(path, method),
       (res) => {
         const chunks = [];
         res.on('data', (c) => chunks.push(c));

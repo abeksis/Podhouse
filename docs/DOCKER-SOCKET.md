@@ -12,7 +12,9 @@ and for the dashboard as it is built today that answer would be theatre.
 
 | Container | Mount | What it does with it |
 |---|---|---|
-| `dashboard` | read-write | creates, starts, stops and deletes containers; builds and pulls images; creates networks |
+| `dashboard` | **none** | the web process holds no socket at all since 0.15.0 |
+| `dashboard-worker` | read-write | the same work, behind a named-operation API — see below |
+| `dashboard-socket` | proxied, read-only | what the page reads: containers, logs, stats, events |
 | `portainer` | read-write | everything, by design — it is a general Docker UI. Not installed on a new box since 0.9.0 |
 | `beszel-agent` | proxied, read-only | lists containers and reads their stats, so the graphs have names |
 
@@ -70,18 +72,30 @@ it running and keeps its settings — the old definition stays in `core` behind
 a Compose profile, which is what stops `up --remove-orphans` from deleting a
 container that is no longer being asked for.
 
-**3. Split the dashboard.** The only real fix: the web process holds no socket
-and talks to a small privileged worker over a unix socket of our own, whose
-API is not "run this Docker request" but `install <module id>`, `up <id>`,
-`down <id>`, `restart <container of id>`. The worker validates the id against
-the catalog on disk and runs compose itself. Then a hole in the web process
-buys an attacker the ability to restart Jellyfin, not to mount `/`.
+**3. Split the dashboard.** Done in 0.15.0. The web process holds no socket and
+talks to `dashboard-worker` over a unix socket in `state/`, whose API is not
+"run this Docker request" but `install <id>`, `stop <id>`, `restartService <id>
+<service>`, `storage.mount <share>`, `platform.selfUpdate <version>`. Every
+argument vector is built on the worker's side from a validated id; there is no
+operation that forwards an argv, and adding one would undo this.
 
-That is a real piece of work and it is the one that matters. Stages 1 and 2
-are worth having on their own, and neither of them is a substitute for it.
+Reads go to `dashboard-socket`, a `docker-socket-proxy` with `POST=0`.
+
+Measured on a test box after the change: the web container has no
+`/var/run/docker.sock`; a `POST /containers/create` from it asking for
+`Binds: ["/:/host"]` and `Privileged: true` is answered `403 Forbidden`; and
+`worker-client.call("exec", …)` is refused with `unknown operation: exec` and
+logged. Installing, purging and restarting from the page all still work,
+through the worker.
+
+What this does NOT do: the worker can still do anything Docker can, so a flaw
+in the worker's own argument handling is still a path to root. The surface is
+one file and about twenty operations, which is a thing that can be read in an
+afternoon — that is the improvement, not a proof.
 
 ## If you are reading this to decide whether to expose the dashboard
 
-Don't. It is a LAN tool with a login, and everything above is the reason:
-until stage 3 lands, a session on this page is a session with root on the box.
+Still don't. Stage 3 means a session on this page is no longer a session with
+root — it is a session that can install, remove and restart apps, which is
+quite enough to ruin your day.
 Remote access belongs behind one of the VPN modules — see `docs/SECURITY.md`.

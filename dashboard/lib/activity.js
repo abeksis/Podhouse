@@ -11,7 +11,7 @@
 const http = require('http');
 const state = require('./state-store');
 
-const SOCKET = process.env.DOCKER_SOCKET || '/var/run/docker.sock';
+const endpoint = require('./docker-endpoint');
 const FILE = 'activity.json';
 const MAX = 200;
 
@@ -103,7 +103,7 @@ class Activity {
   start() {
     const filters = encodeURIComponent(JSON.stringify({ type: ['container'] }));
     const req = http.request(
-      { socketPath: SOCKET, path: `/v1.43/events?filters=${filters}`, method: 'GET', headers: { Host: 'docker' } },
+      endpoint.options(`/v1.43/events?filters=${filters}`),
       (res) => {
         if (res.statusCode !== 200) {
           res.resume();

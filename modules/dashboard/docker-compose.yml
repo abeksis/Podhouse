@@ -66,14 +66,26 @@ services:
       # Backups copied to HB_BACKUP_COPY_DIR go through a helper container
       # from in here; the CLI on the host copies directly. See lib/backup.js.
       - HB_BACKUP_COPY_VIA=container
+      # Listing containers, reading logs, sampling stats and following events
+      # — all of it GET, none of it through the real socket. See
+      # lib/docker-endpoint.js.
+      - HB_DOCKER_API=dashboard-socket:2375
     volumes:
       # Same path inside and out: `docker compose -f /opt/podhouse/modules/...`
       # run from in here produces bind mounts the host daemon can resolve.
       # Both sides follow HB_ROOT: a fixed path on the right broke the rule the
       # moment a box lived anywhere else.
       - ${HB_ROOT:-/opt/podhouse}:${HB_ROOT:-/opt/podhouse}
-      # Read-write on purpose — installing a module creates containers.
-      - /var/run/docker.sock:/var/run/docker.sock
+      # NOT the Docker socket. Since 0.15.0 this container holds none.
+      #
+      # Write access to that socket is root on the box: anything that can
+      # create a container can create one that bind-mounts / and runs as root.
+      # While the web process held it, a session on this page was a session
+      # with root, and a stolen cookie was the whole machine.
+      #
+      # Writes now go to the dashboard-worker service below, over a unix
+      # socket in state/, as NAMED operations. Reads go to dashboard-socket, a
+      # proxy that answers GET and refuses every write method.
       # The host root, for a real disk figure rather than the image layer's.
       - /:/host/root:ro
       # The whole front end, over the copy baked into the image at build time.
@@ -118,6 +130,130 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: always
+
+  # ------------------------------------------------------------- the worker
+  #
+  # The half that is allowed to change the box. Same image as the dashboard,
+  # different command: it listens on a unix socket in state/ and accepts a
+  # fixed list of named operations — install <id>, stop <id>, mount <share> —
+  # each of which builds its own command from a validated argument.
+  #
+  # It has no port and is on no network. The only way to reach it is the
+  # socket file, and the only container that has it is the one above.
+  dashboard-worker:
+    build:
+      context: ${HB_ROOT:-/opt/podhouse}/dashboard
+    image: homebox-dashboard:${HB_VERSION:-local}
+    container_name: dashboard-worker
+    command:
+      - node
+      - worker.js
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # The same three the dashboard needs and for the same reason: it runs as
+      # root inside the container and reads and writes /opt/podhouse, which
+      # belongs to the BOX's user. Root does not ignore file permissions by
+      # itself - that is DAC_OVERRIDE.
+      #
+      # Nothing here is what makes this container powerful. The socket is, and
+      # capabilities do not restrain it: the container it asks the daemon to
+      # create is created by the daemon, with whatever that container asks for.
+      - DAC_OVERRIDE
+      - CHOWN
+      - FOWNER
+    environment:
+      - TZ=${TZ:-UTC}
+      - HOMEBOX_ROOT=${HB_ROOT:-/opt/podhouse}
+    volumes:
+      # Same path inside and out, so the bind mounts in a module file resolve
+      # identically whether compose is run from here or from an SSH session.
+      - ${HB_ROOT:-/opt/podhouse}:${HB_ROOT:-/opt/podhouse}
+      # This is the one container that holds it.
+      - /var/run/docker.sock:/var/run/docker.sock
+    network_mode: none
+    # The image's own HEALTHCHECK probes the web server on :8443. This process
+    # is not a web server - it listens on a unix socket and nothing else - so
+    # inheriting it marks the worker permanently unhealthy, which then shows up
+    # on the Overview as a broken app. Off, rather than a health probe invented
+    # to satisfy a check.
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '1.00'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: always
+
+  # ------------------------------------------------- reads, and only reads
+  #
+  # haproxy in front of the socket, with every write method refused. The same
+  # arrangement the Beszel agent has used since 0.8.1 — see
+  # modules/metrics/docker-compose.yml, and docs/DOCKER-SOCKET.md for why a
+  # proxy alone was never enough for the dashboard.
+  dashboard-socket:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: dashboard-socket
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # haproxy drops to its own user and binds inside the container, and it
+      # cannot do either without these.
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    environment:
+      # What the page actually reads.
+      - CONTAINERS=1
+      - IMAGES=1
+      - NETWORKS=1
+      - EVENTS=1
+      - VERSION=1
+      - PING=1
+      # And nothing that changes anything. POST=0 is the line that matters:
+      # with it off, /containers/create is refused whatever else is on.
+      - POST=0
+      - BUILD=0
+      - COMMIT=0
+      - CONFIGS=0
+      - DISTRIBUTION=0
+      - EXEC=0
+      - NODES=0
+      - PLUGINS=0
+      - SECRETS=0
+      - SERVICES=0
+      - SESSION=0
+      - SWARM=0
+      - SYSTEM=0
+      - TASKS=0
+      - VOLUMES=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - homebox_proxy
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.50'
     logging:
       driver: json-file
       options:

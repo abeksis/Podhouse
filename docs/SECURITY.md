@@ -3,9 +3,19 @@
 ## The dashboard can create and destroy containers
 
 This is the thing to understand before anything else. Installing an app means
-creating containers, so the `dashboard` container mounts `/var/run/docker.sock`
-**read-write**. Write access to the Docker socket is root on this box: it can
-start a privileged container that mounts the host filesystem.
+creating containers, and write access to the Docker socket is root on this box:
+it can start a privileged container that mounts the host filesystem.
+
+Since 0.15.0 the web process does not hold it. It runs with no socket at all
+and asks a second container, `dashboard-worker`, for named operations —
+`install radarr`, `stop jellyfin`, `platform.selfUpdate 0.15.0` — over a unix
+socket in `state/`. The worker builds every command itself from an id it
+validates against the catalog on disk. Reads go to a proxy that answers GET
+and refuses POST outright.
+
+So a session on this page can install, remove and restart apps. It is no
+longer root on the machine. `docs/DOCKER-SOCKET.md` has the inventory, the
+reasoning, and what this still does not fix.
 
 The dashboard has a login. On first run it shows a one-time bootstrap token
 printed by the installer; you paste it, choose a password, and that claims the

@@ -15,6 +15,10 @@ RUN apk add --no-cache tini docker-cli docker-cli-compose bash tzdata
 WORKDIR /app
 COPY package.json ./
 COPY server.js ./
+# The privileged half. Same image, different command: modules/dashboard runs
+# it as the dashboard-worker service, which is the only container that holds
+# the Docker socket. See worker.js for why the split exists.
+COPY worker.js ./
 COPY lib ./lib
 COPY public ./public
 
@@ -24,8 +28,10 @@ ENV NODE_ENV=production \
 
 EXPOSE 8443
 
-# Runs as root inside the container so it can open the host's docker socket,
-# which is group-owned by `docker` with a gid that differs from box to box.
+# Runs as root inside the container. The WORKER needs that to open the host's
+# docker socket, which is group-owned by `docker` with a gid that differs from
+# box to box; the web half keeps it only to read and write a tree owned by the
+# box's user.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8443/healthz >/dev/null 2>&1 || exit 1
 

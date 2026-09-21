@@ -23,6 +23,7 @@ const path = require('path');
 
 const docker = require('./lib/docker');
 const composeLib = require('./lib/compose');
+const worker = require('./lib/worker-client');
 const modulesLib = require('./lib/modules');
 const hostMetrics = require('./lib/host-metrics');
 const activity = require('./lib/activity');
@@ -1496,8 +1497,13 @@ async function main() {
   } else {
     console.warn('[homebox] docker socket unreachable — status and logs will be empty');
   }
+  // The question used to be whether `docker compose` worked from in here. It
+  // no longer can: this container holds no socket. What matters now is whether
+  // the privileged worker is answering, because nothing installs, starts or
+  // stops without it.
   if (!(await composeLib.available())) {
-    console.warn('[homebox] `docker compose` is not usable from this container — installs will fail');
+    console.warn(`[homebox] the privileged worker is not answering on ${worker.SOCKET_PATH}`);
+    console.warn('[homebox] installing, starting and stopping apps will fail until dashboard-worker is running');
   }
   server.listen(PORT, () => {
     console.log(`[homebox] v${VERSION} listening on :${PORT} (root ${state.ROOT}, host ${HOST_ADDRESS})`);

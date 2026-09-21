@@ -12,7 +12,7 @@
 
 const http = require('http');
 
-const SOCKET = process.env.DOCKER_SOCKET || '/var/run/docker.sock';
+const endpoint = require('./docker-endpoint');
 
 const cache = new Map(); // name -> { cpu, memory, memoryLimit, at }
 let timer = null;
@@ -21,12 +21,7 @@ let sweeping = false;
 function fetchStats(name) {
   return new Promise((resolve) => {
     const req = http.request(
-      {
-        socketPath: SOCKET,
-        path: `/v1.43/containers/${encodeURIComponent(name)}/stats?stream=false`,
-        method: 'GET',
-        headers: { Host: 'docker' },
-      },
+      endpoint.options(`/v1.43/containers/${encodeURIComponent(name)}/stats?stream=false`),
       (res) => {
         const chunks = [];
         res.on('data', (c) => chunks.push(c));
