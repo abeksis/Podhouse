@@ -1253,7 +1253,26 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   background: var(--bg-raised); border-radius: var(--radius-l);
   padding: 1.3rem 1.4rem; min-width: 0;
   display: flex; flex-direction: column; overflow: hidden;
+  position: relative;
 }
+/* The memory curve, lying under the panel's own text.
+   It stopped being a widget: no surface, no border, no axis, faded at both
+   ends and downwards. The range it covers is written into the figures
+   instead, because texture cannot be read off — a shape that looks like data
+   but cannot be measured is worse than no shape at all.
+
+   Anchored to the TOP. It was at the bottom first, which looked right in a
+   mockup where the panel was only as tall as its text; on a real box the
+   panel stretches to the height of the app list, so the curve ended up
+   hundreds of pixels below everything, and an open log drew straight over it.
+   At the top it sits behind the name and the figures at any panel height. */
+.dt-trace {
+  position: absolute; left: 0; right: 0; top: 0;
+  width: 100%; height: 190px; pointer-events: none; z-index: 0;
+}
+.detail > .dt-top,
+.detail > .dt-tips,
+.detail > .dt-log { position: relative; z-index: 1; }
 .dt-head { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 1rem; }
 .dt-art { width: 46px; height: 46px; padding: 8px; border-radius: 13px; background: var(--plate); flex: none; font-size: 1.3rem; }
 .dt-name { margin: 0; font-size: 1.25rem; font-weight: 500; letter-spacing: -0.01em; }
@@ -1277,22 +1296,9 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .say-under { margin: 1rem 0 0; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* The panel: facts on the left, the shape on the right, the log underneath. */
-.dt-top { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 1.8rem; align-items: start; }
-@media (max-width: 980px) { .dt-top { grid-template-columns: 1fr; } }
+/* One column again: nothing sits beside the text any more. */
+.dt-top { min-width: 0; }
 .dt-main { min-width: 0; }
-.dt-chart { min-width: 0; }
-.dt-spark { display: block; width: 100%; height: 96px; }
-.dt-chart-foot {
-  display: flex; justify-content: space-between; margin: 0.5rem 0 0;
-  font-family: var(--mono); font-size: 0.66rem; color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.dt-chart-foot span:nth-child(2) { color: var(--line-strong); }
-.dt-chart-wait {
-  margin: 0; padding: 1.6rem 0; text-align: center; line-height: 1.6;
-  font-size: 0.7rem; color: var(--muted);
-  border: 1px dashed var(--line); border-radius: var(--radius);
-}
 .dt-link { font-size: 0.78rem; color: var(--muted); align-self: center; margin-left: 0.3rem; }
 .dt-link:hover { color: var(--accent-text); }
 .button.is-on { border-color: var(--accent-line); color: var(--accent-text); background: var(--accent-soft); }
@@ -1303,10 +1309,19 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   padding-left: 0.85rem; border-left: 2px solid var(--line-strong);
 }
 
+/* The line belongs to the panel, not to the log.
+   It used to be the log's own border-top, so it blinked into existence when
+   you opened the log and vanished when you closed it — a rule that moves is
+   read as a glitch. It is drawn once, always, and the log simply appears
+   beneath it. */
+.dt-rule {
+  margin-top: 1.3rem; border-top: 1px solid var(--line); flex: none;
+  position: relative; z-index: 1;
+}
 /* Open, the log takes the room that was empty under a short description
    instead of adding to the page. */
 .dt-log {
-  margin-top: 1.4rem; border-top: 1px solid var(--line); padding-top: 1rem;
+  margin-top: 1rem;
   flex: 1; min-height: 0; display: flex; flex-direction: column;
 }
 .dt-log-head {

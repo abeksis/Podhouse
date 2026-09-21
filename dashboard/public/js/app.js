@@ -592,6 +592,15 @@ function renderDetail(tile, peak) {
     ['up', up.replace(/^up /, '')],
     ['port', tile.port_map ? String(tile.port_map) : '--'],
   ];
+  // The curve behind this row is texture, and texture cannot be read off. The
+  // range it covers therefore has to be written down, or the shape is
+  // decoration pretending to be a measurement.
+  const seen = state.series.get(tileKey(tile.module.id, tile.name)) || [];
+  if (seen.length > 1) {
+    const lo = Math.min(...seen);
+    const hi = Math.max(...seen);
+    facts.push([`${seen.length} samples`, lo === hi ? bytes(lo) : `${bytes(lo)}–${bytes(hi)}`]);
+  }
 
   const tipList = (tile.module.tips || []).slice(0, 2);
   const tips = tipList.length
@@ -603,6 +612,7 @@ function renderDetail(tile, peak) {
 
   const name = tile.container ? tile.container.name : null;
   el.innerHTML = `
+    ${memoryChart(tileKey(tile.module.id, tile.name), color)}
     <div class="dt-top">
       <div class="dt-main">
         <div class="dt-head">
@@ -624,9 +634,9 @@ function renderDetail(tile, peak) {
           ${linkOut.join('')}
         </div>
       </div>
-      <div class="dt-chart">${memoryChart(tileKey(tile.module.id, tile.name), color)}</div>
     </div>
     ${tips}
+    ${name ? '<div class="dt-rule"></div>' : ''}
     ${name && state.logOpen
       ? `<div class="dt-log"><p class="dt-log-head">Last lines <span id="dt-log-name">${escapeHtml(name)}</span></p><pre id="dt-log" class="dt-log-body">reading…</pre></div>`
       : ''}`;
@@ -644,34 +654,52 @@ function renderDetail(tile, peak) {
  */
 function memoryChart(key, color) {
   const series = state.series.get(key) || [];
-  if (series.length < 2) {
-    return `<p class="dt-chart-wait">memory is sampled every 20 seconds<br>the shape appears once there are two</p>`;
-  }
-  const w = 260;
-  const h = 96;
+  // Under two samples there is no shape, and an empty box saying so is worse
+  // than nothing — the figures above already say how much memory it uses.
+  if (series.length < 2) return '';
+
+  const w = 640;
+  const h = 190;
   const min = Math.min(...series);
   const max = Math.max(...series);
-  // How much movement counts as movement.
-  //
-  // A chart that scales to its own noise turns a steady 200MB into a mountain
-  // range, and you stop believing it. A chart that flattens everything shows
-  // nothing. This is the dial between those, and it is set low enough that a
-  // real few-hundred-kilobyte drift is visible while an app that is genuinely
-  // still draws as still. If min and max print the same number, the line is
-  // straight on purpose — the alternative is inventing a shape.
+  // How much movement counts as movement. A chart that scales to its own
+  // noise turns a steady 200MB into a mountain range and you stop believing
+  // it; one that flattens everything shows nothing. If min and max print the
+  // same number the line is straight on purpose.
   const span = Math.max(max - min, max * 0.025, 1);
   const base = max - span;
   const step = w / (series.length - 1);
-  const pts = series.map((v, i) => [i * step, h - ((v - base) / span) * (h - 10) - 5]);
+  // Drawn in the lower half of the band: the fill washes down across the
+  // figures, and the app's name stays on clean surface.
+  const top = h * 0.42;
+  const pts = series.map((v, i) => [i * step, h - ((v - base) / span) * (h - top - 14) - 14]);
   const line = smoothPath(pts);
   const stroke = color || 'var(--accent)';
+  // Behind the panel's text rather than beside it, and faded at both ends so
+  // it has no beginning and no end — which is honest, since it is a window
+  // onto something still running.
   return `
-    <svg class="dt-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
-      <path d="${line} L ${w},${h} L 0,${h} Z" fill="${escapeHtml(stroke)}" opacity="0.13"></path>
-      <path d="${line}" fill="none" stroke="${escapeHtml(stroke)}" stroke-width="1.8"
-        stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></path>
-    </svg>
-    <p class="dt-chart-foot"><span>${escapeHtml(bytes(min))}</span><span>${series.length} samples</span><span>${escapeHtml(bytes(max))}</span></p>`;
+    <svg class="dt-trace" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="trace-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="${escapeHtml(stroke)}" stop-opacity="0.22"></stop>
+          <stop offset="1" stop-color="${escapeHtml(stroke)}" stop-opacity="0"></stop>
+        </linearGradient>
+        <linearGradient id="trace-ends" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#000"></stop>
+          <stop offset="0.22" stop-color="#fff"></stop>
+          <stop offset="0.92" stop-color="#fff"></stop>
+          <stop offset="1" stop-color="#000"></stop>
+        </linearGradient>
+        <mask id="trace-mask"><rect x="0" y="0" width="${w}" height="${h}" fill="url(#trace-ends)"></rect></mask>
+      </defs>
+      <g mask="url(#trace-mask)">
+        <path d="${line} L ${w},${h} L 0,${h} Z" fill="url(#trace-fill)"></path>
+        <path d="${line}" fill="none" stroke="${escapeHtml(stroke)}" stroke-width="1.5"
+          stroke-opacity="0.5" stroke-linejoin="round" stroke-linecap="round"
+          vector-effect="non-scaling-stroke"></path>
+      </g>
+    </svg>`;
 }
 
 /**
