@@ -60,7 +60,7 @@ const cache = new Map();   // key -> { at, value }
  * rest of this server: no dependency tree behind a process that holds the
  * Docker socket.
  */
-function request(url, { method = 'GET', headers = {}, body = null, raw = false } = {}) {
+function request(url, { method = 'GET', headers = {}, body = null, raw = false, binary = false } = {}) {
   return new Promise((resolve, reject) => {
     const target = new URL(url);
     const req = http.request({
@@ -77,11 +77,17 @@ function request(url, { method = 'GET', headers = {}, body = null, raw = false }
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
-        const text = Buffer.concat(chunks).toString('utf8');
+        const buffer = Buffer.concat(chunks);
+        // `raw` decodes as text, which is right for everything here except a
+        // JPEG: passing image bytes through utf8 replaces every byte that is
+        // not a valid sequence and hands back something that is no longer an
+        // image. `binary` keeps the buffer.
+        const text = binary ? '' : buffer.toString('utf8');
         if (res.statusCode >= 400) {
           reject(Object.assign(new Error(`${target.host} answered ${res.statusCode}`), { status: res.statusCode }));
           return;
         }
+        if (binary) return resolve({ buffer, headers: res.headers });
         if (raw) return resolve({ text, headers: res.headers });
         try {
           resolve(text ? JSON.parse(text) : null);
@@ -221,6 +227,8 @@ function radarrRow(r, today) {
     detail: r.year ? String(r.year) : '',
     date: next,
     have: r.hasFile === true,
+    // A Radarr row IS the film, so its own id addresses the poster.
+    art: r.id ? Number(r.id) : null,
   };
 }
 
@@ -258,6 +266,14 @@ async function arrCalendar(serviceName, containers, days) {
         detail: `${num}${r.title ? ` · ${r.title}` : ''}`,
         date: r.airDateUtc || r.airDate || null,
         have: r.hasFile === true,
+        // The id of the SERIES, not the episode. An episode that has not aired
+        // has no artwork of its own, and never will until someone uploads a
+        // still — but the series it belongs to is in the library and its
+        // poster was downloaded the day it was added. `includeSeries` returns
+        // only remoteUrl (thetvdb.com), which the page's own CSP forbids and
+        // which would tell a stranger's server what this house watches, so
+        // the id is what travels and the poster is fetched from Sonarr.
+        art: r.series && r.series.id ? Number(r.series.id) : null,
       };
     }
     return radarrRow(r, iso(start));
@@ -491,4 +507,58 @@ function invalidate() {
   qbSession = null;
 }
 
-module.exports = { snapshot, invalidate, TTL, radarrRow };
+/* ------------------------------------------------------------- artwork */
+
+/**
+ * One poster, from the *arr app that already has it on disk.
+ *
+ * The contract here is deliberately narrow, because this is the one thing in
+ * the dashboard that fetches a URL on behalf of the page, and a fetcher that
+ * accepts a URL is a request forgery waiting to be asked nicely.
+ *
+ *   - the service is one of two names, not a host;
+ *   - the id is a number, and it is the only thing the caller supplies;
+ *   - the path is built here and nowhere else;
+ *   - the answer must be a JPEG or a PNG, under a size this page could
+ *     plausibly want to draw.
+ *
+ * `poster-250.jpg` rather than `poster.jpg`: measured on a real library, the
+ * full poster is 95KB and the small one is 13KB for a tile 120 pixels wide.
+ *
+ * Cached on disk under state/art, because the artwork for a series does not
+ * change and a card that repolls every ten seconds should not re-ask Sonarr
+ * for the same bytes.
+ */
+const ART_DIR = path.join(state.ROOT, 'state', 'art');
+const ART_MAX = 3 * 1024 * 1024;
+const ART_OK = new Set(['image/jpeg', 'image/png']);
+
+async function poster(serviceName, id) {
+  if (serviceName !== 'sonarr' && serviceName !== 'radarr') throw new Error('unknown service');
+  if (!Number.isInteger(id) || id < 1 || id > 1e9) throw new Error('bad id');
+
+  // The name is built from two values this function has already validated,
+  // so nothing a caller sends can reach the filesystem as a path.
+  const file = path.join(ART_DIR, `${serviceName}-${id}.img`);
+  const cached = await fsp.readFile(file).catch(() => null);
+  if (cached) return cached;
+
+  const base = await addressOf(serviceName);
+  if (!base) throw new Error(`${serviceName} is not installed`);
+  const key = await arrApiKey(serviceName).catch(() => null);
+
+  const res = await request(`${base}/MediaCover/${id}/poster-250.jpg`, {
+    headers: key ? { 'x-api-key': key } : {},
+    binary: true,
+  });
+  const type = String((res.headers && res.headers['content-type']) || '').split(';')[0].trim();
+  if (!ART_OK.has(type)) throw new Error('not an image');
+  const body = res.buffer;
+  if (!body || !body.length || body.length > ART_MAX) throw new Error('no artwork');
+
+  await fsp.mkdir(ART_DIR, { recursive: true }).catch(() => {});
+  await fsp.writeFile(file, body).catch(() => {});
+  return body;
+}
+
+module.exports = { snapshot, invalidate, TTL, radarrRow, poster };

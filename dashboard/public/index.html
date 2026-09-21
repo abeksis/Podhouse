@@ -472,24 +472,17 @@
           <div class="panel-head"><h2 class="panel-title">"Right now" panel</h2></div>
           <div class="setting">
             <div class="setting-help">
-              Shows what your media apps are doing without opening them. A part appears only when
-              the app behind it is installed and answering; switching it off here hides it either way.
+              Shows what your media apps are doing without opening them: what is downloading right
+              now, what airs next, and how much is still wanted. It appears only when one of those
+              apps is installed and answering.
             </div>
+            <!-- Three more switches used to sit here, one per part of the
+                 panel, from when it was three cards side by side. The panel is
+                 one thing now, so they controlled nothing — a switch that does
+                 nothing is worse than no switch. -->
             <label class="switch-row">
               <input type="checkbox" id="live-enabled" checked>
               <span><strong>Show it on the Overview</strong><small>Off hides the whole panel.</small></span>
-            </label>
-            <label class="switch-row">
-              <input type="checkbox" id="live-transfers" checked>
-              <span><strong>Transfers</strong><small>qBittorrent: current speed in each direction, and what is downloading.</small></span>
-            </label>
-            <label class="switch-row">
-              <input type="checkbox" id="live-queues" checked>
-              <span><strong>Queues</strong><small>Radarr and Sonarr: what is being fetched, and what is still missing.</small></span>
-            </label>
-            <label class="switch-row">
-              <input type="checkbox" id="live-upcoming" checked>
-              <span><strong>Upcoming releases</strong><small>Films and episodes you follow that come out in the next three weeks.</small></span>
             </label>
             <p class="help">
               Radarr and Sonarr work without setup — Podhouse reads the API key they write to disk.

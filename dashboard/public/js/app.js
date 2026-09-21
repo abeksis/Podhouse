@@ -3549,20 +3549,10 @@ function renderInsightToggles() {
   const i = (state.prefs && state.prefs.insights) || {};
   const set = (sel, value) => { const el = $(sel); if (el) el.checked = value !== false; };
   set('#live-enabled', i.enabled);
-  set('#live-transfers', i.transfers);
-  set('#live-queues', i.queues);
-  set('#live-upcoming', i.upcoming);
 }
 
 function saveInsightPrefs() {
-  savePrefs({
-    insights: {
-      enabled: $('#live-enabled').checked,
-      transfers: $('#live-transfers').checked,
-      queues: $('#live-queues').checked,
-      upcoming: $('#live-upcoming').checked,
-    },
-  });
+  savePrefs({ insights: { enabled: $('#live-enabled').checked } });
 }
 
 /**
@@ -3950,11 +3940,6 @@ let insightsData = null;
 let insightsTimer = null;
 
 const insightsOn = () => !state.prefs || !state.prefs.insights || state.prefs.insights.enabled !== false;
-const panelOn = (name) => {
-  const i = (state.prefs && state.prefs.insights) || {};
-  return i[name] !== false;
-};
-
 function rate(bytesPerSecond) {
   if (!bytesPerSecond) return '0 B/s';
   return `${bytes(bytesPerSecond)}/s`;
@@ -3982,133 +3967,92 @@ function whenText(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-/**
- * A panel heading, built like a Quick access item: the app's own icon in a
- * small tile, then the name and what it is. Two cards in the same band should
- * read as the same kind of object, and an icon is what anchors a row.
- *
- * The icon files already ship in public/icons — these are Podhouse's own
- * modules, so there is nothing to download or configure.
- */
-function liveHead(icon, title, sub) {
-  return `<div class="pulse-head">
-    <span class="pulse-head-art"><img src="icons/${escapeHtml(icon)}" alt="" loading="lazy"></span>
-    <span class="pulse-head-text">
-      <strong>${escapeHtml(title)}</strong>
-      <small>${escapeHtml(sub)}</small>
-    </span>
-  </div>`;
-}
+
+
+
+
+
+/* ------------------------------------------ Right now: the marquee view */
 
 /**
- * The transfer sparkline: down as a filled area, up as a line over it.
+ * One thing big, everything else small.
  *
- * Hand-built SVG rather than a charting library, for the same reason the
- * server has no dependencies — and because what is wanted here is one glance:
- * is it moving, is it climbing, has it stalled. A chart with axes and a
- * legend would answer questions nobody asks of a 200px card.
- *
- * BOTH SERIES SHARE ONE SCALE. Giving each its own would draw a 20 KB/s
- * upload at the same height as a 5 MB/s download — two lines that look equal
- * and are not, which is worse than no graph.
+ * What people open this panel for is "what lands next" — the rest is a state
+ * of affairs, not a question. So the next episode gets the whole band, lit
+ * the way the greeting is lit, and the remaining dates queue up as chips
+ * underneath. The transfer figures go in one line at the foot, because when
+ * nothing is moving that is all they are worth; when something IS moving,
+ * the hero becomes the download instead.
  */
-function transferSpark(history) {
-  const pts = (history || []).filter((p) => p && typeof p.down === 'number');
-  // Two points is the minimum that can be a line rather than a dot.
-  if (pts.length < 2) return '';
-
-  const W = 100;
-  const H = 30;
-  const peak = Math.max(1, ...pts.map((p) => Math.max(p.down, p.up)));
-  const x = (i) => (i / (pts.length - 1)) * W;
-  const y = (v) => H - (v / peak) * (H - 1);
-
-  const line = (key) => pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ');
-  const area = `${line('down')} L${W} ${H} L0 ${H} Z`;
-
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-      <path class="chart-area" d="${area}"></path>
-      <path class="chart-down" d="${line('down')}"></path>
-      <path class="chart-up" d="${line('up')}"></path>
-    </svg>
-    <div class="chart-legend mono">
-      <span>${escapeHtml(rate(peak))} peak</span>
-      <span>${pts.length} samples</span>
-    </div>`;
-}
-
-function transfersPanel(qb) {
-  if (!qb || qb.installed === false) return '';
-  if (qb.error) {
-    return `<section class="pulse-part">
-      ${liveHead('qbittorrent.svg', 'Transfers', 'qBittorrent')}
-      <p class="pulse-note">${escapeHtml(qb.error)}</p>
-    </section>`;
-  }
-  const moving = qb.torrents || [];
-  const rows = moving.length
-    ? moving.map((t) => `
-        <div class="torrent">
-          <div class="torrent-top">
-            <span class="torrent-name">${escapeHtml(t.name)}</span>
-            <span class="torrent-eta mono">${escapeHtml(etaText(t.eta) || '')}</span>
-          </div>
-          <div class="progressbar"><span style="width:${Math.max(0, Math.min(100, t.progress))}%"></span></div>
-          <div class="torrent-foot mono">${t.progress.toFixed(1)}% · ${escapeHtml(rate(t.downSpeed))}</div>
-        </div>`).join('')
-    : '<p class="pulse-note">Nothing is downloading right now.</p>';
-
-  return `<section class="pulse-part">
-    ${liveHead('qbittorrent.svg', 'Transfers', 'qBittorrent')}
-    <div class="speeds">
-      <div class="speed"><span class="speed-dir is-down">↓</span><strong class="mono">${escapeHtml(rate(qb.downSpeed))}</strong></div>
-      <div class="speed"><span class="speed-dir is-up">↑</span><strong class="mono">${escapeHtml(rate(qb.upSpeed))}</strong></div>
-      <div class="speed is-quiet"><strong class="mono">${qb.activeCount}</strong><span>active</span></div>
-    </div>
-    ${transferSpark(qb.history)}
-    ${rows}
-  </section>`;
-}
-
-function queuesPanel(data) {
-  const apps = [
-    { name: 'Radarr', icon: 'radarr.png', d: data.radarr },
-    { name: 'Sonarr', icon: 'sonarr.png', d: data.sonarr },
-  ].filter((a) => a.d && a.d.installed !== false);
-  if (!apps.length) return '';
-
-  // Named after whichever is actually installed — "Radarr & Sonarr" on a box
-  // running only one of them is a heading that describes someone else's box.
-  const sub = apps.map((a) => a.name).join(' & ');
-
-  return `<section class="pulse-part">
-    ${liveHead(apps.length === 1 ? apps[0].icon : 'radarr.png', 'Queues', sub)}
-    ${apps.map((a) => `
-      <div class="queue-row">
-        <span class="queue-art"><img src="icons/${escapeHtml(a.icon)}" alt="" loading="lazy"></span>
-        <span class="queue-app">${escapeHtml(a.name)}</span>
-        ${a.d.error
-          ? `<span class="pulse-note">${escapeHtml(a.d.error)}</span>`
-          : `<span class="queue-nums mono"><b>${a.d.queue}</b> fetching · <b>${a.d.missing}</b> missing</span>`}
-      </div>`).join('')}
-  </section>`;
-}
-
-function upcomingPanel(data) {
+function marqueeView(data) {
+  const qb = data.qbittorrent || {};
+  const moving = (qb.torrents || []).slice().sort((a, b) => (b.progress || 0) - (a.progress || 0));
   const rows = data.upcoming || [];
-  if (!rows.length && !data.upcomingError) return '';
-  return `<section class="pulse-part">
-    ${liveHead('sonarr.png', 'Upcoming', `next ${data.upcomingDays} days`)}
-    ${data.upcomingError
-      ? `<p class="pulse-note">${escapeHtml(data.upcomingError)}</p>`
-      : rows.map((r) => `
-          <div class="soon-row">
-            <span class="soon-dot${r.have ? ' is-have' : ''}" title="${r.have ? 'already downloaded' : 'not downloaded yet'}"></span>
-            <span class="soon-title">${escapeHtml(r.title)}</span>
-            <span class="soon-detail">${escapeHtml(r.detail)}</span>
-            <span class="soon-when">${escapeHtml(whenText(r.date))}</span>
-          </div>`).join('')}
-  </section>`;
+
+  const arrs = [data.radarr, data.sonarr].filter((a) => a && a.installed !== false && !a.error);
+  const missing = arrs.reduce((n, a) => n + (a.missing || 0), 0);
+  const queue = arrs.reduce((n, a) => n + (a.queue || 0), 0);
+
+  let kicker;
+  let head;
+  let meta;
+  let art = null;
+  if (moving.length) {
+    // Something is actually happening, so that is the headline.
+    const top = moving[0];
+    kicker = 'Downloading';
+    head = top.name;
+    const eta = etaText(top.eta);
+    meta = `${top.progress.toFixed(0)}% done · ${rate(top.downSpeed)}${eta ? ` · ${eta}` : ''}`
+      + (moving.length > 1 ? ` · and ${moving.length - 1} more` : '');
+  } else if (rows.length) {
+    const next = rows[0];
+    kicker = whenText(next.date);
+    head = next.detail ? `${next.title} — ${next.detail}` : next.title;
+    meta = next.have ? 'Already downloaded' : 'Sonarr is watching for it';
+    // The poster belongs to the series, not the episode: an episode that has
+    // not aired has no artwork of its own. Served by this box from the copy
+    // the *arr app downloaded when the series was added — never from the
+    // internet, which the page's CSP forbids anyway.
+    art = next.art ? { service: next.source, id: next.art } : null;
+  } else {
+    kicker = 'Right now';
+    head = 'Nothing on';
+    meta = 'No downloads, nothing airing in the days ahead';
+  }
+
+  const rest = (moving.length ? rows : rows.slice(1)).slice(0, 4).map((r) => `
+    <span><b>${escapeHtml(r.title)}</b> ${escapeHtml((r.detail || '').split(' ')[0])} · ${escapeHtml(whenText(r.date))}</span>`).join('');
+  const more = Math.max(0, (moving.length ? rows.length : rows.length - 1) - 4);
+
+  const foot = [];
+  if (qb.installed !== false) {
+    foot.push(moving.length
+      ? `<span><b>${escapeHtml(rate(qb.downSpeed))}</b> down · <b>${escapeHtml(rate(qb.upSpeed))}</b> up</span>`
+      : '<span>Nothing downloading</span>');
+  }
+  if (arrs.length) {
+    foot.push(`<span><b>${missing}</b> still wanted${queue ? ` · <b>${queue}</b> being fetched` : ''}</span>`);
+  }
+  if (!foot.length && !rows.length) return '';
+
+  // `onerror` removes the frame rather than leaving a broken-image glyph:
+  // a series added a minute ago has no artwork yet, and that is ordinary.
+  const poster = art
+    ? `<div class="mq-art"><img src="api/insights/art?service=${encodeURIComponent(art.service)}&id=${encodeURIComponent(art.id)}"
+         alt="" loading="lazy" onerror="this.closest('.mq-art').remove()"></div>`
+    : '';
+
+  return `<div class="mq${poster ? ' has-art' : ''}">
+      ${poster}
+      <div class="mq-text">
+        <p class="mq-kicker">${escapeHtml(kicker)}</p>
+        <h3 class="mq-head">${escapeHtml(head)}</h3>
+        <p class="mq-meta">${escapeHtml(meta)}</p>
+        ${rest ? `<div class="mq-rest">${rest}${more ? `<span>+${more} more</span>` : ''}</div>` : ''}
+      </div>
+    </div>
+    ${foot.length ? `<div class="mq-foot">${foot.join('')}</div>` : ''}`;
 }
 
 function renderInsights(data) {
@@ -4119,18 +4063,12 @@ function renderInsights(data) {
 
   if (!insightsOn()) { card.hidden = true; return; }
 
-  const panels = [
-    panelOn('transfers') ? transfersPanel(data.qbittorrent) : '',
-    panelOn('queues') ? queuesPanel(data) : '',
-    panelOn('upcoming') ? upcomingPanel(data) : '',
-  ].filter(Boolean);
+  const view = marqueeView(data);
+  card.hidden = !view;
+  if (!view) return;
 
-  // Nothing to say: no media apps installed, or every panel switched off.
-  // Hiding beats an empty card asking to be configured.
-  card.hidden = !panels.length;
-  if (!panels.length) return;
-
-  box.innerHTML = panels.join('');
+  box.innerHTML = view;
+  box.classList.add('is-marquee');
   $('#pulse-time').textContent = new Date(data.at).toLocaleTimeString();
 }
 

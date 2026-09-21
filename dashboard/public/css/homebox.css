@@ -681,48 +681,48 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 
 /* Right now */
 .pulse { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
-.pulse-part { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.8rem 0.9rem; background: var(--well); min-width: 0; }
-.pulse-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.7rem; }
-.pulse-head-art, .queue-art { width: 30px; height: 30px; padding: 5px; border-radius: 8px; background: var(--plate); flex: none; }
-.pulse-head-art img, .queue-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.pulse-head-text { display: flex; flex-direction: column; line-height: 1.2; }
-.pulse-head-text small { color: var(--muted); font-size: 0.78rem; }
-.pulse-note { color: var(--muted); font-size: 0.85rem; }
-.speeds { display: flex; gap: 1rem; margin-bottom: 0.5rem; align-items: baseline; }
-.speed { display: flex; align-items: baseline; gap: 0.3rem; }
-.speed strong { font-size: 1.05rem; }
-.speed span { color: var(--muted); font-size: 0.8rem; }
-.speed-dir.is-down { color: var(--good); }
-.speed-dir.is-up { color: var(--accent-text); }
-.speed.is-quiet strong { color: var(--text-2); font-size: 0.95rem; }
-.chart { width: 100%; height: 44px; display: block; }
-.chart-area { fill: color-mix(in srgb, var(--good) 20%, transparent); }
-.chart-down { fill: none; stroke: var(--good); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
-.chart-up { fill: none; stroke: var(--accent-text); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
-.chart-legend { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.72rem; margin: 0.15rem 0 0.6rem; }
-.torrent { padding: 0.45rem 0; border-top: 1px solid var(--line); }
-.torrent-top { display: flex; justify-content: space-between; gap: 0.6rem; font-size: 0.84rem; }
-.torrent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.torrent-eta { color: var(--muted); flex: none; font-size: 0.76rem; }
-.progressbar { height: 5px; border-radius: 3px; background: var(--surface-2); margin: 0.3rem 0; overflow: hidden; }
-.progressbar span { display: block; height: 100%; background: var(--accent); }
-.torrent-foot { color: var(--muted); font-size: 0.74rem; }
-.queue-row { display: flex; align-items: center; gap: 0.55rem; padding: 0.4rem 0; border-top: 1px solid var(--line); font-size: 0.86rem; flex-wrap: wrap; }
-.queue-art { width: 24px; height: 24px; padding: 3px; border-radius: 6px; }
-.queue-app { font-weight: 600; }
-.queue-nums { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
-.queue-nums b { color: var(--text); font-weight: 600; }
-.soon-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 0.55rem; align-items: baseline; padding: 0.38rem 0; border-top: 1px solid var(--line); font-size: 0.85rem; }
-.soon-dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--muted); align-self: center; }
-.soon-dot.is-have { background: var(--good); border-color: var(--good); }
-.soon-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.soon-detail { grid-column: 2; color: var(--muted); font-size: 0.78rem; }
-.soon-when { grid-column: 3; grid-row: 1; color: var(--accent-text); font-size: 0.78rem; white-space: nowrap; }
+/* The marquee is one band, not a grid of panels. */
+.pulse.is-marquee { display: block; }
 
-/* Running containers */
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 0.8rem;
-  padding: 0.55rem 0.2rem; border-bottom: 1px solid var(--line);
+/* Right now, as a marquee.
+   No wash. It had a violet one, and violet meant nothing a reader could work
+   out — the greeting band is coloured because the colour IS the accent you
+   picked, and there was no such reason here. The poster brings whatever
+   colour this band has, which is the only colour in it that means something.
+   So the band is the panel: no surface of its own, no border, no tint. */
+.mq { position: relative; padding: 0.2rem 0 0; }
+/* With artwork the band becomes a poster and its caption. The image is a
+   fixed aspect ratio (2:3, which is what both *arr apps store) so a series
+   whose art is a different shape is cropped rather than stretched. */
+.mq.has-art { display: flex; gap: 1.3rem; align-items: center; }
+.mq-art { width: 104px; flex: none; }
+.mq-art img { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; box-shadow: 0 10px 26px -12px rgba(0, 0, 0, 0.9); }
+.mq-text { min-width: 0; flex: 1; }
+.mq-kicker { margin: 0; font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); font-weight: 700; }
+.mq-head { margin: 0.3rem 0 0.1rem; font-size: 1.75rem; font-weight: 650; letter-spacing: -0.025em; line-height: 1.2; }
+.mq-meta { margin: 0; color: var(--text-2); font-size: 0.86rem; }
+.mq-rest { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.15rem; }
+.mq-rest span { background: var(--well); box-shadow: inset 0 0 0 1px var(--line); border-radius: 999px; padding: 0.28rem 0.75rem; font-size: 0.76rem; color: var(--text-2); }
+.mq-rest span b { color: var(--text); font-weight: 600; }
+.mq-foot { display: flex; flex-wrap: wrap; gap: 1.3rem; margin-top: 0.9rem; font-size: 0.83rem; color: var(--text-2); }
+.mq-foot b { color: var(--text); }
+@media (max-width: 720px) {
+  .mq.has-art { gap: 0.9rem; align-items: flex-start; }
+  .mq-art { width: 72px; }
+  .mq-head { font-size: 1.4rem; }
 }
+
+/* The three cards this panel used to be — Transfers, Queues and Upcoming,
+   each in its own frame with its own heading, speed readouts, a sparkline,
+   progress bars and a list of dates — are gone with their markup. The panel
+   is one marquee now; see .mq above.
+
+   Removed with them: an orphaned rule that had lost its selector. A comment
+   reading "Running containers" was followed by two declarations and a closing
+   brace with nothing to apply them to — left behind when the process list was
+   taken out, and present since 0.4.23. A block like that is not inert: the
+   parser reads forward looking for the selector's opening brace and eats
+   whatever it passes on the way. */
 
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.5rem; }
 .fact { background: var(--well); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 0.5rem 0.7rem; min-width: 0; }

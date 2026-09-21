@@ -1114,6 +1114,39 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // One poster, from Radarr or Sonarr, through this process.
+    //
+    // The page's own CSP allows images from 'self' and nothing else, which is
+    // the rule that decides the shape of this: the alternative is thetvdb.com
+    // in an <img>, and that both breaks the policy and tells someone else's
+    // server what this house is watching.
+    //
+    // Two values reach the fetcher, a service NAME from a set of two and an
+    // integer, and lib/insights.js checks both again before it builds a path.
+    // Nothing here accepts a host, a path or a URL — an image endpoint that
+    // did would be a request forgery with a friendly name.
+    if (route === '/api/insights/art') {
+      const service = url.searchParams.get('service') || '';
+      const id = Number(url.searchParams.get('id'));
+      try {
+        const body = await insights.poster(service, id);
+        res.writeHead(200, {
+          ...BASE_HEADERS,
+          'content-type': 'image/jpeg',
+          'content-length': body.length,
+          // The artwork for a series does not change, and this card repolls
+          // every ten seconds.
+          'cache-control': 'private, max-age=86400',
+        });
+        return res.end(body);
+      } catch (err) {
+        // A missing poster is ordinary — a series added a minute ago, or an
+        // *arr that has not reached its artwork source. The page falls back
+        // to a monogram, so this must not read as a fault.
+        return sendJson(res, 404, { error: err.message });
+      }
+    }
+
     // --- Podhouse itself ---
     //
     // GET  /api/platform          cached answer + progress + history
