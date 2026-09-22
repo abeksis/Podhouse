@@ -5390,9 +5390,7 @@ $('#quick-form').addEventListener('submit', submitQuickForm);
 $('#password-form').addEventListener('submit', submitPasswordChange);
 state.launcherPrefs = readLauncherPrefs();
 
-['#live-enabled', '#live-transfers', '#live-queues', '#live-upcoming'].forEach((sel) => {
-  $(sel).addEventListener('change', saveInsightPrefs);
-});
+$('#live-enabled').addEventListener('change', saveInsightPrefs);
 $('#pulse-panel').addEventListener('click', (event) => {
   // The timestamp is the refresh control: clicking it drops the server-side
   // caches and asks every app again, which is what someone wants when they
