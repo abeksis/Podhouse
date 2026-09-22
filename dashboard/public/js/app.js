@@ -1702,47 +1702,317 @@ function actionsFor(mod) {
 
 let configSchema = null;
 
-async function loadConfig() {
-  if (!$('#config-groups')) return;
-  try {
-    configSchema = await (await fetch('api/config')).json();
-  } catch {
-    return;
+/**
+ * The schema, split the way a person thinks about it.
+ *
+ * The server returns a group for EVERY module in the catalog — forty of them
+ * on a box with sixteen installed — because the variables exist whether or
+ * not the app does. Settings for an app you do not have are noise on the
+ * page you come to for the ones you do, so they are kept, but out of the way.
+ */
+function cfgSplit(schema) {
+  const installed = new Set(state.modules.filter((m) => m.installed).map((m) => `module-${m.id}`));
+  const base = [];
+  const apps = [];
+  const other = [];
+  for (const g of schema.groups) {
+    if (!g.id.startsWith('module-')) base.push(g);
+    else if (installed.has(g.id)) apps.push(g);
+    else other.push(g);
   }
-  $('#config-file-note').innerHTML =
-    `Edited in place in <code class="mono">${escapeHtml(configSchema.file)}</code>. Comments and anything Podhouse does not know about are left alone. `
-    + 'Most changes need the affected app restarted before they take effect.';
-
-  $('#config-groups').innerHTML = configSchema.groups.map((group) => `
-    <fieldset class="env-group${group.dangerous ? ' is-sensitive' : ''}">
-      <legend class="env-group-title">
-        ${escapeHtml(group.title)}
-        ${group.dangerous ? '<span class="env-group-warn">holds security keys</span>' : ''}
-      </legend>
-      ${group.description ? `<p class="env-group-desc">${escapeHtml(group.description)}</p>` : ''}
-      ${group.keys.map(configRow).join('')}
-    </fieldset>`).join('');
+  return { base, apps, other };
 }
 
-function configRow(k) {
+/** One input. saveConfig collects every one of these that has changed. */
+function cfgInput(k, extraClass = '') {
   const id = `cfg-${k.key}`;
-  const input = `<input class="input" id="${escapeHtml(id)}" data-config-key="${escapeHtml(k.key)}"
+  return `<input class="input cfg-in${extraClass ? ` ${extraClass}` : ''}${k.secret ? '' : ' mono'}" id="${escapeHtml(id)}"
+    data-config-key="${escapeHtml(k.key)}"
     type="${k.secret ? 'password' : 'text'}"
     value="${escapeHtml(k.value || '')}"
     data-original="${escapeHtml(k.value || '')}"
     placeholder="${escapeHtml(k.placeholder || '')}"
     ${k.readonly ? 'disabled' : ''} autocomplete="off" spellcheck="false">`;
+}
 
-  return `<div class="env-row">
-    <label class="env-label" for="${escapeHtml(id)}">
-      ${escapeHtml(k.label || k.key)}
-      <span class="env-key mono">${escapeHtml(k.key)}</span>
-    </label>
-    ${k.secret
-      ? `<span class="env-secret">${input}<button type="button" class="button is-small" data-config-show="${escapeHtml(id)}">Show</button></span>`
-      : input}
-    ${k.hint ? `<p class="env-hint">${escapeHtml(k.hint)}</p>` : ''}
-  </div>`;
+/* --------------------------------------------- configuration: grouped lists */
+
+/**
+ * A row in a grouped list: what it is on the left, the value in the middle,
+ * the verb at the end.
+ *
+ * The value IS the input — styled to read as text until it has focus — so
+ * there is no edit mode to enter and leave. A secret is the exception: it
+ * shows dots and offers to be replaced, and only then becomes a field, because
+ * a password sitting in an input on a settings page is a password someone can
+ * read over your shoulder by clicking Show.
+ */
+function cfgListRow(k) {
+  const id = `cfg-${k.key}`;
+  const label = `<span class="cl-l">${escapeHtml(k.label || k.key)}${k.hint ? `<small>${escapeHtml(k.hint)}</small>` : ''}</span>`;
+  if (k.readonly) {
+    return `<div class="cl-row is-ro">${label}<span class="cl-v mono">${escapeHtml(k.value || '—')}</span><span class="cl-a"></span></div>`;
+  }
+  if (k.secret) {
+    return `<div class="cl-row is-secret" data-cfg-row="${escapeHtml(k.key)}">${label}
+      <span class="cl-v"><span class="cl-dots" aria-label="hidden">${k.value ? '••••••••••' : '<em>not set</em>'}</span>${cfgInput(k, 'cl-in')}</span>
+      <button type="button" class="cl-a linkish" data-cfg-replace="${escapeHtml(id)}">${k.value ? 'Replace' : 'Set'}</button></div>`;
+  }
+  return `<div class="cl-row" data-cfg-row="${escapeHtml(k.key)}">${label}
+    <span class="cl-v">${cfgInput(k, 'cl-in')}</span>
+    <button type="button" class="cl-a linkish" data-cfg-focus="${escapeHtml(id)}">${k.value ? 'Change' : 'Set'}</button></div>`;
+}
+
+function cfgListGroup(g) {
+  return `<section class="cl-group" data-cfg-group="${escapeHtml(g.id)}">
+    <p class="cl-t">${escapeHtml(g.title)}${g.dangerous ? ' <span class="cl-warn">holds security keys</span>' : ''}</p>
+    <div class="cl">${g.keys.map(cfgListRow).join('')}</div>
+    ${g.description && !g.id.startsWith('module-') ? `<p class="cl-desc">${escapeHtml(g.description)}</p>` : ''}
+  </section>`;
+}
+
+function cfgIdentityView(split) {
+  return `
+    ${split.base.map(cfgListGroup).join('')}
+    ${split.apps.length ? `<h3 class="cl-h">Your apps</h3>${split.apps.map(cfgListGroup).join('')}` : ''}
+    ${split.other.length ? `<details class="cl-other"><summary>Settings for apps you have not installed <span class="mono">${split.other.length}</span></summary>
+      ${split.other.map(cfgListGroup).join('')}</details>` : ''}`;
+}
+
+/* ----------------------------------------------------------- the page */
+
+/**
+ * The icons the Settings band draws. Stroke paths on a 24-unit grid, the same
+ * weight as the sidebar's — no icon font, because this box works offline and
+ * a font that fails to load leaves a row of empty squares.
+ */
+const BAND_ICONS = {
+  // one per tab, drawn large and faint on the right of the band
+  general: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+  quick: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  launcher: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+  catalog: '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/>',
+  server: '<rect x="3.5" y="4" width="17" height="6" rx="1.5"/><rect x="3.5" y="14" width="17" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
+  network: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.6 3.5 5.4 3.5 8.5s-1.1 5.9-3.5 8.5c-2.4-2.6-3.5-5.4-3.5-8.5s1.1-5.9 3.5-8.5z"/>',
+  backup: '<path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3z"/><path d="M4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  passwords: '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3M12 14.5v2.5"/>',
+  monitoring: '<path d="M3 12h4l2.5-6 3 12 2.5-6h6"/>',
+  tools: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5l3 3 5.8-5.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/>',
+  // one per fact
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  plug: '<path d="M9 3.5v4M15 3.5v4M6.5 7.5h11v3a5.5 5.5 0 0 1-11 0zM12 16v4.5"/>',
+  cube: '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/>',
+  grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  drop: '<path d="M12 3.5s6 6.2 6 10.5a6 6 0 0 1-12 0c0-4.3 6-10.5 6-10.5z"/>',
+  tag: '<path d="M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9z"/><path d="M8 8h.01"/>',
+  eyeoff: '<path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c5 0 8.5 4.5 9.5 7a14 14 0 0 1-3 4.2M6.6 6.6A13.6 13.6 0 0 0 2.5 12c1 2.5 4.5 7 9.5 7a9.7 9.7 0 0 0 4.4-1"/>',
+  pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  check: '<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.7 2.7L16 9.8"/>',
+  host: '<rect x="3.5" y="4.5" width="17" height="11" rx="1.5"/><path d="M8 20h8M12 15.5V20"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l8.5-8.5M16 7l2.5 2.5M14 9l2 2"/>',
+  stack: '<path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3z"/><path d="M4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  play: '<circle cx="12" cy="12" r="8.5"/><path d="M10 8.5v7l6-3.5z"/>',
+  lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+};
+
+const bandIcon = (name, cls = 'band-ic') => (BAND_ICONS[name]
+  ? `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${BAND_ICONS[name]}</svg>` : '');
+
+/**
+ * The band across the top of Settings, one per tab.
+ *
+ * It started on Configuration alone, and a tab that looked unlike the nine
+ * beside it read as a different product. So every tab has one — but NOT the
+ * same one: "This box" ten times over would be the same sentence ten times.
+ * Each says the single thing its tab is about.
+ *
+ * Every figure carries an icon, and the tab carries a large one of its own on
+ * the right. The icons are labels, not decoration: the one on the right is the
+ * same glyph the tab is known by, and each small one says what KIND of thing
+ * the figure beside it is before you read the word.
+ *
+ * Everything here is read from data the page already holds. A tab whose data
+ * has not arrived yet gets its sentence without the number rather than a
+ * spinner in a banner.
+ */
+function renderTabBand(tab = state.settingsTab) {
+  const band = $('#tab-band');
+  if (!band) return;
+  const s = state.summary || {};
+  const c = s.config || {};
+  const counts = s.counts || {};
+  const b = s.backups || {};
+
+  let kicker = '';
+  let head = '';
+  let facts = [];
+  switch (tab) {
+    case 'general': {
+      const p = state.prefs || {};
+      const cap = (v) => (v ? v[0].toUpperCase() + v.slice(1) : v);
+      kicker = 'General';
+      head = `Podhouse <b>v${escapeHtml(s.version || '')}</b>`;
+      facts = [['moon', 'Theme', cap(p.theme)], ['drop', 'Accent', cap(p.accent)], ['grid', 'Apps', counts.installed != null ? `${counts.installed} installed` : '']];
+      break;
+    }
+    case 'quick': {
+      const links = state.bookmarks || [];
+      const groups = new Set(links.map((l) => (l.subtitle || '').trim() || 'Other'));
+      kicker = 'Links';
+      head = links.length ? `<b>${links.length}</b> ${links.length === 1 ? 'link' : 'links'} on the Overview` : 'No links yet';
+      if (links.length) facts = [['tag', 'Groups', String(groups.size)]];
+      break;
+    }
+    case 'launcher': {
+      const lp = state.launcherPrefs || {};
+      kicker = 'Your apps';
+      head = 'What the Overview lists, and what it calls them';
+      facts = [
+        ['grid', 'On the Overview', counts.installed != null ? String(Math.max(0, counts.installed - (lp.hidden || []).length)) : ''],
+        ['eyeoff', 'Hidden', String((lp.hidden || []).length)],
+        ['pencil', 'Renamed', String(Object.keys(lp.overrides || {}).length)],
+      ];
+      break;
+    }
+    case 'catalog':
+      kicker = 'Catalog';
+      head = counts.modules ? `<b>${counts.modules}</b> apps you can install` : 'Apps you can install';
+      if (counts.modules) facts = [['check', 'Installed', String(counts.installed || 0)], ['cube', 'Not yet', String(Math.max(0, counts.modules - (counts.installed || 0)))]];
+      break;
+    case 'server':
+      kicker = 'This box';
+      head = `Installed in <b class="mono">${escapeHtml(c.root || '—')}</b>`;
+      facts = [
+        ['clock', 'Timezone', c.timezone],
+        ['plug', 'Dashboard', c.port ? `port ${c.port}` : ''],
+        // "unreachable" only once the server has said so, not before it has said anything.
+        ['cube', 'Docker', s.docker ? s.docker.version : (state.summary ? 'unreachable' : '')],
+        ['grid', 'Apps', counts.installed != null ? `${counts.installed} installed` : ''],
+      ];
+      break;
+    case 'network':
+      kicker = 'Network';
+      head = s.host && s.host.address ? `Reachable at <b class="mono">${escapeHtml(s.host.address)}</b>` : 'How this box is reached';
+      facts = [['host', 'Name', s.host && s.host.name], ['plug', 'Dashboard', c.port ? `port ${c.port}` : '']];
+      break;
+    case 'backup':
+      kicker = 'Backups';
+      head = !s.backups ? 'Copies of this box, kept safe'
+        : !b.hasKey ? 'No backup key is set yet'
+        : !b.latest ? 'Nothing has been backed up yet'
+          : `Last backed up <b>${escapeHtml(ago(b.latest.created))} ago</b>`;
+      // Nothing until the server has answered: before then "Key: not set" and
+      // "Automatic: off" are not facts about this box, they are the defaults
+      // of an empty object, and they read exactly like a problem.
+      if (s.backups) {
+        facts = [
+          ['stack', 'Kept', b.count != null ? `${b.count} ${b.count === 1 ? 'archive' : 'archives'}` : ''],
+          ['calendar', 'Automatic', b.scheduled ? 'on' : 'off'],
+          ['key', 'Key', b.hasKey ? 'set' : 'not set'],
+        ];
+      }
+      break;
+    case 'passwords':
+      kicker = 'Passwords';
+      head = 'The accounts Podhouse made for you';
+      facts = [['lock', 'Stored in', '.env, mode 600']];
+      break;
+    case 'monitoring':
+      kicker = 'Health';
+      head = s.health ? `<b>${escapeHtml(s.health.title)}</b>` : 'How the box is doing';
+      facts = [
+        ['play', 'Running', counts.containers != null ? `${counts.running} of ${counts.containers}` : ''],
+        ['grid', 'Apps', counts.installed != null ? `${counts.installed} installed` : ''],
+      ];
+      break;
+    case 'tools':
+      kicker = 'Tools';
+      head = 'Clean up, and get back in';
+      break;
+    default:
+      band.hidden = true;
+      return;
+  }
+
+  const shown = facts.filter(([, , v]) => v !== undefined && v !== null && v !== '');
+  band.hidden = false;
+  band.innerHTML = `
+    ${bandIcon(tab, 'band-mark')}
+    <p class="cfg-k">${escapeHtml(kicker)}</p>
+    <h3 class="cfg-h">${head}</h3>
+    ${shown.length ? `<div class="cfg-row">${shown.map(([ic, k, v]) => `
+      <div class="band-fact">
+        <span class="band-plate">${bandIcon(ic)}</span>
+        <span>${escapeHtml(k)}<b>${escapeHtml(String(v))}</b></span>
+      </div>`).join('')}</div>` : ''}`;
+  band.classList.toggle('has-facts', shown.length > 0);
+}
+
+/**
+ * Every panel on Settings as a label over a surface.
+ *
+ * That is the look the Configuration tab was given and liked, and the other
+ * tabs had framed cards with the title inside the frame. Rather than rewrite
+ * twenty-three panels' markup by hand, each panel's content is moved into one
+ * body element once, at startup: the nodes are MOVED, not copied, so every id
+ * and every listener already attached comes along unchanged.
+ */
+function settingsPanelsAsGroups() {
+  $$('#screen-settings .subpage .panel').forEach((panel) => {
+    const head = panel.querySelector(':scope > .panel-head');
+    if (!head || panel.querySelector(':scope > .panel-body')) return;
+    const body = document.createElement('div');
+    body.className = 'panel-body';
+    while (head.nextSibling) body.appendChild(head.nextSibling);
+    panel.appendChild(body);
+    panel.classList.add('is-group');
+  });
+}
+
+async function loadConfig() {
+  const root = $('#config-groups');
+  if (!root) return;
+  try {
+    configSchema = await (await fetch('api/config')).json();
+  } catch {
+    return;
+  }
+  const split = cfgSplit(configSchema);
+  root.innerHTML = cfgIdentityView(split);
+  cfgDirty();
+}
+
+/**
+ * The save bar: how many values differ from the file, and the two ways out.
+ *
+ * It exists only while something has changed. A Save button that is always
+ * there is a button people press to find out whether it does anything.
+ */
+function cfgDirty() {
+  const changed = $$('#config-groups [data-config-key]').filter((i) => !i.disabled && i.value !== i.dataset.original);
+  const bar = $('#cfg-bar');
+  if (bar) {
+    bar.hidden = !changed.length;
+    $('#cfg-bar-count').textContent = `${changed.length} change${changed.length === 1 ? '' : 's'}`;
+  }
+  // Mark the row, and in the editor the group it belongs to, so a change made
+  // three groups ago is still findable.
+  $$('#config-groups [data-cfg-row]').forEach((row) => {
+    const input = row.querySelector('[data-config-key]');
+    row.classList.toggle('is-changed', !!input && input.value !== input.dataset.original);
+  });
+  $$('#config-groups [data-cfg-mark]').forEach((mark) => {
+    const pane = $(`#config-groups [data-cfg-group="${mark.dataset.cfgMark}"]`);
+    mark.classList.toggle('is-changed', !!pane && !!pane.querySelector('.is-changed'));
+  });
+}
+
+function cfgDiscard() {
+  $$('#config-groups [data-config-key]').forEach((i) => { i.value = i.dataset.original; });
+  $$('#config-groups .is-replacing').forEach((row) => row.classList.remove('is-replacing'));
+  cfgDirty();
 }
 
 async function saveConfig() {
@@ -2905,6 +3175,7 @@ function showSettingsTab(tab) {
   state.settingsTab = tab;
   $$('.subnav-item').forEach((b) => b.classList.toggle('is-current', b.dataset.stab === tab));
   $$('.subpage').forEach((p) => p.classList.toggle('is-shown', p.dataset.stabPanel === tab));
+  renderTabBand(tab);
 }
 
 /**
@@ -2918,34 +3189,11 @@ function renderSettings() {
   const cfg = summary.config || {};
   const host = summary.host.address;
 
-  // --- Server config ---
-  const serverConfig = $('#server-config');
-  if (serverConfig) {
-    serverConfig.innerHTML = kvRows([
-      ['Install root', cfg.root],
-      ['Modules', cfg.modulesDir],
-      ['Data pool', cfg.dataDir],
-      ['Timezone', cfg.timezone],
-      ['Dashboard port', cfg.port],
-      ['Docker', summary.docker ? `${summary.docker.version} · API ${summary.docker.apiVersion} · ${summary.docker.arch}` : 'unreachable'],
-    ]);
-  }
-  const tree = $('#server-tree');
-  if (tree) {
-    tree.textContent = [
-      `${cfg.root}/`,
-      '├── homebox              the CLI',
-      '├── install.sh           clean Debian to running Podhouse',
-      '├── .env                 generated secrets, mode 600',
-      '├── modules/<id>/',
-      '│   ├── docker-compose.yml   services + x-homebox metadata',
-      '│   ├── setup.sh             optional, seeds what an image will not',
-      '│   └── config/<app>/        that app config, inside its module',
-      '├── data/                shared pool: media, photos, downloads',
-      '├── dashboard/           this UI',
-      '└── state/               enabled list, activity, prefs',
-    ].join(NL);
-  }
+  // --- Configuration ---
+  // The Paths list and the ASCII tree that used to be drawn here said every
+  // folder twice. What is left is the band at the top of the identity design;
+  // the editor carries the same facts under its group list.
+  renderTabBand();
 
   // --- Network ---
   const netGrid = $('#settings-net-facts');
@@ -3227,6 +3475,12 @@ async function removeDialog(title, id) {
 
 // The checkbox lives inside a dialog that is gone by the time the promise
 // settles, so its state is captured on change.
+// Every keystroke in a setting updates the save bar, so the count is right
+// before the field loses focus rather than after.
+document.addEventListener('input', (event) => {
+  if (event.target.closest('#config-groups [data-config-key]')) cfgDirty();
+});
+
 document.addEventListener('change', (event) => {
   if (event.target.id === 'remove-erase-box') removeDialog.erase = event.target.checked;
   // One checkbox, one save. The page changes before the round trip finishes,
@@ -5147,6 +5401,22 @@ document.addEventListener('click', async (event) => {
     return;
   }
   if (event.target.closest('#config-save')) return saveConfig();
+  if (event.target.closest('#cfg-discard')) return cfgDiscard();
+  const cfgReplace = event.target.closest('[data-cfg-replace]');
+  if (cfgReplace) {
+    // A secret becomes a field only when someone asks to replace it, and it
+    // opens EMPTY: the point is a new value, not reading the old one.
+    const row = cfgReplace.closest('.cl-row');
+    const field = document.getElementById(cfgReplace.dataset.cfgReplace);
+    row.classList.add('is-replacing');
+    field.value = '';
+    field.type = 'text';
+    field.focus();
+    cfgDirty();
+    return undefined;
+  }
+  const cfgFocus = event.target.closest('[data-cfg-focus]');
+  if (cfgFocus) { const f = document.getElementById(cfgFocus.dataset.cfgFocus); f.focus(); f.select(); return undefined; }
 
   const showBtn = event.target.closest('[data-config-show]');
   if (showBtn) {
@@ -5369,6 +5639,7 @@ $('#catalog-form').addEventListener('submit', submitCatalogForm);
 $('#quick-form').addEventListener('submit', submitQuickForm);
 $('#password-form').addEventListener('submit', submitPasswordChange);
 state.launcherPrefs = readLauncherPrefs();
+settingsPanelsAsGroups();
 
 $('#live-enabled').addEventListener('change', saveInsightPrefs);
 $('#pulse-panel').addEventListener('click', (event) => {

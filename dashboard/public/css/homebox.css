@@ -1041,24 +1041,183 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .form-label { color: var(--text-2); font-size: 0.86rem; }
 .mount-form .select { width: 100%; }
 
-.raw-config { margin-top: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-l); }
-.raw-config-summary { display: flex; flex-direction: column; padding: 0.85rem 1.1rem; cursor: pointer; list-style: none; }
-.raw-config-summary::-webkit-details-marker { display: none; }
-.raw-config-summary::before { content: "▸"; float: left; color: var(--muted); margin-right: 0.4rem; }
-.raw-config[open] .raw-config-summary::before { content: "▾"; }
-.raw-config-title { font-weight: 600; }
-.raw-config-sub { color: var(--muted); font-size: 0.85rem; }
-.raw-config-body { padding: 0 1.1rem 1.1rem; }
-.env-group { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.4rem 0.9rem 0.8rem; margin: 0 0 0.9rem; }
-.env-group.is-sensitive { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
-.env-group-title { font-weight: 600; padding: 0 0.3rem; }
-.env-group-warn { margin-left: 0.5rem; font-size: 0.72rem; font-weight: 600; color: var(--warn); }
-.env-group-desc { color: var(--muted); font-size: 0.85rem; margin: 0.2rem 0 0.4rem; }
-.env-row { display: grid; grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr); gap: 0.2rem 0.9rem; align-items: center; padding: 0.35rem 0; }
-.env-label { display: flex; flex-direction: column; font-size: 0.86rem; }
-.env-key { color: var(--muted); font-size: 0.72rem; }
-.env-secret { display: flex; gap: 0.4rem; }
-.env-hint { grid-column: 2; color: var(--muted); font-size: 0.8rem; }
+/* ------------------------------------------------------------- Settings
+   One language for every tab: a band that says what the tab is about, then
+   groups — a small label, and the content on a surface under it. It began on
+   Configuration alone, and a tab that looked unlike the nine beside it read
+   as a different product.
+
+   The disclosure Configuration used to have drew its triangle with
+   `::before { float: left }` inside a flex column, which is why it sat alone
+   on a line of its own above the title it belonged to. */
+
+/* The band. Lit like the greeting on the Overview. */
+.tab-band {
+  position: relative; border-radius: var(--radius-l); padding: 1.5rem 1.7rem; margin: 0 0 1.5rem;
+  background:
+    radial-gradient(circle at 92% -40%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 60%),
+    linear-gradient(120deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface) 55%);
+}
+.cfg-k { margin: 0; font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); font-weight: 700; }
+.cfg-h { margin: 0.3rem 0 0; font-size: 1.85rem; font-weight: 300; letter-spacing: -0.02em; }
+.cfg-h b { font-weight: 600; }
+.cfg-h b.mono { font-size: 1.55rem; }
+.tab-band.has-facts .cfg-h { margin-bottom: 0.95rem; }
+.cfg-row { display: flex; flex-wrap: wrap; gap: 0.8rem 2.4rem; }
+.cfg-row div { font-size: 0.78rem; color: var(--muted); }
+.cfg-row b { display: block; color: var(--text); font-size: 1rem; font-weight: 600; margin-top: 0.1rem; }
+/* Icons in the band. Each figure sits beside a small plate carrying what
+   kind of thing it is; the tab's own glyph is drawn large and faint on the
+   right, the way a document carries its seal. The plate takes the accent
+   so the band stays one colour. */
+.tab-band { overflow: hidden; }
+.band-mark {
+  position: absolute; right: 2.2rem; top: 50%; width: 132px; height: 132px; margin-top: -66px;
+  fill: none; stroke: var(--accent-text); stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0.16; pointer-events: none;
+}
+.cfg-k, .cfg-h, .cfg-row { position: relative; }
+.band-fact { display: flex; align-items: center; gap: 0.7rem; }
+.band-plate {
+  width: 36px; height: 36px; flex: none; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.band-ic { width: 18px; height: 18px; fill: none; stroke: var(--accent-text); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 820px) { .band-mark { width: 84px; height: 84px; margin-top: -42px; right: 1rem; } }
+
+/* Every panel on a Settings tab: the frame goes, the title moves out above
+   the content, and the content sits on a surface. settingsPanelsAsGroups()
+   in app.js puts the content into .panel-body so there is one thing to paint. */
+#screen-settings .panel.is-group { background: none; border: 0; box-shadow: none; padding: 0; }
+#screen-settings .panel.is-group > .panel-head { margin: 0 0 0.45rem 0.2rem; padding: 0; min-height: 0; }
+#screen-settings .panel.is-group > .panel-head .panel-title {
+  font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700;
+}
+#screen-settings .panel.is-group > .panel-body {
+  background: var(--surface); border-radius: var(--radius); padding: 1rem 1.1rem;
+}
+#screen-settings .panel.is-group > .panel-body > :first-child { margin-top: 0; }
+#screen-settings .panel.is-group > .panel-body > :last-child { margin-bottom: 0; }
+/* Things that were a surface of their own inside a card would now be a
+   surface on a surface; they sink one step instead. */
+#screen-settings .panel.is-group .fact,
+#screen-settings .panel.is-group .form-card,
+#screen-settings .panel.is-group .code-block { background: var(--bg-raised); }
+#screen-settings .subpage > .panel.is-group + .panel.is-group,
+#screen-settings .subpage > .cols + .panel.is-group,
+#screen-settings .subpage > .panel.is-group + .cols { margin-top: 1.4rem; }
+
+/* ---- Configuration: grouped lists edited in place */
+.cl-group { margin-bottom: 1.3rem; }
+.cl-t { margin: 0 0 0.45rem 0.2rem; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.cl-warn { margin-left: 0.5rem; font-size: 0.68rem; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--warn); }
+.cl { background: var(--surface); border-radius: var(--radius); overflow: hidden; }
+.cl-desc { margin: 0.45rem 0.2rem 0; color: var(--muted); font-size: 0.78rem; max-width: 90ch; }
+.cl-row { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr) auto; gap: 1rem; align-items: center; padding: 0.55rem 1rem; border-top: 1px solid var(--line); }
+.cl-row:first-child { border-top: 0; }
+.cl-l { font-size: 0.88rem; min-width: 0; }
+.cl-l small { display: block; color: var(--muted); font-size: 0.74rem; line-height: 1.35; margin-top: 0.1rem; }
+.cl-v { min-width: 0; font-size: 0.82rem; color: var(--text-2); }
+.cl-row.is-ro .cl-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The value is the input, dressed as text until it has focus. */
+.cl-in {
+  width: 100%; background: transparent; border: 1px solid transparent; border-radius: 7px;
+  padding: 0.32rem 0.5rem; margin-left: -0.5rem; font-size: 0.82rem; color: var(--text-2);
+}
+.cl-in::placeholder { color: var(--muted); font-style: italic; font-family: inherit; }
+.cl-in:hover { border-color: var(--line); }
+.cl-in:focus { background: var(--bg); border-color: var(--accent); color: var(--text); outline: none; }
+.cl-a { font-size: 0.8rem; color: var(--accent-text); white-space: nowrap; }
+.cl-dots { letter-spacing: 0.2em; color: var(--text-2); }
+.cl-dots em { letter-spacing: 0; color: var(--muted); }
+/* A secret stays dots until someone asks to replace it. */
+.cl-row.is-secret .cl-in { display: none; }
+.cl-row.is-secret.is-replacing .cl-in { display: block; }
+.cl-row.is-secret.is-replacing .cl-dots { display: none; }
+.cl-row.is-changed { background: color-mix(in srgb, var(--warn) 7%, transparent); }
+.cl-row.is-changed .cl-l::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); margin-right: 0.45rem; vertical-align: middle; }
+.cl-h { margin: 1.9rem 0 0.9rem; font-size: 1.05rem; font-weight: 600; }
+.cl-other { margin-top: 1.6rem; }
+.cl-other > summary { cursor: pointer; color: var(--muted); font-size: 0.86rem; padding: 0.4rem 0.2rem; }
+.cl-other > summary .mono { font-size: 0.72rem; margin-left: 0.3rem; }
+.cl-other[open] > summary { margin-bottom: 0.9rem; }
+
+/* The save bar. Only while something differs from the file, and sticky so it
+   is still there after scrolling past forty groups. */
+.cfg-bar {
+  position: sticky; bottom: 0.8rem; z-index: 5; margin-top: 1.2rem;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem;
+  padding: 0.75rem 1rem 0.75rem 1.2rem; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warn) 10%, var(--bg-raised));
+  border: 1px solid color-mix(in srgb, var(--warn) 38%, transparent);
+  box-shadow: var(--shadow);
+}
+.cfg-bar-msg { font-size: 0.86rem; color: var(--text-2); }
+.cfg-bar-msg b { color: var(--warn); }
+.cfg-bar-btns { margin-left: auto; display: flex; gap: 0.5rem; }
+
+@media (max-width: 820px) {
+  .tab-band { padding: 1.2rem 1.1rem; }
+  .cfg-h { font-size: 1.4rem; }
+  .cfg-h b.mono { font-size: 1.2rem; }
+  .cl-row { grid-template-columns: minmax(0, 1fr) auto; gap: 0.2rem 0.8rem; }
+  .cl-v { grid-column: 1; grid-row: 2; }
+  .cl-a { grid-column: 2; grid-row: 1 / span 2; }
+}
+
+/* Inside the surfaces: the same rows Configuration is made of.
+   A group on another tab is not a list of .env values, but it is still a list
+   of things — a fact and its value, a switch and what it does, a link and its
+   buttons — and those are drawn as the rows Configuration uses: full width,
+   a hairline between them, the label on the left. What each tab holds stays
+   its own; the way a row looks does not change from tab to tab. */
+#screen-settings .panel.is-group .panel-body .help { font-size: 0.8rem; margin-bottom: 0.7rem; }
+#screen-settings .panel.is-group .panel-body > .help:last-child { margin: 0.8rem 0 0; }
+
+/* A fact and its value: "Podhouse — v0.18.2". */
+#screen-settings .panel.is-group .kv {
+  grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr); gap: 0;
+  margin: -1rem -1.1rem; font-size: 0.86rem;
+}
+#screen-settings .panel.is-group .kv dt,
+#screen-settings .panel.is-group .kv dd { padding: 0.6rem 1.1rem; border-top: 1px solid var(--line); }
+#screen-settings .panel.is-group .kv dt:first-of-type,
+#screen-settings .panel.is-group .kv dd:first-of-type { border-top: 0; }
+#screen-settings .panel.is-group .kv dd { color: var(--text-2); }
+#screen-settings .panel.is-group .kv + .help { margin-top: 1.6rem; }
+
+/* The same, when it was drawn as a grid of little cards. A card on a surface
+   is a frame inside a frame; a row is not. */
+#screen-settings .panel.is-group .facts { grid-template-columns: 1fr; gap: 0; margin: -1rem -1.1rem; }
+#screen-settings .panel.is-group .fact {
+  display: grid; grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr); gap: 1rem; align-items: baseline;
+  background: none; border: 0; border-radius: 0; border-top: 1px solid var(--line); padding: 0.6rem 1.1rem;
+}
+#screen-settings .panel.is-group .fact:first-child { border-top: 0; }
+#screen-settings .panel.is-group .fact-key { font-size: 0.86rem; }
+#screen-settings .panel.is-group .fact-val { color: var(--text-2); }
+
+/* A switch and what it does. */
+#screen-settings .panel.is-group .switch-row { padding: 0.65rem 0; }
+#screen-settings .panel.is-group .switch-row:first-of-type { border-top: 0; }
+#screen-settings .panel.is-group .switch-row input { accent-color: var(--accent); }
+
+/* A setting with its choices — Mode, Accent, Background. */
+#screen-settings .panel.is-group .setting { margin: 0; padding: 1rem 0; border-top: 1px solid var(--line); }
+#screen-settings .panel.is-group .setting:first-child { padding-top: 0; border-top: 0; }
+#screen-settings .panel.is-group .setting:last-child { padding-bottom: 0; }
+#screen-settings .panel.is-group .setting-name { font-size: 0.9rem; }
+#screen-settings .panel.is-group .setting-help { font-size: 0.8rem; }
+#screen-settings .panel.is-group .choice { background: var(--bg-raised); }
+
+/* A thing in a list, with its buttons at the end. */
+#screen-settings .panel.is-group .list-row { padding: 0.6rem 0; }
+#screen-settings .panel.is-group .list-art { background: var(--bg-raised); }
+
+
+
 
 .mount { display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
 .mount-main { flex: 1; min-width: 0; }

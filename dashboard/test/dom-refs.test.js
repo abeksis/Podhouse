@@ -92,6 +92,17 @@ test('every element app.js names exists in the page', () => {
   );
 });
 
+test('a single element is never used as a list', () => {
+  // `$` returns one element and `$$` returns an array. `$('.subpage').forEach`
+  // is a TypeError on the first click, and it is exactly what a shell does to
+  // `$$` when an edit passes through it unquoted: a double dollar is the
+  // shell's own PID variable. It happened twice in one session, and the second
+  // time every Settings tab showed General's content whichever one was picked.
+  const bad = [...js.matchAll(/(^|[^$\w])\$\(([^()]*)\)\.(forEach|map|filter|some|every|reduce|find|findIndex|flatMap)\(/gm)]
+    .map((m) => `$(${m[2]}).${m[3]}`);
+  assert.deepStrictEqual(bad, [], `used as a list but only returns one element: ${bad.join(', ')}`);
+});
+
 test('the pattern that broke 0.18.0 is one this test can see', () => {
   // A guard on the guard, written against the line that actually shipped
   // rather than a tidier one. The first version of this test passed a sample

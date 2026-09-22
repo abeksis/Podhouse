@@ -446,6 +446,10 @@
       <button type="button" class="subnav-item" data-stab="tools">Tools</button>
     </div>
 
+    <!-- One band for the whole of Settings, rewritten for whichever tab is
+         open: each tab says the one thing it is about. See renderTabBand. -->
+    <section class="tab-band" id="tab-band" hidden></section>
+
     <!-- GENERAL -->
     <div class="subpage is-shown" data-stab-panel="general">
       <div class="cols">
@@ -613,36 +617,24 @@
     </div>
 
     <!-- CONFIGURATION -->
+    <!-- This tab used to say every path twice — a "Paths" list on the left and
+         an ASCII tree of the same folders on the right — and hid the one thing
+         you can actually DO here, editing the values, behind a disclosure
+         triangle that sat alone on its own line. The values are the page now.
+         The facts the list carried are in the band above them (identity) or
+         under the group list (editor); see CFG_DESIGN in app.js. -->
     <div class="subpage" data-stab-panel="server">
-      <div class="cols">
-        <section class="panel">
-          <div class="panel-head"><h2 class="panel-title">Paths</h2></div>
-          <dl class="kv" id="server-config"></dl>
-          <p class="help">Written once by <code class="mono">install.sh</code> into <code class="mono">/opt/podhouse/.env</code>. Change them below, or in that file followed by a restart of the app that uses them.</p>
-        </section>
-        <section class="panel">
-          <div class="panel-head"><h2 class="panel-title">Where things live</h2></div>
-          <p class="help">Each app is a folder with its compose file, its description and its config. Copying the folder copies the app.</p>
-          <code class="code-block" id="server-tree"></code>
-        </section>
-      </div>
+      <div id="config-groups" class="cfg-body"><p class="empty">Reading the settings&hellip;</p></div>
 
-      <!-- The raw file sits behind a toggle, closed by default: it holds
-           security keys and is rarely needed, but it is all there for whoever does. -->
-      <details class="raw-config" id="raw-config">
-        <summary class="raw-config-summary">
-          <span class="raw-config-title">Edit .env values</span>
-          <span class="raw-config-sub">For paths, ports and app settings. Rarely needed.</span>
-        </summary>
-        <div class="raw-config-body">
-          <p class="help" id="config-file-note"></p>
-          <div id="config-groups"></div>
-          <div class="form-actions">
-            <button type="button" class="button is-primary" id="config-save">Save</button>
-            <span class="status-text" id="config-save-status"></span>
-          </div>
-        </div>
-      </details>
+      <!-- Only while something differs from the file. -->
+      <div class="cfg-bar" id="cfg-bar" hidden>
+        <span class="cfg-bar-msg"><b id="cfg-bar-count">0 changes</b> not saved yet &middot; apps that use them restart when you save</span>
+        <span class="status-text" id="config-save-status"></span>
+        <span class="cfg-bar-btns">
+          <button type="button" class="button" id="cfg-discard">Discard</button>
+          <button type="button" class="button is-primary" id="config-save">Save</button>
+        </span>
+      </div>
     </div>
 
     <!-- NETWORK -->
@@ -863,7 +855,7 @@
               <tbody id="secrets-body"></tbody>
             </table>
           </div>
-          <p class="help">Settings that are not passwords &mdash; user IDs, addresses, a game server&rsquo;s difficulty &mdash; are not listed here. They live in Configuration, under &ldquo;Edit .env values&rdquo;.</p>
+          <p class="help">Settings that are not passwords &mdash; user IDs, addresses, a game server&rsquo;s difficulty &mdash; are not listed here. They live in Configuration.</p>
         </section>
       </div>
     </div>
