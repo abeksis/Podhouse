@@ -13,6 +13,17 @@ other people. This is the checklist.
 
 ## Cutting a release
 
+0. **Run the tests, and open the page.** `cd dashboard && npm test`. One of them —
+   `test/dom-refs.test.js` — cross-references every `'#id'` in `app.js` against the
+   markup, because a selector left pointing at a removed element throws during
+   startup and takes the WHOLE dashboard with it, blank, on every box that takes
+   the release. That is not hypothetical: it is 0.18.0.
+
+   Then load the page in a browser and read the console. `node --check` passes a
+   file with a dangling selector, the test suite does not open the page, and
+   confirming that the new asset is being SERVED confirms nothing — all three of
+   those passed while the dashboard was dead.
+
 1. **Write the migration first, if the release needs one.** `migrations/<version>/up.sh`
    — see `migrations/README.md`. Anything that changes an existing `.env` value or moves
    a config file needs one, because `install.sh` never overwrites.

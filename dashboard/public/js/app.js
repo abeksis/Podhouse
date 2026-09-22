@@ -1693,29 +1693,10 @@ function actionsFor(mod) {
   return out.join('');
 }
 
-/* ------------------------------------------------------- system actions */
-
-function updatePortainerAction() {
-  const link = $('#open-portainer');
-  if (!link) return;
-  const core = state.modules.find((m) => m.id === 'core');
-  const svc = core && core.installed ? core.services.find((x) => x.name === 'portainer' && x.url) : null;
-  if (svc) {
-    link.href = svc.url;
-    link.target = '_blank';
-    // noreferrer as well, for the same reason every other outbound link on
-    // this page carries it: an app with a strict referer check refuses a
-    // request that says it came from the dashboard's port.
-    link.rel = 'noopener noreferrer';
-    delete link.dataset.page;
-    link.title = 'Open Portainer';
-  } else {
-    link.href = '#apps';
-    link.removeAttribute('target');
-    link.dataset.page = 'apps';
-    link.title = 'Portainer is part of the Core module';
-  }
-}
+/* updatePortainerAction lived here. The link it configured, #open-portainer,
+   was taken out of index.html a while ago; the function kept running on every
+   module refresh, found nothing and returned. Found by test/dom-refs.test.js,
+   which is the whole reason that test exists. */
 
 /* ------------------------------------------------ raw configuration editor */
 
@@ -3365,7 +3346,6 @@ function loadModules(force = false) {
       renderLogPicker();
       renderLauncher(state.modules);
       renderModuleErrors(data.errors || []);
-      updatePortainerAction();
       renderSettings();
       // The two content editors list modules too, and they follow the same
       // rule as the rest of Settings: rendered from data already on the page,
