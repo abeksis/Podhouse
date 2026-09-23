@@ -33,6 +33,9 @@ const path = require('path');
 const { SOCKET_PATH, framer, encode, ROOT } = require('./lib/worker-protocol');
 const compose = require('./lib/compose-privileged');
 const storage = require('./lib/storage-privileged');
+// Here the Docker library talks to the real socket: HB_DOCKER_API is not set
+// in this container, so lib/docker-endpoint.js falls back to it.
+const docker = require('./lib/docker');
 
 const log = (...parts) => console.log('[worker]', ...parts);
 
@@ -79,6 +82,17 @@ const ops = {
   // The platform updater. A version, and nothing else: the command around it
   // is fixed in lib/storage-privileged.js.
   'platform.selfUpdate': ({ version }) => storage.selfUpdate(version),
+
+  // Settings → Tools → Clean up. It takes no arguments at all: the filter —
+  // dangling layers only, never a tagged image — is fixed in lib/docker.js.
+  //
+  // It was the one Docker write the 0.15.0 split left in the web process, and
+  // it had been failing ever since. The web process reads Docker through a
+  // proxy started with POST=0, so the prune came back 403 "Request forbidden
+  // by administrative rules" — which is the proxy doing its job. Nobody
+  // noticed for four releases because the button is two tabs deep and is
+  // rarely pressed; it was found when someone pressed it.
+  'images.pruneDangling': () => docker.pruneDangling(),
 };
 
 /* -------------------------------------------------------------- one request

@@ -1192,7 +1192,9 @@ const server = http.createServer(async (req, res) => {
     // deletes those.
     if (route === '/api/prune-images' && req.method === 'POST') {
       try {
-        const result = await docker.pruneDangling();
+        // Through the worker: this process holds no socket, and the read-only
+        // proxy it does hold refuses every POST. See the op in worker.js.
+        const result = await worker.call('images.pruneDangling');
         activity.note({ name: 'dashboard', action: 'cleared leftover image layers', level: 'info' });
         return sendJson(res, 200, { ok: true, ...result });
       } catch (err) {
