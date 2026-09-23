@@ -222,7 +222,13 @@ async function checkOne(target) {
   let newer = null;
   let blocked = null;
   try {
-    newer = versions.newerThan(ref.tag, await registry.listTags(ref));
+    // From where the registry says a newer tag can be, and the whole list
+    // when that comes back empty — a tag deleted upstream is not a valid
+    // cursor, and "nothing after it" must not read as "nothing newer".
+    const from = versions.listFrom(ref);
+    let tags = await registry.listTags(ref, { last: from });
+    if (from && !tags.length) tags = await registry.listTags(ref);
+    newer = versions.newerThan(ref.tag, tags);
 
     // A database's data directory belongs to one major version. Postgres 17
     // will not open Postgres 14's files — it refuses at startup, the container

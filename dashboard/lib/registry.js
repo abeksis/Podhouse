@@ -182,11 +182,22 @@ async function remoteDigest(ref) {
  * page cap is a deliberate stop: a repository with tens of thousands of tags
  * is not worth hanging an update check on.
  */
-async function listTags(ref, { maxPages = 12, pageSize = 200 } = {}) {
+/**
+ * Every tag a repository has — or every tag after `last`, when given.
+ *
+ * The limit used to be 12 pages of 200, and that was a real bug: linuxserver's
+ * Sonarr has 6,335 tags and Radarr 15,824, so the listing stopped at 2,400 —
+ * in the 3.x releases, before the 4.x the box is actually on — and no newer
+ * version of any large linuxserver image was ever offered. Sonarr sat a week
+ * behind while telling its own user an update was out. The limit is now far
+ * above any real repository, and `last` (see versions.listFrom) means the
+ * common case reads a few hundred tags instead of all of them.
+ */
+async function listTags(ref, { maxPages = 60, pageSize = 1000, last = null } = {}) {
   if (!ref) return [];
   const headers = { accept: 'application/json', 'user-agent': 'homebox-updates/1' };
   let token = null;
-  let path = `/v2/${ref.repo}/tags/list?n=${pageSize}`;
+  let path = `/v2/${ref.repo}/tags/list?n=${pageSize}${last ? `&last=${encodeURIComponent(last)}` : ''}`;
   const tags = [];
 
   for (let page = 0; page < maxPages && path; page += 1) {
