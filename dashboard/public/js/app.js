@@ -337,6 +337,70 @@ document.addEventListener('click', (event) => {
 
 /* ------------------------------------------------------------ home render */
 
+/* --------------------------------------------------------------- the sidebar */
+
+/**
+ * The sidebar: the pages hang on one thin line, like stops on a route, and the
+ * one you are on is a lit dot. At the foot, a card lit like the greeting holds
+ * how long the box has been up, its three numbers, and Log out — leaving
+ * belongs with "this box". Only the page you are on is in a regular weight,
+ * so the weight itself says where you are, instead of a thick outline.
+ */
+
+/**
+ * Each meter has a colour of its own, and it moves as the number climbs.
+ *
+ * Calm below 60% — the meter's own colour, so the three are told apart at a
+ * glance. From 60% it mixes toward amber, reaching it at 85%; from 85% toward
+ * red, reaching it at 95%. Mixed in oklab so the way from blue to red does not
+ * pass through a green that would read as "fine" halfway to full.
+ */
+const METER_COLOUR = { cpu: '#38bdf8', memory: '#a78bfa', disk: '#2dd4bf' };
+
+function meterColour(kind, pct) {
+  const base = METER_COLOUR[kind];
+  if (pct == null) return base;
+  const toWarn = Math.max(0, Math.min(1, (pct - 60) / 25));
+  const toBad = Math.max(0, Math.min(1, (pct - 85) / 10));
+  const warm = `color-mix(in oklab, ${base} ${Math.round((1 - toWarn) * 100)}%, var(--warn))`;
+  return toBad ? `color-mix(in oklab, ${warm} ${Math.round((1 - toBad) * 100)}%, var(--bad))` : warm;
+}
+
+const SIDE_METERS = [
+  { kind: 'cpu', id: 'side-cpu', label: 'CPU', title: 'Processor load right now' },
+  { kind: 'memory', id: 'side-ram', label: 'Memory', short: 'Mem', title: 'Memory in use right now' },
+  { kind: 'disk', id: 'side-disk', label: 'Disk', title: 'How full the system disk is' },
+];
+
+const LOG_OUT = `<button type="button" class="side-out" id="sign-out">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 8l-4 4 4 4M6 12h9"/></svg>
+  <span>Log out</span></button>`;
+
+/** The foot of the column, built once; renderSideMeters fills in the numbers. */
+function buildSideFoot() {
+  const foot = $('#side-foot');
+  if (!foot) return;
+  foot.innerHTML = `
+    <div class="sd-card">
+      <p class="sd-k">This box</p>
+      <p class="sd-up">Up <b id="side-uptime">—</b></p>
+      <div class="sd-nums">${SIDE_METERS.map((m) => `
+        <div class="sd-num" id="${m.id}" title="${m.title}"><span>${m.short || m.label}</span><b>--</b><i><em></em></i></div>`).join('')}
+      </div>
+      ${LOG_OUT}
+    </div>`;
+}
+
+/** One meter's number, bar and colour. */
+function paintSideMeter(m, pct) {
+  const el = $(`#${m.id}`);
+  if (!el) return;
+  const clamped = pct == null ? 0 : Math.max(0, Math.min(100, pct));
+  el.style.setProperty('--c', meterColour(m.kind, pct));
+  $('b', el).textContent = pct == null ? '--' : `${pct}%`;
+  $('em', el).style.width = `${clamped}%`;
+}
+
 /**
  * The foot of the sidebar: processor, memory and disk, a number and a thin bar
  * each — and the samples the Reports page draws from.
@@ -350,18 +414,11 @@ function renderSideMeters(summary) {
   $('#side-version').textContent = `v${summary.version}`;
 
   const m = summary.metrics || {};
-  const set = (id, pct) => {
-    const el = $(id);
-    if (!el) return;
-    $('b', el).textContent = pct == null ? '--' : `${pct}%`;
-    $('em', el).style.width = `${pct == null ? 0 : Math.max(0, Math.min(100, pct))}%`;
-    const lv = level(pct);
-    if (lv) el.dataset.level = lv;
-    else delete el.dataset.level;
-  };
-  set('#side-cpu', m.cpu);
-  set('#side-ram', m.memory && m.memory.percent);
-  set('#side-disk', m.disk && m.disk.percent);
+  paintSideMeter(SIDE_METERS[0], m.cpu);
+  paintSideMeter(SIDE_METERS[1], m.memory && m.memory.percent);
+  paintSideMeter(SIDE_METERS[2], m.disk && m.disk.percent);
+  const up = $('#side-uptime');
+  if (up) up.textContent = m.uptime ? duration(m.uptime) : '—';
 
   const push = (key, value) => {
     if (value == null) return;
@@ -6259,6 +6316,7 @@ $('#catalog-form').addEventListener('submit', submitCatalogForm);
 $('#quick-form').addEventListener('submit', submitQuickForm);
 $('#password-form').addEventListener('submit', submitPasswordChange);
 state.launcherPrefs = readLauncherPrefs();
+buildSideFoot();
 settingsPanelsAsGroups();
 
 $('#live-enabled').addEventListener('change', saveInsightPrefs);

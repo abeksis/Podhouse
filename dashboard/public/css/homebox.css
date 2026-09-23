@@ -247,16 +247,8 @@ button { font: inherit; color: inherit; }
 }
 
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 0.9rem; padding: 0 0.3rem; }
-.side-meters { display: flex; flex-direction: column; gap: 0.55rem; }
-.side-meter { display: grid; grid-template-columns: 1fr auto; row-gap: 3px; font-size: 0.8rem; color: var(--muted); }
-.side-meter span { display: inline-flex; align-items: center; gap: 0.4rem; }
 /* The Reports page draws the same three icons, at the same weight. */
 .meter-ic { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.side-meter b { font-family: var(--mono); font-weight: 500; color: var(--text-2); }
-.side-meter i { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
-.side-meter em { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.4s ease; }
-.side-meter[data-level="warn"] em { background: var(--warn); }
-.side-meter[data-level="bad"] em { background: var(--bad); }
 
 /* Log out. Shaped like a nav item so the column has one row language, but
    quieter than the pages above it — it is the way out, not a destination. */
@@ -1376,9 +1368,8 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   .nav-item { padding: 0.4rem 0.6rem; white-space: nowrap; }
   .nav-item svg { display: none; }
   .nav-dot { margin-left: 0.3rem; }
-  /* The meters do not fit a top bar and the session controls live in the
-     topbar now, so the foot has nothing left to show on a phone. */
-  .side-foot { display: none; }
+  /* The foot on a phone: Log out only, as an icon — see the sidebar rules at
+     the end of this file. */
   .topbar { flex-wrap: wrap; gap: 0.5rem 0.8rem; padding: 0.5rem 0.65rem; }
   .topbar-right { margin-left: auto; gap: 0.6rem; }
   .view { padding: 1.1rem 1rem 5rem; }
@@ -1806,3 +1797,62 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .up-ba.is-waiting .up-fill { animation: up-breathe 1.6s ease-in-out infinite; }
 @keyframes up-breathe { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .up-ba.is-waiting .up-fill { animation: none; } }
+
+/* ---------------------------------------------------------------- sidebar
+   A lighter weight everywhere except the page you are on, and no thick
+   outline — the focus ring stays for the keyboard, drawn inside the item. */
+.side .nav-item { font-weight: 400; }
+.side .nav-item svg { stroke-width: 1.4; }
+.side .nav-item.is-current { font-weight: 550; }
+.side .nav-item:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.side .side-brand-text strong { font-weight: 550; }
+
+/* ---- track: the pages as stops on one line */
+.side .side-nav { position: relative; gap: 0; padding-left: 1.4rem; }
+.side .side-nav::before { content: ""; position: absolute; left: 0.62rem; top: 1rem; bottom: 1rem; width: 1px; background: var(--line-strong); }
+.side .nav-item { position: relative; padding: 0.56rem 0.6rem; background: none; color: var(--muted); font-weight: 300; }
+.side .nav-item::before {
+  content: ""; position: absolute; left: -1.05rem; top: 50%; width: 9px; height: 9px; margin-top: -4.5px;
+  border-radius: 50%; background: var(--bg-raised); border: 1px solid var(--line-strong);
+}
+.side .nav-item:hover { background: none; color: var(--text); }
+.side .nav-item.is-current { background: none; color: var(--text); font-weight: 550; }
+.side .nav-item.is-current::before {
+  background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.side .nav-item svg { opacity: 0.75; }
+
+/* ---- track's foot: a lit card with the box's numbers and the way out */
+.sd-card {
+  border-radius: 14px; padding: 1rem 1rem 0.75rem;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 62%),
+    linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface) 60%);
+}
+.sd-k { margin: 0; font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); font-weight: 700; }
+.sd-up { margin: 0.15rem 0 0.8rem; font-size: 1.02rem; font-weight: 300; }
+.sd-up b { font-weight: 600; }
+.sd-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin-bottom: 0.75rem; }
+.sd-num > span { display: block; font-size: 0.64rem; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
+.sd-num > b { display: block; font-size: 1.3rem; font-weight: 250; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.sd-num > i { display: block; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--text) 8%, transparent); margin-top: 0.3rem; overflow: hidden; }
+.sd-num em { display: block; height: 100%; width: 0; background: var(--c, var(--accent)); transition: width 0.4s ease, background 0.4s ease; }
+.sd-card .side-out { width: 100%; border-top-color: color-mix(in srgb, var(--text) 10%, transparent); padding-top: 0.6rem; }
+
+/* On a phone the sidebar is a row across the top. The track — a vertical line
+   with a dot per page — has no meaning sideways, so the current page is
+   underlined instead. And the foot comes back as one thing: Log out, as an
+   icon beside the brand. Hiding the whole foot here used to be right, when
+   Sign out lived in the top bar; since 0.17.0 moved it into the sidebar, that
+   rule had left phones with no way to log out at all. */
+@media (max-width: 860px) {
+  .side .side-nav { padding-left: 0; }
+  .side .side-nav::before, .side .nav-item::before { display: none; }
+  .side .nav-item.is-current { box-shadow: inset 0 -2px 0 var(--accent); }
+  .side-foot { display: block; order: 2; margin: 0 0 0 auto; padding: 0; }
+  .sd-card { background: none; padding: 0; border-radius: 0; }
+  .sd-k, .sd-up, .sd-nums { display: none; }
+  .sd-card .side-out { width: auto; border-top: 0; padding: 0.35rem; margin: 0; }
+  .sd-card .side-out span { display: none; }
+}
