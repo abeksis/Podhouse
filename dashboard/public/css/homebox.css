@@ -1797,3 +1797,12 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   .up-ver.is-old { display: none; }
   .up-ring { margin: 0 auto; }
 }
+
+/* Podhouse updating itself: same ring, two extras. The signature gets a badge
+   because it is the proof the release is real; and while the dashboard is
+   rebuilding and the page cannot reach it, the ring breathes instead of
+   freezing, so a minute of silence does not read as a hang. */
+.up-chip.is-signed { color: var(--good); background: color-mix(in srgb, var(--good) 12%, var(--surface)); }
+.up-ba.is-waiting .up-fill { animation: up-breathe 1.6s ease-in-out infinite; }
+@keyframes up-breathe { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .up-ba.is-waiting .up-fill { animation: none; } }

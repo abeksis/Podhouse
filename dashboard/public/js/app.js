@@ -4759,6 +4759,178 @@ function renderPlatform(data) {
   });
 }
 
+/* ------------------------------------ Podhouse updating itself, as it happens */
+
+/**
+ * The same ring an app upgrade uses, for the one update that is different:
+ * Podhouse replacing itself. Same picture on purpose — "an update is running"
+ * should look like one thing wherever it happens.
+ *
+ * Two things only this update has, and both are shown:
+ *
+ *   - the signature. Every release is signed, and the box refuses one that is
+ *     not. "Signature on v0.21.0 checks out" is the line that says this is
+ *     really a Podhouse release, so it earns a badge rather than a log line.
+ *
+ *   - the minute the dashboard is gone. It rebuilds itself partway through, so
+ *     the page loses its server — which is the update working, and looked
+ *     exactly like it breaking. The sentence says so before it happens and
+ *     while it is happening.
+ *
+ * The phases come from self-update.sh's own log, which writes "phase  message"
+ * on every line. `verifying` appears twice — the signature, and waiting for
+ * the new dashboard — so the message decides which step that is.
+ */
+const PF_STEPS = ['backup', 'download', 'install', 'restart'];
+// Nouns, not verbs in a tense: "Downloaded" on a chip that is still
+// downloading was a small lie, measured on a replay of a real update log.
+const PF_LABEL = { backup: 'Backup', download: 'Download', install: 'Install', restart: 'Restart' };
+
+let platformRun = null;
+
+function pfStep(phase, message) {
+  if (phase === 'checking' || phase === 'backup') return 'backup';
+  if (phase === 'fetching') return 'download';
+  if (phase === 'verifying') return /waiting for the dashboard/i.test(message) ? 'restart' : 'download';
+  if (phase === 'installing' || phase === 'migrating') return 'install';
+  return null;
+}
+
+function openPlatformRing(from, to) {
+  const layer = document.createElement('div');
+  layer.className = 'dialog-layer';
+  layer.innerHTML = `
+    <div class="dialog is-wide is-upgrade" role="dialog" aria-modal="true" aria-labelledby="pf-title">
+      <h3 class="dialog-title up-title" id="pf-title">Updating Podhouse</h3>
+      <div class="up-body" id="pf-body"></div>
+      <div class="up-foot">
+        <span class="up-safe" id="pf-safe">${upSvg('shield')}If ${escapeHtml(to)} does not start, ${escapeHtml(from)} goes back on by itself</span>
+        <button type="button" class="linkish" data-act="pf-details">Show details</button>
+      </div>
+      <pre class="stream up-raw" id="pf-raw" hidden></pre>
+      <div class="dialog-actions" id="pf-actions" hidden>
+        <button type="button" class="button is-primary" data-act="pf-close">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(layer);
+  platformRun = { layer, from, to, step: null, phase: null, message: '', signed: false, offline: false, outcome: null, detail: '' };
+  layer.querySelector('[data-act="pf-details"]').addEventListener('click', (e) => {
+    const raw = layer.querySelector('#pf-raw');
+    raw.hidden = !raw.hidden;
+    e.currentTarget.textContent = raw.hidden ? 'Show details' : 'Hide details';
+    if (!raw.hidden) raw.scrollTop = raw.scrollHeight;
+  });
+  drawPlatformRing();
+}
+
+function platformRingLine(line) {
+  const r = platformRun;
+  if (!r) return;
+  const raw = r.layer.querySelector('#pf-raw');
+  raw.appendChild(document.createTextNode(`${line}\n`));
+  if (!raw.hidden) raw.scrollTop = raw.scrollHeight;
+  const m = /^\s*([a-z]+)\s{2,}(.*)$/.exec(line);
+  if (m) {
+    r.phase = m[1];
+    r.message = m[2];
+    const step = pfStep(m[1], m[2]);
+    if (step) r.step = step;
+    if (/signature on .* checks out/i.test(m[2])) r.signed = true;
+    if (/roll(ing|ed)? ?back|putting .* back/i.test(m[2])) r.outcome = r.outcome || 'rolling-back';
+  }
+  r.offline = false;
+  drawPlatformRing();
+}
+
+/** A poll failed. During the rebuild that is the update working, and the page says so. */
+function platformRingOffline() {
+  if (!platformRun || platformRun.offline) return;
+  platformRun.offline = true;
+  drawPlatformRing();
+}
+
+function pfSentence() {
+  const r = platformRun;
+  const to = escapeHtml(r.to);
+  if (r.outcome === 'ok') return `<b>Podhouse is on ${to}.</b> Reloading the page…`;
+  if (r.outcome === 'failed') {
+    return `${to} did not start, so <b>this box is back on ${escapeHtml(r.from)}</b>.`
+      + (r.detail ? ` ${escapeHtml(r.detail)}` : ' Show details says why.');
+  }
+  if (r.outcome === 'rolling-back') return `Putting ${escapeHtml(r.from)} back…`;
+  if (r.offline) return 'The dashboard is restarting on the new version — <b>reconnecting</b>. This is expected and takes about a minute.';
+  switch (r.phase) {
+    case 'checking': return 'Checking this box is ready to update…';
+    case 'backup': return 'Saving your settings before anything changes…';
+    case 'fetching': return `Downloading Podhouse ${to}…`;
+    case 'verifying':
+      return r.step === 'restart'
+        ? 'Waiting for the new dashboard to answer…'
+        : 'Checking the release is signed by Podhouse…';
+    case 'migrating': return 'Running migrations…';
+    // The script's own last line. Without these two the sentence fell back to
+    // "Starting…" for the second between the run ending and the dialog
+    // closing — the last thing on screen before success was the first word.
+    case 'done': return `<b>Podhouse is on ${to}.</b>`;
+    case 'failed': return `Something went wrong — putting ${escapeHtml(r.from)} back…`;
+    case 'installing':
+      return /rebuild/i.test(r.message)
+        ? 'Rebuilding the dashboard. <b>This page goes quiet for about a minute</b> — that is the update working.'
+        : `Switching to ${to}…`;
+    default: return 'Starting…';
+  }
+}
+
+function pfStepState(s) {
+  const r = platformRun;
+  const i = PF_STEPS.indexOf(s);
+  const at = PF_STEPS.indexOf(r.step);
+  if (r.outcome === 'ok') return 'done';
+  if (r.outcome === 'failed' || r.outcome === 'rolling-back') return i < at ? 'done' : i === at ? 'bad' : 'todo';
+  return i < at ? 'done' : i === at ? 'now' : 'todo';
+}
+
+function drawPlatformRing() {
+  const r = platformRun;
+  if (!r) return;
+  const at = PF_STEPS.indexOf(r.step);
+  const overall = r.outcome === 'ok' ? 1 : at < 0 ? 0.03 : (at + 0.5) / PF_STEPS.length;
+  const tone = r.outcome === 'ok' ? ' is-ok' : (r.outcome === 'failed' || r.outcome === 'rolling-back') ? ' is-bad' : '';
+  const C = 326.7;
+  r.layer.querySelector('#pf-body').innerHTML = `
+    <div class="up-ba${tone}${r.offline ? ' is-waiting' : ''}">
+      <div class="up-ver is-old"><small>From</small><b class="mono">${escapeHtml(r.from)}</b></div>
+      <div class="up-ring">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="up-track" cx="60" cy="60" r="52"/>
+          <circle class="up-fill" cx="60" cy="60" r="52" stroke-dasharray="${C}" stroke-dashoffset="${(C * (1 - overall)).toFixed(1)}"/></svg>
+        <span class="up-art"><img class="art-img" src="icons/homebox.svg" alt=""></span>
+      </div>
+      <div class="up-ver"><small>To</small><b class="mono">${escapeHtml(r.to)}</b></div>
+    </div>
+    <p class="up-say">${pfSentence()}</p>
+    <div class="up-chips">${PF_STEPS.map((s) => {
+      const st = pfStepState(s);
+      return `<span class="up-chip is-${st}">${st === 'done' ? upSvg('done') : ''}${escapeHtml(PF_LABEL[s])}</span>`;
+    }).join('')}${r.signed ? `<span class="up-chip is-signed">${upSvg('shield')}Signed release</span>` : ''}</div>`;
+}
+
+function closePlatformRing(ok, detail) {
+  const r = platformRun;
+  if (!r) return;
+  r.outcome = ok ? 'ok' : 'failed';
+  r.detail = detail || '';
+  r.offline = false;
+  r.layer.querySelector('#pf-title').textContent = ok ? `Podhouse is on ${r.to}` : 'Podhouse was not updated';
+  if (ok) r.layer.querySelector('#pf-safe').hidden = true;
+  r.layer.querySelector('#pf-actions').hidden = false;
+  drawPlatformRing();
+  platformRun = null;
+  r.layer.querySelector('[data-act="pf-close"]').addEventListener('click', () => {
+    r.layer.remove();
+    loadModules(true);
+  });
+}
+
 async function startPlatformUpgrade(data) {
   const ok = await confirmDialog({
     title: `Update Podhouse to ${data.latest}?`,
@@ -4781,7 +4953,7 @@ async function startPlatformUpgrade(data) {
     // The same dialog an image upgrade uses. A button that goes quiet for a
     // minute while the page it is on restarts needs to show its work.
     platformShown = 0;
-    openProgress(`Updating Podhouse to ${data.latest}`);
+    openPlatformRing(data.current, data.latest);
     pollPlatform();
   } catch (err) {
     toast(`Could not start the update: ${err.message}`, 'error', 8000);
@@ -4818,7 +4990,7 @@ function pollPlatform() {
       // while the browser could not reach anything — which is exactly the
       // stretch somebody wants to read.
       const lines = data.log || [];
-      for (let i = platformShown; i < lines.length; i += 1) progressLine(lines[i]);
+      for (let i = platformShown; i < lines.length; i += 1) platformRingLine(lines[i]);
       platformShown = lines.length;
 
       if (!data.running) {
@@ -4826,7 +4998,7 @@ function pollPlatform() {
         platformPoll = null;
         const last = (data.history || [])[0];
         if (last && last.kind === 'platform') {
-          closeProgress(last.ok, last.ok ? `Now on ${last.to}` : `Rolled back to ${last.from}`);
+          closePlatformRing(last.ok, last.ok ? '' : last.detail);
           // The version changed underneath this page, so its CSS and JS are
           // now the previous release's. Reload rather than leave a mixed page
           // — but only after the dialog has had a moment to be read.
@@ -4838,13 +5010,15 @@ function pollPlatform() {
           // only thing that knows why, so say what it says rather than the
           // useless truth that something stopped.
           const why = data.progress && data.progress.message;
-          closeProgress(false, why || 'The update stopped');
+          closePlatformRing(false, why || 'The update stopped before it began.');
           if (why) toast(why, 'error', 12000);
         }
         loadUpdates();
       }
     } catch {
       missed += 1;
+      // The dashboard is being rebuilt by the update being watched: say so.
+      platformRingOffline();
       // Five minutes of silence is a real problem. A minute of it is the
       // dashboard being rebuilt by the very update being watched.
       if (Date.now() - started > 300000 && missed > 3) {
@@ -4867,7 +5041,7 @@ async function loadPlatform() {
       // read rather than skipped. Without the dialog, progressLine has nowhere
       // to write and every line is silently dropped.
       platformShown = 0;
-      openProgress(`Updating Podhouse to ${data.progress ? data.progress.to : ''}`);
+      openPlatformRing(data.current, data.progress ? data.progress.to : '');
       pollPlatform();
     }
   } catch { /* the card simply stays hidden */ }
