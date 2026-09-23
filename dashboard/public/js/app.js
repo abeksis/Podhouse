@@ -1571,36 +1571,244 @@ function logTimestamp(utc) {
   return fmt.format(when);
 }
 
-/** The line as the reader sees it — what a filter must match against. */
-function logDisplayText(line) {
-  const m = DOCKER_TS.exec(line);
-  return m ? `${logTimestamp(m[1])} ${line.slice(m[0].length)}` : line;
+/**
+ * Logs are drawn as a story: lines grouped where time passes, each group
+ * read as one event, and repeats of the same event folded together. The
+ * alternative that was compared against it — the same groups drawn in full,
+ * one after another — was faithful to the clock and useless on a Sonarr that
+ * logs the same RSS sync every fifteen minutes: forty-nine identical blocks.
+ */
+
+/** Lines closer together than this are one moment. */
+const LOG_GAP_MS = 2 * 60 * 1000;
+
+/**
+ * The level an app printed, or 'info'.
+ *
+ * Read ONLY from where apps put it — the first few dozen characters, as a
+ * bracketed or delimited token, or `level=` — and never from the message.
+ * "RSS Sync Completed. 0 errors" is not an error, and a log view that paints
+ * it red teaches people to ignore red. An app that prints no level at all is
+ * info, which is the honest reading of silence.
+ */
+const LOG_LEVEL_TOKEN = /(?:^|[\s[|(<])(trace|debug|dbug|dbg|info|inf|notice|warn|warning|wrn|error|err|eror|fatal|crit|critical|panic)(?=[\]|):>\s]|$)/i;
+const LOG_LEVEL_KV = /\blevel=["']?(\w+)/i;
+
+function logLevel(body) {
+  const head = body.slice(0, 64);
+  const kv = LOG_LEVEL_KV.exec(body);
+  const word = ((kv && kv[1]) || (LOG_LEVEL_TOKEN.exec(head) || [])[1] || '').toLowerCase();
+  if (/^(error|err|eror|fatal|crit|critical|panic)$/.test(word)) return 'err';
+  if (/^(warn|warning|wrn)$/.test(word)) return 'warn';
+  if (/^(trace|debug|dbug|dbg)$/.test(word)) return 'dbg';
+  return 'info';
 }
 
-function logLineHtml(line, needle) {
-  const m = DOCKER_TS.exec(line);
-  const ts = m
-    ? `<span class="ln-time" title="${escapeHtml(m[1])}">${escapeHtml(logTimestamp(m[1]))}</span> `
-    : '';
-  const body = m ? line.slice(m[0].length) : line;
-  return `<span class="ln">${ts}${needle ? highlight(body, needle) : escapeHtml(body)}</span>`;
+/** The app's own leading timestamp — the Docker one already says when. */
+const APP_STAMP = /^\[?\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?\]?\s*/;
+/** `[Info] ` and friends, at the start. Kept for anything but info. */
+const LEAD_LEVEL = /^\[(trace|debug|dbg|info|inf|notice|warn|warning|wrn|error|err|fatal|crit|critical)\]\s*/i;
+/** `DownloadDecisionMaker: ` — the part of the line that says who spoke. */
+const LEAD_SOURCE = /^([A-Za-z][\w.]{2,60}):\s+/;
+
+/**
+ * One raw line into what the page draws.
+ *
+ * The raw text is kept, untouched, for the filter and for "show the line as
+ * the app wrote it"; everything else is presentation.
+ */
+function parseLogLine(raw) {
+  const m = DOCKER_TS.exec(raw);
+  const t = m ? new Date(m[1]) : null;
+  let body = m ? raw.slice(m[0].length) : raw;
+  const level = logLevel(body);
+  body = body.replace(APP_STAMP, '').replace(LEAD_LEVEL, '');
+  const s = LEAD_SOURCE.exec(body);
+  return {
+    raw,
+    t: t && !Number.isNaN(t.getTime()) ? t : null,
+    level,
+    src: s ? s[1] : '',
+    msg: s ? body.slice(s[0].length) : body,
+  };
+}
+
+/** Consecutive lines split wherever the clock jumps. */
+function logBursts(entries) {
+  const out = [];
+  let cur = null;
+  for (const e of entries) {
+    if (!cur || (e.t && cur.end && e.t - cur.end > LOG_GAP_MS)) {
+      cur = { start: e.t, end: e.t, lines: [] };
+      out.push(cur);
+    }
+    cur.lines.push(e);
+    if (e.t) { cur.end = e.t; if (!cur.start) cur.start = e.t; }
+  }
+  return out;
+}
+
+/** The box's calendar day for an instant, so "yesterday" means the box's yesterday. */
+function logDay(t) {
+  const fmt = logTimeFormat(logTz);
+  return fmt ? fmt.format(t).slice(0, 10) : t.toISOString().slice(0, 10);
+}
+
+function logWhen(t) {
+  if (!t) return { time: '', day: '' };
+  const fmt = logTimeFormat(logTz);
+  const stamp = fmt ? fmt.format(t) : t.toISOString().replace('T', ' ');
+  const today = logDay(new Date());
+  const yest = logDay(new Date(Date.now() - 86400000));
+  const d = stamp.slice(0, 10);
+  const day = d === today ? 'today' : d === yest ? 'yesterday'
+    : new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  return { time: stamp.slice(11, 16), day };
+}
+
+function logLineRow(e, needle) {
+  const text = (v) => (needle ? highlight(v, needle) : escapeHtml(v));
+  const tag = e.level === 'warn' ? '<span class="lg-tag is-warn">WARN</span>'
+    : e.level === 'err' ? '<span class="lg-tag is-err">ERROR</span>' : '';
+  return `<div class="lg-ln is-${e.level}">${tag}${e.src ? `<span class="lg-src">${text(e.src)}</span>` : ''}${text(e.msg)}</div>`;
+}
+
+/* --------------------------------------------------------------- story */
+
+/**
+ * What a group of lines was, in words, or null when it cannot honestly say.
+ *
+ * These are patterns that hold across the apps Podhouse ships — .NET hosts,
+ * linuxserver images, anything that prints "listening on" — not rules for one
+ * app. A group that matches none of them is titled by its own first line
+ * rather than by a guess, because a confident wrong summary is worse than no
+ * summary.
+ */
+const STORY_KINDS = [
+  { kind: 'start', icon: 'play', test: /(listening on|application started|server started|started on port|ls\.io-init\] done|startup complete)/i, title: 'Started' },
+  { kind: 'migrate', icon: 'db', test: /migrat/i, title: 'Updated its database' },
+  { kind: 'house', icon: 'broom', test: /(housekeep|vacuum|clean ?up|compress|prun)/i, title: 'Housekeeping' },
+  { kind: 'sync', icon: 'sync', test: /(rss sync|sync(ing|ed)?\b|refresh(ing)?\b|scan(ning)?\b)/i, title: 'Checked for new things' },
+  { kind: 'stop', icon: 'stop', test: /(shutting down|stopping|shutdown|terminat)/i, title: 'Stopped' },
+];
+
+const STORY_ICONS = {
+  play: '<circle cx="12" cy="12" r="8.5"/><path d="M10 8.5v7l6-3.5z"/>',
+  db: '<path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3z"/><path d="M4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  broom: '<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/>',
+  sync: '<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/>',
+  stop: '<circle cx="12" cy="12" r="8.5"/><rect x="9" y="9" width="6" height="6" rx="1"/>',
+  warn: '<path d="M12 3.5 21 19.5H3z"/><path d="M12 10v4M12 17h.01"/>',
+  line: '<path d="M5 7h14M5 12h14M5 17h9"/>',
+};
+
+/** Numbers, ids and times out, so two runs of the same thing compare equal. */
+const storyShape = (lines) => lines.map((l) => `${l.src}|${l.msg.replace(/[0-9a-f]{6,}|\d+([.,:]\d+)*/gi, '#')}`).join('\n');
+
+function logStoryEvents(bursts) {
+  const events = [];
+  for (const b of bursts) {
+    // A warning or an error is never folded into anything: it is its own
+    // event, so it cannot end up inside a closed group nobody opens.
+    const loud = b.lines.filter((l) => l.level === 'warn' || l.level === 'err');
+    const quiet = b.lines.filter((l) => l.level !== 'warn' && l.level !== 'err');
+    // Folded with its own repeats, though: on a real Sonarr with no indexer
+    // the same "No available indexers" arrives with every RSS sync, 49 times
+    // in 200 lines, and 49 identical red events bury the one different line
+    // as surely as a closed group would. One event, open, saying how often.
+    for (const l of loud) {
+      const shape = `loud|${l.level}|${storyShape([l])}`;
+      const same = events.find((x) => x.shape === shape);
+      if (same) { same.times.push(l.t || b.start); same.lines.push(l); continue; }
+      events.push({ kind: 'loud', icon: 'warn', level: l.level, title: l.msg, sub: l.src, times: [l.t || b.start], lines: [l], shape });
+    }
+    if (!quiet.length) continue;
+    const text = quiet.map((l) => `${l.src} ${l.msg}`).join(' ');
+    const k = STORY_KINDS.find((x) => x.test.test(text));
+    const first = quiet.find((l) => l.msg.trim()) || quiet[0];
+    const ev = {
+      kind: k ? k.kind : 'other',
+      icon: k ? k.icon : 'line',
+      title: k ? k.title : first.msg,
+      sub: k ? (quiet.find((l) => k.test.test(`${l.src} ${l.msg}`)) || first).msg : (first.src || `${quiet.length} lines`),
+      times: [b.start],
+      lines: quiet,
+      shape: storyShape(quiet),
+    };
+    // The same thing again — tonight's housekeeping is last night's — folds
+    // into the event it repeats, and says how often.
+    const same = events.find((x) => x.shape && x.shape === ev.shape);
+    if (same) { same.times.push(b.start); same.lines = same.lines.concat(quiet); } else events.push(ev);
+  }
+  return events;
+}
+
+function logStoryHtml(bursts, needle) {
+  const events = logStoryEvents(bursts);
+  return events.map((ev) => {
+    const w = logWhen(ev.times[0]);
+    const more = ev.times.length > 1 ? ` · ${ev.times.length} times` : '';
+    const last = ev.times.length > 1 ? logWhen(ev.times[ev.times.length - 1]) : null;
+    const when = last ? `${w.day} ${w.time} → ${last.day} ${last.time}` : `${w.day} ${w.time}`;
+    const cls = ev.level === 'err' ? ' is-err' : ev.level === 'warn' ? ' is-warn' : '';
+    return `<div class="lg-ev${cls}${ev.kind === 'loud' ? ' is-open' : ''}">
+      <button type="button" class="lg-ev-h" data-log-ev>
+        <span class="lg-ev-plate is-${ev.kind}"><svg viewBox="0 0 24 24" aria-hidden="true">${STORY_ICONS[ev.icon]}</svg></span>
+        <span class="lg-ev-text"><b>${escapeHtml(ev.title)}</b><small>${escapeHtml(ev.sub || '')}${escapeHtml(more)}</small></span>
+        <span class="lg-ev-r"><span>${escapeHtml(when)}</span><span class="mono">${ev.lines.length} ${ev.lines.length === 1 ? 'line' : 'lines'}</span><span class="lg-chev">›</span></span>
+      </button>
+      <div class="lg-ev-b">${ev.lines.map((l) => logLineRow(l, needle)).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------------------------------------------------------- the band */
+
+/** The app the log belongs to, lit the way the Settings bands are. */
+function renderLogBand(entries) {
+  const band = $('#log-band');
+  if (!band) return;
+  const name = $('#log-picker').value;
+  if (!name) { band.hidden = true; return; }
+  const c = state.containers.find((x) => x.name === name) || { name };
+  const entry = logPickerEntry(c);
+  const mod = c.project ? state.modules.find((m) => `homebox-${m.id}` === c.project) : null;
+  const svc = mod && mod.services ? mod.services.find((x) => x.name === c.service) : null;
+  const art = iconArt((svc && svc.icon) || (mod && mod.theme && mod.theme.emoji), monogram(entry.label.replace(/^\S+\s/, ''), mod && mod.theme && mod.theme.color));
+  const stamped = entries.filter((e) => e.t);
+  const lastT = stamped.length ? stamped[stamped.length - 1].t : null;
+  const warns = entries.filter((e) => e.level === 'warn').length;
+  const errs = entries.filter((e) => e.level === 'err').length;
+  const running = c.state && c.state !== 'stopped';
+  band.hidden = false;
+  band.innerHTML = `
+    <span class="lg-art">${art}</span>
+    <div class="lg-id"><p class="cfg-k">Logs</p><h3 class="lg-h"><b>${escapeHtml((svc && svc.friendly_name) || c.name)}</b> ${running ? 'is running' : 'is stopped'}</h3></div>
+    <div class="lg-facts">
+      <div>Last line<b>${lastT ? `${escapeHtml(ago(lastT.getTime()))} ago` : '—'}</b></div>
+      <div>Warnings<b class="${warns ? 'is-warn' : ''}">${warns}</b></div>
+      <div>Errors<b class="${errs ? 'is-err' : ''}">${errs}</b></div>
+    </div>`;
 }
 
 function renderLogs() {
   const view = $('#log-view');
   const filter = $('#log-search').value.trim();
-  const lines = String(logText).split(NL).filter((l) => l.length);
+  const entries = String(logText).split(NL).filter((l) => l.length).map(parseLogLine);
+  renderLogBand(entries);
+  if (!entries.length) { view.innerHTML = '<p class="lg-empty">Nothing to show.</p>'; return; }
 
-  if (!filter) {
-    view.innerHTML = lines.map((l) => logLineHtml(l, '')).join('');
-  } else {
-    const needle = filter.toLowerCase();
-    const hits = lines.filter((l) => logDisplayText(l).toLowerCase().includes(needle));
-    view.innerHTML = hits.length
-      ? hits.map((l) => logLineHtml(l, filter)).join('')
-      : `<span class="ln is-dim">No line contains ${escapeHtml(filter)}.</span>`;
+  const needle = filter.toLowerCase();
+  const shown = needle
+    ? entries.filter((e) => `${e.src} ${e.msg}`.toLowerCase().includes(needle))
+    : entries;
+  if (!shown.length) {
+    view.innerHTML = `<p class="lg-empty">No line contains ${escapeHtml(filter)}.</p>`;
+    return;
   }
-  if ($('#log-stick').checked) view.parentElement.scrollTop = view.parentElement.scrollHeight;
+  const bursts = logBursts(shown);
+  view.innerHTML = logStoryHtml(bursts, filter);
+  if ($('#log-stick').checked) view.scrollTop = view.scrollHeight;
 }
 
 function highlight(line, needle) {
@@ -5400,6 +5608,8 @@ document.addEventListener('click', async (event) => {
     renderApps();
     return;
   }
+  const logEv = event.target.closest('[data-log-ev]');
+  if (logEv) { logEv.parentElement.classList.toggle('is-open'); return undefined; }
   if (event.target.closest('#config-save')) return saveConfig();
   if (event.target.closest('#cfg-discard')) return cfgDiscard();
   const cfgReplace = event.target.closest('[data-cfg-replace]');

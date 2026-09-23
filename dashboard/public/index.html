@@ -320,6 +320,9 @@
       <h1>Logs</h1>
       <p>The output of any container, newest at the bottom. When an app misbehaves, this is usually where it says why.</p>
     </header>
+    <!-- The app this log belongs to, and whether it has anything to say.
+         See renderLogBand. -->
+    <section class="lg-band" id="log-band" hidden></section>
     <div class="log-tools">
       <select id="log-picker" class="select" aria-label="Container">
         <option value="">Choose a container…</option>
@@ -337,9 +340,9 @@
       </label>
       <button type="button" class="button" id="log-reload">Reload</button>
     </div>
-    <div class="console">
-      <pre class="console-body mono" id="log-view">Choose a container to read its output.</pre>
-    </div>
+    <!-- Not a <pre> any more: the lines are grouped where time passes, and
+         each group is drawn as its own block. See renderLogs. -->
+    <div class="lg-view" id="log-view"><p class="lg-empty">Choose a container to read its output.</p></div>
   </section>
 
   <!-- ==================== UPDATES ==================== -->
