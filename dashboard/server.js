@@ -1235,7 +1235,11 @@ const server = http.createServer(async (req, res) => {
           });
           const send = (obj) => { if (!res.writableEnded) res.write(`${JSON.stringify(obj)}\n`); };
           try {
-            const result = await updates.upgrade(which, { onLine: (line, err) => send({ line, err }) });
+            const result = await updates.upgrade(which, {
+              onLine: (line, err) => send({ line, err }),
+              // Phases, sizes: the facts the upgrade dialog draws. See updates.upgrade.
+              onEvent: (event) => send({ event }),
+            });
             send({ done: true, ...result });
           } catch (err) {
             send({ line: err.message, err: true });

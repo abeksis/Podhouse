@@ -614,10 +614,14 @@ async function apply(which, { onLine = null } = {}) {
  * tag, so putting the pin back and recreating restores it exactly — and the
  * old image is still local, so it does not even need the network.
  */
-async function upgrade(which, { onLine = null } = {}) {
+async function upgrade(which, { onLine = null, onEvent = null } = {}) {
   if (applying) throw Object.assign(new Error('an update is already running'), { status: 409 });
   applying = true;
   const say = (line, err = false) => { if (onLine) onLine(line, err); };
+  // The same run, as facts rather than sentences: which step it is on, how
+  // big the backup was, how big the download is. The page draws from these;
+  // the lines above stay the record, shown under "Show details".
+  const tell = (event) => { if (onEvent) onEvent(event); };
   try {
     const cache = await readCache();
     const item = (cache.newVersions || []).find((v) => v.container === which);
@@ -644,6 +648,7 @@ async function upgrade(which, { onLine = null } = {}) {
     // per-module backup a rebuild already takes. A module with no config has
     // no data for a new version to migrate, so there is nothing to refuse.
     say('==> Backing up before anything changes — a new version may migrate its database');
+    tell({ phase: 'backup' });
     // Kept, because the history row names the archive to restore from. This
     // was once a bare `await` while the lines below still read `made.name`:
     // every upgrade switched the version, then threw a ReferenceError before
@@ -651,6 +656,7 @@ async function upgrade(which, { onLine = null } = {}) {
     // had happened.
     const made = await backupModule(item.module, onLine);
     const backupName = made ? path.basename(made) : null;
+    tell({ backup: { bytes: made ? (await fsp.stat(made).catch(() => ({ size: null }))).size : null } });
 
     const previous = await pins.set(item.module, item.service, repo, item.newerVersion);
     say(`==> Pinned to ${item.newerVersion}`);
@@ -662,9 +668,17 @@ async function upgrade(which, { onLine = null } = {}) {
     };
 
     try {
+      // The sizes first, so the page knows where the download ends. Best
+      // effort: a registry that will not say leaves a download that counts
+      // up without a percentage, which is still true.
+      try {
+        tell({ layers: await registry.layerSizes({ ...ref, tag: item.newerVersion }) });
+      } catch { /* no sizes; the count still works */ }
       say('==> Pulling');
+      tell({ phase: 'download' });
       await composeLib.pullService(item.module, item.service, { onLine });
       say('==> Recreating');
+      tell({ phase: 'switch' });
       await composeLib.upService(item.module, item.service, { onLine });
     } catch (err) {
       say(`==> ${err.message} — putting the previous version back`, true);
@@ -673,6 +687,7 @@ async function upgrade(which, { onLine = null } = {}) {
     }
 
     say('==> Waiting for it to come back healthy');
+    tell({ phase: 'health' });
     const health = await waitHealthy(item.container, onLine);
     if (!health.ok) {
       say(`==> ${item.container} is ${health.state} — rolling back to ${item.tag}`, true);

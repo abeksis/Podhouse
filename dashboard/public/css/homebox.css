@@ -1756,3 +1756,44 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   .lg-facts { margin-left: 0; width: 100%; gap: 1.2rem; }
   .lg-ev-r span:first-child { display: none; }
 }
+
+/* --------------------------------------------------------- app upgrade
+   What an upgrade is doing, as it does it. The raw pull output is still
+   there under "Show details"; this is what the lines mean. */
+.dialog.is-upgrade { max-width: 640px; }
+.up-title { margin-bottom: 0.4rem; }
+.up-ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.up-foot { display: flex; align-items: center; gap: 0.8rem; margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--line); font-size: 0.8rem; }
+.up-safe { display: flex; align-items: center; gap: 0.45rem; color: var(--good); }
+.up-foot .linkish { margin-left: auto; }
+.up-raw { margin-top: 0.9rem; max-height: 240px; }
+.up-say { text-align: center; font-size: 0.98rem; color: var(--text-2); margin: 0.2rem 0 0; }
+.up-say b { color: var(--text); }
+
+/* ---- ring: from, the app, to */
+.up-ba { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1.2rem; padding: 0.9rem 0 1.1rem; }
+.up-ver { text-align: center; min-width: 0; }
+.up-ver small { display: block; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.up-ver b { display: block; margin-top: 0.2rem; font-size: 1.35rem; font-weight: 650; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-ver.is-old b { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text) 25%, transparent); }
+.up-ring { position: relative; width: 118px; height: 118px; }
+.up-ring svg { width: 118px; height: 118px; transform: rotate(-90deg); }
+.up-track { fill: none; stroke: color-mix(in srgb, var(--text) 8%, transparent); stroke-width: 7; }
+.up-fill { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
+.up-ba.is-ok .up-fill { stroke: var(--good); }
+.up-ba.is-bad .up-fill { stroke: var(--bad); }
+.up-art { position: absolute; inset: 0; margin: auto; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center; border-radius: 14px; overflow: hidden; font-size: 1.6rem; }
+.up-art .art-img { width: 100%; height: 100%; object-fit: contain; }
+.up-art .art-mono { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+.up-chips { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+.up-chip { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; padding: 0.28rem 0.7rem; border-radius: 999px; background: var(--surface); color: var(--muted); }
+.up-chip .up-ic { width: 13px; height: 13px; }
+.up-chip.is-done { color: var(--good); }
+.up-chip.is-now { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); color: var(--accent-text); }
+.up-chip.is-bad { background: color-mix(in srgb, var(--bad) 16%, var(--surface)); color: var(--bad); }
+
+@media (max-width: 560px) {
+  .up-ba { grid-template-columns: 1fr; }
+  .up-ver.is-old { display: none; }
+  .up-ring { margin: 0 auto; }
+}

@@ -228,4 +228,52 @@ async function listTags(ref, { maxPages = 60, pageSize = 1000, last = null } = {
   return tags;
 }
 
-module.exports = { parseRef, remoteDigest, listTags, DOCKER_HUB };
+/**
+ * How big each piece of an image is, for this machine's architecture.
+ *
+ * `docker pull` reports how much of a layer has arrived — "a974969fb74a
+ * Downloading 47.19MB" — and never how much there is, so a progress bar built
+ * on its output alone has no end. The manifest has the sizes. This reads it
+ * once before the pull, and the page divides one by the other.
+ *
+ * The keys are the first twelve hex characters of each layer's digest, which
+ * is exactly the id `docker pull` prints beside it. Compressed sizes, because
+ * those are the bytes that cross the network and the ones the pull counts.
+ */
+const ARCH = { x64: 'amd64', arm64: 'arm64', arm: 'arm' }[process.arch] || process.arch;
+
+async function manifest(ref, reference, token) {
+  const url = `https://${ref.registry}/v2/${ref.repo}/manifests/${encodeURIComponent(reference)}`;
+  const headers = { accept: ACCEPT, 'user-agent': 'homebox-updates/1' };
+  let res = await request(url, { headers: token ? { ...headers, authorization: `Bearer ${token}` } : headers });
+  if (res.status === 401 && !token) {
+    const challenge = parseChallenge(res.headers['www-authenticate']);
+    if (!challenge) throw new Error('registry requires auth we cannot satisfy');
+    token = await tokenFor(ref, challenge);
+    res = await request(url, { headers: { ...headers, authorization: `Bearer ${token}` } });
+  }
+  if (res.status !== 200) throw new Error(`registry answered ${res.status} for the manifest`);
+  return { body: JSON.parse(res.body), token };
+}
+
+async function layerSizes(ref) {
+  let { body, token } = await manifest(ref, ref.tag, null);
+  // A multi-architecture image answers with an index; the layers are in the
+  // manifest for THIS machine's platform, one request further down.
+  if (Array.isArray(body.manifests)) {
+    const mine = body.manifests.find((m) => m.platform && m.platform.os === 'linux' && m.platform.architecture === ARCH);
+    if (!mine) throw new Error(`no ${ARCH} build of this image`);
+    ({ body } = await manifest(ref, mine.digest, token));
+  }
+  const layers = {};
+  let total = 0;
+  for (const l of body.layers || []) {
+    const id = String(l.digest || '').replace(/^sha256:/, '').slice(0, 12);
+    if (!id || !Number.isFinite(l.size)) continue;
+    layers[id] = l.size;
+    total += l.size;
+  }
+  return { layers, total };
+}
+
+module.exports = { parseRef, remoteDigest, listTags, layerSizes, DOCKER_HUB };

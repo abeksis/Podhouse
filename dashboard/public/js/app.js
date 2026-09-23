@@ -5020,6 +5020,240 @@ function renderUpdateHistory(history) {
   }).join('');
 }
 
+/* ------------------------------------------------ the upgrade, as it happens */
+
+/**
+ * An app upgrade drawn as the change itself: the old version, the new one,
+ * and the app between them inside a ring that fills as the whole upgrade
+ * goes — backup, download, switch, health — with one sentence under it saying
+ * what is happening in words. The pull output stays under "Show details".
+ */
+
+/** The four things an upgrade does, in order. updates.upgrade() names them. */
+const UP_PHASES = ['backup', 'download', 'switch', 'health'];
+const UP_LABEL = { backup: 'Backed up', download: 'Downloading', switch: 'Switching', health: 'Health check' };
+const UP_ICON = {
+  done: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+};
+const upSvg = (name, cls = 'up-ic') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${UP_ICON[name]}</svg>`;
+
+/**
+ * One line of `docker pull`, as a layer and how much of it has arrived.
+ *
+ * The pull never says how big a layer is, only how much has come so far, so
+ * the sizes come separately — from the manifest, before the pull, in a
+ * `layers` event. Measured against a real pull: the ids here are the first
+ * twelve characters of each layer digest, and the three extra ids a pull
+ * prints are the manifest and config, which are not layers and are not
+ * counted.
+ */
+const PULL_LINE = /^\s*([0-9a-f]{12})\s+(Downloading|Download complete|Verifying Checksum|Extracting|Pull complete|Already exists)(?:\s+([\d.]+)\s*([kKMG]?B))?/;
+const UNIT = { B: 1, kB: 1e3, KB: 1e3, MB: 1e6, GB: 1e9 };
+
+let upgradeRun = null;
+
+/** "4.0.20.3014-ls325" → "4.0.20.3014": the build suffix is not the version. */
+const upShort = (tag) => String(tag || '').replace(/-ls\d+$/, '');
+
+function openUpgrade(container, from, to) {
+  const item = ((updatesState && updatesState.newVersions) || []).find((v) => v.container === container) || {};
+  const mod = state.modules.find((m) => m.id === item.module);
+  const svc = mod && mod.services ? mod.services.find((s) => s.name === item.service) : null;
+  const name = (svc && svc.friendly_name) || item.title || container;
+  const art = iconArt((svc && svc.icon) || (mod && mod.theme && mod.theme.emoji), monogram(name, mod && mod.theme && mod.theme.color));
+
+  const layer = document.createElement('div');
+  layer.className = 'dialog-layer';
+  layer.innerHTML = `
+    <div class="dialog is-wide is-upgrade" role="dialog" aria-modal="true" aria-labelledby="up-title">
+      <h3 class="dialog-title up-title" id="up-title">Upgrading ${escapeHtml(name)}</h3>
+      <div class="up-body" id="up-body"></div>
+      <div class="up-foot">
+        <span class="up-safe" id="up-safe">${upSvg('shield')}If the new version does not come up, ${escapeHtml(upShort(from))} goes back on by itself</span>
+        <button type="button" class="linkish" data-act="up-details">Show details</button>
+      </div>
+      <pre class="stream up-raw" id="up-raw" hidden></pre>
+      <div class="dialog-actions" id="up-actions" hidden>
+        <button type="button" class="button is-primary" data-act="up-close">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(layer);
+
+  upgradeRun = {
+    layer, name, art, from, to,
+    phase: null, started: {}, ended: {},
+    sizes: null, total: 0, got: {}, samples: [],
+    backupBytes: null, outcome: null, rolledBack: null,
+  };
+  layer.querySelector('[data-act="up-details"]').addEventListener('click', (e) => {
+    const raw = layer.querySelector('#up-raw');
+    raw.hidden = !raw.hidden;
+    e.currentTarget.textContent = raw.hidden ? 'Show details' : 'Hide details';
+    if (!raw.hidden) raw.scrollTop = raw.scrollHeight;
+  });
+  drawUpgrade();
+  return upgradeRun;
+}
+
+function upPhase(p) {
+  const r = upgradeRun;
+  if (!r || r.phase === p) return;
+  const now = Date.now();
+  if (r.phase) r.ended[r.phase] = now;
+  r.phase = p;
+  r.started[p] = now;
+}
+
+function upgradeEvent(ev) {
+  const r = upgradeRun;
+  if (!r) return;
+  if (ev.phase) upPhase(ev.phase);
+  if (ev.backup) r.backupBytes = ev.backup.bytes;
+  if (ev.layers && ev.layers.layers) { r.sizes = ev.layers.layers; r.total = ev.layers.total || 0; }
+  drawUpgrade();
+}
+
+function upgradeLine(line, err) {
+  const r = upgradeRun;
+  if (!r) return;
+  const raw = r.layer.querySelector('#up-raw');
+  raw.appendChild(document.createTextNode(`${line}\n`));
+  if (!raw.hidden) raw.scrollTop = raw.scrollHeight;
+  if (err || /rolling back|putting the previous version back/i.test(line)) r.outcome = r.outcome || 'rolling-back';
+
+  const m = PULL_LINE.exec(line);
+  if (m && r.sizes && Object.prototype.hasOwnProperty.call(r.sizes, m[1])) {
+    const size = r.sizes[m[1]];
+    if (m[2] === 'Downloading' && m[3]) r.got[m[1]] = Math.min(size, parseFloat(m[3]) * (UNIT[m[4]] || 1));
+    else if (m[2] !== 'Downloading') r.got[m[1]] = size;
+    const sum = Object.values(r.got).reduce((a, b) => a + b, 0);
+    r.samples.push({ t: Date.now(), b: sum });
+    if (r.samples.length > 40) r.samples.shift();
+  } else if (m && !r.sizes && m[2] === 'Downloading' && m[3]) {
+    // No sizes from the registry: still count what arrives, per layer.
+    r.got[m[1]] = parseFloat(m[3]) * (UNIT[m[4]] || 1);
+  }
+  scheduleUpgradeDraw();
+}
+
+let upDrawQueued = false;
+function scheduleUpgradeDraw() {
+  if (upDrawQueued) return;
+  upDrawQueued = true;
+  requestAnimationFrame(() => { upDrawQueued = false; drawUpgrade(); });
+}
+
+/** Bytes down so far, the total if known, and seconds left if it can be said honestly. */
+function upDownload() {
+  const r = upgradeRun;
+  const got = Object.values(r.got).reduce((a, b) => a + b, 0);
+  const total = r.total || 0;
+  let eta = null;
+  const s = r.samples.filter((x) => Date.now() - x.t < 6000);
+  if (total && s.length > 1) {
+    const rate = (s[s.length - 1].b - s[0].b) / Math.max(1, (s[s.length - 1].t - s[0].t) / 1000);
+    if (rate > 0) eta = Math.max(1, Math.round((total - got) / rate));
+  }
+  return { got, total, pct: total ? Math.min(1, got / total) : null, eta };
+}
+
+const upSecs = (n) => (n < 60 ? `${n} s` : `${Math.round(n / 60)} min`);
+
+/** The sentence for where the run is now — the one thing the ring design says in words. */
+function upSentence() {
+  const r = upgradeRun;
+  const to = upShort(r.to);
+  if (r.outcome === 'ok') return `<b>${escapeHtml(r.name)}</b> is on ${escapeHtml(to)}.`;
+  if (r.outcome === 'failed') {
+    return r.rolledBack
+      ? `${escapeHtml(to)} did not come up, so <b>${escapeHtml(r.name)} is back on ${escapeHtml(upShort(r.from))}</b>. Show details says why.`
+      : `${escapeHtml(to)} did not come up, and the previous version did not come back either. Show details says why.`;
+  }
+  if (r.outcome === 'rolling-back') return `Putting ${escapeHtml(upShort(r.from))} back…`;
+  switch (r.phase) {
+    case 'backup': return `Backing up ${escapeHtml(r.name)}'s settings and database…`;
+    case 'download': {
+      const d = upDownload();
+      if (d.total) {
+        return `Downloading ${escapeHtml(r.name)} ${escapeHtml(to)} — <b>${bytes(d.got)} of ${bytes(d.total)}</b>`
+          + (d.eta ? `, about ${upSecs(d.eta)} left.` : '.');
+      }
+      return `Downloading ${escapeHtml(r.name)} ${escapeHtml(to)} — <b>${bytes(d.got)}</b> so far.`;
+    }
+    case 'switch': return `Stopping ${escapeHtml(upShort(r.from))} and starting ${escapeHtml(to)}…`;
+    case 'health': return `Waiting for ${escapeHtml(r.name)} to answer…`;
+    default: return 'Starting…';
+  }
+}
+
+/** How far through the whole upgrade, 0..1, for the ring. The download is most of it. */
+function upOverall() {
+  const r = upgradeRun;
+  if (r.outcome === 'ok') return 1;
+  const weight = { backup: 0.1, download: 0.7, switch: 0.1, health: 0.1 };
+  let sum = 0;
+  for (const p of UP_PHASES) {
+    if (p === r.phase) {
+      const inside = p === 'download' ? (upDownload().pct || 0) : 0.5;
+      return sum + weight[p] * inside;
+    }
+    sum += weight[p];
+  }
+  return 0;
+}
+
+function upStepState(p) {
+  const r = upgradeRun;
+  const i = UP_PHASES.indexOf(p);
+  const at = UP_PHASES.indexOf(r.phase);
+  if (r.outcome === 'ok') return 'done';
+  if (r.outcome === 'failed' || r.outcome === 'rolling-back') return i < at ? 'done' : i === at ? 'bad' : 'todo';
+  return i < at ? 'done' : i === at ? 'now' : 'todo';
+}
+
+function drawUpgrade() {
+  const r = upgradeRun;
+  if (!r) return;
+  const body = r.layer.querySelector('#up-body');
+  const tone = r.outcome === 'ok' ? ' is-ok' : (r.outcome === 'failed' || r.outcome === 'rolling-back') ? ' is-bad' : '';
+
+  const C = 326.7;
+  body.innerHTML = `
+    <div class="up-ba${tone}">
+      <div class="up-ver is-old"><small>From</small><b class="mono" title="${escapeHtml(r.from)}">${escapeHtml(upShort(r.from))}</b></div>
+      <div class="up-ring">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="up-track" cx="60" cy="60" r="52"/>
+          <circle class="up-fill" cx="60" cy="60" r="52" stroke-dasharray="${C}" stroke-dashoffset="${(C * (1 - upOverall())).toFixed(1)}"/></svg>
+        <span class="up-art">${r.art}</span>
+      </div>
+      <div class="up-ver"><small>To</small><b class="mono" title="${escapeHtml(r.to)}">${escapeHtml(upShort(r.to))}</b></div>
+    </div>
+    <p class="up-say">${upSentence()}</p>
+    <div class="up-chips">${UP_PHASES.map((p) => {
+      const st = upStepState(p);
+      return `<span class="up-chip is-${st}">${st === 'done' ? upSvg('done') : ''}${escapeHtml(UP_LABEL[p])}</span>`;
+    }).join('')}</div>`;
+}
+
+function closeUpgrade(result) {
+  const r = upgradeRun;
+  if (!r) return;
+  if (r.phase) r.ended[r.phase] = Date.now();
+  r.outcome = result.ok ? 'ok' : 'failed';
+  r.rolledBack = result.rolledBack === true;
+  r.layer.querySelector('#up-title').textContent = result.ok ? `${r.name} is on ${upShort(r.to)}` : `${r.name} was not upgraded`;
+  const safe = r.layer.querySelector('#up-safe');
+  if (result.ok) safe.hidden = true;
+  r.layer.querySelector('#up-actions').hidden = false;
+  drawUpgrade();
+  upgradeRun = null;
+  r.layer.querySelector('[data-act="up-close"]').addEventListener('click', () => {
+    r.layer.remove();
+    loadModules(true);
+  });
+}
+
 /**
  * Move one service to a newer version, from the button.
  *
@@ -5046,8 +5280,9 @@ async function upgradeVersion(container, from, to) {
   });
   if (!ok) return;
 
-  openProgress(`Upgrading ${container} to ${to}`);
+  openUpgrade(container, from, to);
   let success = false;
+  let result = { ok: false };
   try {
     const res = await fetch('api/updates/upgrade', {
       method: 'POST',
@@ -5067,14 +5302,15 @@ async function upgradeVersion(container, from, to) {
         if (!raw.trim()) continue;
         let msg;
         try { msg = JSON.parse(raw); } catch { continue; }
-        if (msg.done) success = msg.ok === true;
-        else if (typeof msg.line === 'string') progressLine(msg.line);
+        if (msg.done) { success = msg.ok === true; result = msg; }
+        else if (msg.event) upgradeEvent(msg.event);
+        else if (typeof msg.line === 'string') upgradeLine(msg.line, msg.err);
       }
     }
   } catch (err) {
-    progressLine(`ERROR: ${err.message}`);
+    upgradeLine(`ERROR: ${err.message}`, true);
   }
-  closeProgress(success, success ? `${container} is on ${to}` : 'Rolled back');
+  closeUpgrade(result);
   toast(success
     ? `${container} upgraded to ${to}.`
     : `${container} was put back on ${from} — the log says why.`, success ? 'success' : 'error', 12000);
