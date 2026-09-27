@@ -28,7 +28,6 @@ const state = {
   // collected for each app while this tab has been open.
   picked: null,
   series: new Map(),
-  logOpen: false,
   modules: [],
   unclaimed: [],
   categories: [],
@@ -620,173 +619,158 @@ function renderLauncher(modules) {
   const byName = (a, b) => a.friendly_name.localeCompare(b.friendly_name);
   const peak = Math.max(1, ...tiles.map((t) => (t.load && t.load.memory) || 0));
 
-  $('#dock').innerHTML = tiles.slice().sort(byName).map((t) => launchTile(t, peak)).join('');
-
-  // A short history, kept only in this tab.
-  //
-  // The box samples memory every 20 seconds anyway; nothing was keeping the
-  // samples. Sixty of them is twenty minutes, which is enough to see a leak
-  // starting or a restart, and it costs one number per app per refresh.
-  for (const t of tiles) {
-    if (!t.load) continue;
-    const key = tileKey(t.module.id, t.name);
-    const series = state.series.get(key) || [];
-    series.push(t.load.memory);
-    if (series.length > 60) series.shift();
-    state.series.set(key, series);
-  }
-
-  // Nothing picked yet, or the picked app is gone: take the first one, so the
-  // panel is never an empty rectangle asking to be clicked.
+  // The picture replaces the index. Nothing is picked until you click: the
+  // picture is the resting state, and the card under it is a question you ask.
   const all = tiles.slice().sort(byName);
-  if (!all.some((t) => tileKey(t.module.id, t.name) === state.picked)) {
-    state.picked = all.length ? tileKey(all[0].module.id, all[0].name) : null;
-    $('#dock').querySelectorAll('.ix').forEach((el) => {
-      el.classList.toggle('is-on', el.dataset.pick === state.picked);
-    });
-  }
+  $('#apps-panel .split').classList.add('is-picture');
+  $('#dock').innerHTML = appTiles(all);
+  if (!all.some((t) => tileKey(t.module.id, t.name) === state.picked)) state.picked = null;
   renderDetail(all.find((t) => tileKey(t.module.id, t.name) === state.picked) || null, peak);
 
-  syncTileMenu();
 }
 
 /**
- * The right-hand side: one app, with the room to say what it is.
+ * Your apps: one compact tile each, with how it is written under its name
+ * ("Up 11h · 201MB"), and a click that opens a sheet over the page for the
+ * rest — so the page never grows with the app you are looking at. The idea is
+ * the one smart-home dashboards use for devices; nothing else is borrowed.
+ * Only an exception is coloured: red for unhealthy, amber near its memory
+ * limit, grey for stopped. Nothing says "fine" sixteen times.
  *
- * Three things share it. The identity and the facts on the left, because that
- * is what you looked for. A graph on the right, because the empty half of this
- * panel was the first thing anybody noticed about it. And the log underneath,
- * closed, because it is the thing you want SECOND and it is twenty lines long.
+ * It replaced an index with a tall panel beside it (0.16-0.22), whose raw log
+ * was the loudest thing on the Overview. Also tried and turned down on the
+ * test boxes: a circuit board, test tubes, TV-style glass tiles, round
+ * visionOS buttons, and a phone-style home screen.
  */
-function renderDetail(tile, peak) {
+
+/** How full an app is against its own memory limit, 0..1 — or null if it has none. */
+function appFill(tile) {
+  const load = tile.load;
+  if (!load || !load.limit) return null;
+  // Docker reports the host's whole memory as the "limit" of a container
+  // nobody limited. That is not a limit, and 3% of it says nothing.
+  const host = state.summary && state.summary.metrics ? state.summary.metrics.memory.total : null;
+  if (host && load.limit >= host * 0.9) return null;
+  return Math.min(1, load.memory / load.limit);
+}
+
+/** What a tile has to say beyond its name: nothing, unless it is an exception. */
+function appMark(tile) {
+  const st = tile.container ? tile.container.state : null;
+  // Stopped is a choice someone made, not a fault: grey, not red.
+  if (st === 'stopped') return 'off';
+  if (st === 'unhealthy') return 'bad';
+  const fill = appFill(tile);
+  return fill != null && fill >= 0.8 ? 'warn' : '';
+}
+
+function appArtOf(tile) {
+  const color = tile.color || (tile.module.theme && tile.module.theme.color) || null;
+  return iconArt(tile.customIcon || tile.icon || (tile.module.theme && tile.module.theme.emoji), monogram(tile.friendly_name, color));
+}
+
+function appTitle(tile) {
+  const fill = appFill(tile);
+  const parts = [tile.friendly_name];
+  if (tile.load) parts.push(bytes(tile.load.memory));
+  if (fill != null) parts.push(`${Math.round(fill * 100)}% of its limit`);
+  if (tile.container) parts.push(tile.container.state);
+  return parts.join(' · ');
+}
+
+/** The app's own colour, only ever a plain hex — it lands in a style attribute. */
+function appColor(tile) {
+  const c = String(tile.color || (tile.module.theme && tile.module.theme.color) || '');
+  return /^#[0-9a-f]{6}$/i.test(c) ? c : '#64748b';
+}
+
+/** The line under a tile's name: how it is, in words. */
+function appStateLine(tile) {
+  const st = tile.container ? tile.container.state : null;
+  if (!tile.container) return 'Link';
+  if (st === 'stopped') return 'Stopped';
+  if (st === 'unhealthy') return 'Unhealthy';
+  if (st === 'starting') return 'Starting…';
+  const fill = appFill(tile);
+  if (fill != null && fill >= 0.8) return `${bytes(tile.load.memory)} of ${bytes(tile.load.limit)}`;
+  const up = (upFor(tile.container.status) || '').replace(/^up /, 'Up ');
+  return [up, tile.load ? bytes(tile.load.memory) : ''].filter(Boolean).join(' · ') || st || '';
+}
+
+function appTiles(tiles) {
+  const items = tiles.map((t) => {
+    const key = tileKey(t.module.id, t.name);
+    const mark = appMark(t);
+    return `<button type="button" class="ha-app${state.picked === key ? ' is-on' : ''}" data-pick="${escapeHtml(key)}"
+      data-level="${mark}" style="--app:${appColor(t)}" title="${escapeHtml(appTitle(t))}">
+      <span class="ha-ic">${appArtOf(t)}</span>
+      <span class="ha-txt"><b>${escapeHtml(t.friendly_name)}</b><small>${escapeHtml(appStateLine(t))}</small></span>
+    </button>`;
+  }).join('');
+  return `<div class="pic pic-tiles">${items}</div>`;
+}
+
+/**
+ * One app's details, only when asked for, in a sheet over the page: what it
+ * is, how it is, and the four things you do to it. The log lives on the Logs
+ * page.
+ */
+function renderDetail(tile) {
   const el = $('#detail');
   if (!el) return;
-  if (!tile) { el.innerHTML = '<p class="empty">No apps yet.</p>'; return; }
-
+  el.hidden = !tile;
+  // A sheet is fixed to the WINDOW, and a transformed ancestor (the panels
+  // animate in with one) would pin it to the panel instead. So it lives on body.
+  if (el.parentElement !== document.body) document.body.appendChild(el);
+  if (!tile) { el.innerHTML = ''; return; }
+  const key = tileKey(tile.module.id, tile.name);
   const st = tile.container ? tile.container.state : null;
   const down = st === 'stopped' || st === 'unhealthy';
-  const load = tile.load;
-  const color = tile.color || (tile.module.theme && tile.module.theme.color) || null;
-  const art = iconArt(
-    tile.customIcon || tile.icon || (tile.module.theme && tile.module.theme.emoji),
-    monogram(tile.friendly_name, color),
-  );
-  const up = tile.container ? (upFor(tile.container.status) || '--') : '--';
-  const facts = [
-    ['memory', load ? bytes(load.memory) : '--'],
-    ['cpu', load && load.cpu != null ? `${load.cpu}%` : '--'],
-    ['up', up.replace(/^up /, '')],
-    ['port', tile.port_map ? String(tile.port_map) : '--'],
-  ];
-  // The curve behind this row is texture, and texture cannot be read off. The
-  // range it covers therefore has to be written down, or the shape is
-  // decoration pretending to be a measurement.
-  const seen = state.series.get(tileKey(tile.module.id, tile.name)) || [];
-  if (seen.length > 1) {
-    const lo = Math.min(...seen);
-    const hi = Math.max(...seen);
-    facts.push([`${seen.length} samples`, lo === hi ? bytes(lo) : `${bytes(lo)}–${bytes(hi)}`]);
-  }
-
-  const tipList = (tile.module.tips || []).slice(0, 2);
-  const tips = tipList.length
-    ? `<ul class="dt-tips">${tipList.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>`
-    : '';
-  const linkOut = [];
-  if (tile.module.docs) linkOut.push(`<a class="dt-link" href="${escapeHtml(tile.module.docs)}" target="_blank" rel="noopener noreferrer">Docs</a>`);
-  if (tile.module.source) linkOut.push(`<a class="dt-link" href="${escapeHtml(tile.module.source)}" target="_blank" rel="noopener noreferrer">Source</a>`);
-
+  const fill = appFill(tile);
   const name = tile.container ? tile.container.name : null;
+  const up = tile.container && !down ? (upFor(tile.container.status) || '').replace(/^up /, '') : '';
+  const mem = tile.load ? (fill != null ? `${bytes(tile.load.memory)} of ${bytes(tile.load.limit)}` : bytes(tile.load.memory)) : '';
+  const stats = [
+    ['State', st || 'link', st === 'unhealthy' ? 'bad' : st === 'stopped' ? 'off' : ''],
+    ['Up', up || '—', ''],
+    ['Memory', mem || '—', fill != null && fill >= 0.8 ? 'warn' : ''],
+  ];
+  const links = [];
+  if (tile.module.docs) links.push(`<a class="dt-link" href="${escapeHtml(tile.module.docs)}" target="_blank" rel="noopener noreferrer">Docs</a>`);
+  if (tile.module.source) links.push(`<a class="dt-link" href="${escapeHtml(tile.module.source)}" target="_blank" rel="noopener noreferrer">Source</a>`);
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', tile.friendly_name);
   el.innerHTML = `
-    ${memoryChart(tileKey(tile.module.id, tile.name), color)}
-    <div class="dt-top">
-      <div class="dt-main">
-        <div class="dt-head">
-          <span class="dt-art">${art}</span>
-          <div class="dt-title">
-            <p class="dt-name">${escapeHtml(tile.friendly_name)}</p>
-            <p class="dt-state" data-level="${down ? 'bad' : 'good'}">${escapeHtml(st || 'link')}</p>
-          </div>
-        </div>
-        <p class="dt-desc">${escapeHtml(tile.description || tile.module.description || '')}</p>
-        <div class="dt-facts">
-          ${facts.map(([k, v]) => `<div><span>${k}</span><b>${escapeHtml(v)}</b></div>`).join('')}
-        </div>
-        <div class="dt-acts">
-          <a class="button is-primary is-small" href="${escapeHtml(tile.url)}" target="_blank" rel="noopener noreferrer">Open</a>
-          ${name ? `<button type="button" class="button is-small${state.logOpen ? ' is-on' : ''}" data-inline-log="${escapeHtml(name)}">Logs</button>
-          <button type="button" class="button is-small" data-container="${escapeHtml(name)}" data-caction="restart">Restart</button>
-          <button type="button" class="button is-small is-danger" data-container="${escapeHtml(name)}" data-caction="${down ? 'start' : 'stop'}">${down ? 'Start' : 'Stop'}</button>` : ''}
-          ${linkOut.join('')}
-        </div>
+    <div class="dc-head">
+      <span class="dt-art" style="--app:${appColor(tile)}">${appArtOf(tile)}</span>
+      <div class="dc-title">
+        <p class="dt-name">${escapeHtml(tile.friendly_name)}</p>
+        <p class="dc-facts">${escapeHtml(tile.description || tile.module.description || '')}</p>
       </div>
+      <button type="button" class="dc-x" data-pick="${escapeHtml(key)}" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
     </div>
-    ${tips}
-    ${name ? '<div class="dt-rule"></div>' : ''}
-    ${name && state.logOpen
-      ? `<div class="dt-log"><p class="dt-log-head">Last lines <span id="dt-log-name">${escapeHtml(name)}</span></p><pre id="dt-log" class="dt-log-body">reading…</pre></div>`
-      : ''}`;
-
-  if (name && state.logOpen) loadDetailLog(name);
+    <div class="dc-stats">
+      ${stats.map(([k, v, level]) => `<div><span>${k}</span><b data-level="${level}">${escapeHtml(v)}</b></div>`).join('')}
+    </div>
+    <div class="dc-acts">
+      <span class="dc-links">${links.join('')}</span>
+      ${name ? `<button type="button" class="button is-small" data-log-for="${escapeHtml(name)}">Logs</button>
+      <button type="button" class="button is-small" data-container="${escapeHtml(name)}" data-caction="restart">Restart</button>
+      <button type="button" class="button is-small${down ? '' : ' is-danger'}" data-container="${escapeHtml(name)}" data-caction="${down ? 'start' : 'stop'}">${down ? 'Start' : 'Stop'}</button>` : ''}
+      ${st === 'stopped' ? '' : `<a class="button is-primary is-small" href="${escapeHtml(tile.url)}" target="_blank" rel="noopener noreferrer">Open</a>`}
+    </div>`;
+  const x = $('.dc-x', el);
+  if (x && !el.contains(document.activeElement)) x.focus({ preventScroll: true });
 }
 
-/**
- * Memory, for as long as this tab has been open.
- *
- * Drawn by hand rather than with a charting library: the box has to work with
- * no internet, this project ships no npm dependencies, and the whole thing is
- * a path through sixty numbers. The axis is the app's own range, not the
- * box's — the question here is "is this one growing", not "is it the biggest".
- */
-function memoryChart(key, color) {
-  const series = state.series.get(key) || [];
-  // Under two samples there is no shape, and an empty box saying so is worse
-  // than nothing — the figures above already say how much memory it uses.
-  if (series.length < 2) return '';
-
-  const w = 640;
-  const h = 190;
-  const min = Math.min(...series);
-  const max = Math.max(...series);
-  // How much movement counts as movement. A chart that scales to its own
-  // noise turns a steady 200MB into a mountain range and you stop believing
-  // it; one that flattens everything shows nothing. If min and max print the
-  // same number the line is straight on purpose.
-  const span = Math.max(max - min, max * 0.025, 1);
-  const base = max - span;
-  const step = w / (series.length - 1);
-  // Drawn in the lower half of the band: the fill washes down across the
-  // figures, and the app's name stays on clean surface.
-  const top = h * 0.42;
-  const pts = series.map((v, i) => [i * step, h - ((v - base) / span) * (h - top - 14) - 14]);
-  const line = smoothPath(pts);
-  const stroke = color || 'var(--accent)';
-  // Behind the panel's text rather than beside it, and faded at both ends so
-  // it has no beginning and no end — which is honest, since it is a window
-  // onto something still running.
-  return `
-    <svg class="dt-trace" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id="trace-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="${escapeHtml(stroke)}" stop-opacity="0.22"></stop>
-          <stop offset="1" stop-color="${escapeHtml(stroke)}" stop-opacity="0"></stop>
-        </linearGradient>
-        <linearGradient id="trace-ends" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stop-color="#000"></stop>
-          <stop offset="0.22" stop-color="#fff"></stop>
-          <stop offset="0.92" stop-color="#fff"></stop>
-          <stop offset="1" stop-color="#000"></stop>
-        </linearGradient>
-        <mask id="trace-mask"><rect x="0" y="0" width="${w}" height="${h}" fill="url(#trace-ends)"></rect></mask>
-      </defs>
-      <g mask="url(#trace-mask)">
-        <path d="${line} L ${w},${h} L 0,${h} Z" fill="url(#trace-fill)"></path>
-        <path d="${line}" fill="none" stroke="${escapeHtml(stroke)}" stroke-width="1.5"
-          stroke-opacity="0.5" stroke-linejoin="round" stroke-linecap="round"
-          vector-effect="non-scaling-stroke"></path>
-      </g>
-    </svg>`;
-}
+// The sheet closes the way sheets do: Escape, or a click outside it.
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || !state.picked) return;
+  state.picked = null;
+  renderLauncher(state.modules);
+});
 
 /**
  * A curve through the points, not a run of straight segments.
@@ -813,33 +797,6 @@ function smoothPath(pts) {
   return d.join(' ');
 }
 
-/**
- * The tail of the selected app's log, in the panel.
- *
- * Deliberately small and not live: this answers "is it saying anything
- * alarming", and the Logs page answers everything else. A follow here would
- * mean a second event stream open for as long as the Overview is on screen.
- */
-async function loadDetailLog(name) {
-  const view = $('#dt-log');
-  if (!view) return;
-  try {
-    const res = await fetch(`api/logs?name=${encodeURIComponent(name)}&tail=40`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    // Docker's timestamp prefix is dropped here — the column it costs is worth
-    // more than the second it gives, at this size.
-    const lines = String(data.text || '').trim().split(/\r?\n/)
-      .map((l) => l.replace(/^\S+Z\s/, ''))
-      .filter(Boolean)
-      .slice(-14);
-    if ($('#dt-log-name') && $('#dt-log-name').textContent !== name) return;
-    view.textContent = lines.length ? lines.join('\n') : '(nothing yet)';
-  } catch (err) {
-    view.textContent = `could not read the log: ${err.message}`;
-  }
-}
-
 /** Memory and CPU summed over a set of containers; nulls when none reported. */
 function appLoad(containers) {
   const live = (containers || []).filter((c) => c && c.memory != null);
@@ -847,6 +804,9 @@ function appLoad(containers) {
   return {
     memory: live.reduce((sum, c) => sum + c.memory, 0),
     cpu: live.some((c) => c.cpu != null) ? live.reduce((sum, c) => sum + (c.cpu || 0), 0) : null,
+    // Only a limit on EVERY container is a limit for the app: one unbounded
+    // container means the app as a whole has none.
+    limit: live.every((c) => c.memoryLimit) ? live.reduce((sum, c) => sum + c.memoryLimit, 0) : null,
   };
 }
 
@@ -867,56 +827,6 @@ function upFor(status) {
   if (!n) return `up ${said.toLowerCase()}`;
   const unit = { second: 's', minute: 'm', hour: 'h', day: 'd', week: 'w', month: 'mo', year: 'y' };
   return `up ${n[1]}${unit[n[2].toLowerCase()]}`;
-}
-
-/** One app on the Overview: icon, name, state, and how much it is using. */
-function launchTile(tile, peak) {
-  const st = tile.container ? tile.container.state : null;
-  const down = st === 'stopped' || st === 'unhealthy';
-  const color = tile.color || (tile.module.theme && tile.module.theme.color) || null;
-  // The state badge sits on the icon, not in the name row.
-  //
-  // It used to be a dot beside the name with a ring pulsing out of it, which
-  // asked for attention on behalf of the fifteen apps that were FINE and left
-  // the actions no room. On the icon it is out of the way, and it is still.
-  const pip = st ? `<span class="dock-pip" data-state="${escapeHtml(st)}" title="${escapeHtml(st)}"></span>` : '';
-  // The figures used to be built here, one set per tile. They live in the
-  // panel now, for the one app being looked at, so a row carries a name and a
-  // state and nothing else.
-
-  // A per-browser override wins, then the service's own icon, then the
-  // module's emoji — a user-added module has no icon file to point at, so the
-  // emoji is all it has.
-  const art = iconArt(
-    tile.customIcon || tile.icon || (tile.module.theme && tile.module.theme.emoji),
-    monogram(tile.friendly_name, color),
-  );
-
-  // `noreferrer` is not decoration, and it is not the same as `noopener`.
-  //
-  // Without it the browser sends `Referer: http://<box>:8443/` to the app
-  // being opened, and an app with CSRF protection compares that origin to
-  // its own, sees a mismatch and refuses the request. qBittorrent answers a
-  // bare "Unauthorized" — no login form, no explanation — so it reads as a
-  // broken password rather than a header the launcher should not have sent.
-  // Its log is where this is actually visible:
-  //
-  //   WebUI: Referer header & Target origin mismatch!
-  //   Referer header: 'http://192.168.1.77:8443/' Target origin: '192.168.1.77:8080'
-  //
-  // Every outbound link on this page carries it, for the same reason.
-
-  // The link covers the name and figures; the buttons sit outside it, since a
-  // button inside an <a> is invalid and its click would also open the app.
-  // One quiet line in an index. Everything about the app itself
-  // lives in the panel beside it, so nine apps stop competing for attention.
-  const key = tileKey(tile.module.id, tile.name);
-  return `<button type="button" class="ix${down ? ' is-down' : ''}${state.picked === key ? ' is-on' : ''}"
-      data-pick="${escapeHtml(key)}">
-      <span class="ix-art">${art}</span>
-      <span class="ix-name">${escapeHtml(tile.friendly_name)}</span>
-      ${pip}
-    </button>`;
 }
 
 /* ------------------------------------------------- network & maintenance */
@@ -943,133 +853,6 @@ function containerActions(container, on) {
 }
 
 /* --------------------------------------------------- the tile action menu */
-
-/**
- * The per-tile actions, behind one button.
- *
- * Three buttons across a 190px tile cost a divider and a row - 41px on every
- * tile, and the set cannot grow: a fourth action has nowhere to go. One button
- * and a menu costs a click and gives the actions room.
- *
- * ALWAYS visible, never revealed on hover. A phone has no hover, and this page
- * is read from one often enough that a control which only exists on a mouse is
- * not a control. It sits outside the <a>, because a button inside an anchor is
- * invalid and its click would also open the app.
- */
-function tileMenuButton(container, on, url) {
-  const id = escapeHtml(container.name);
-  return `<button type="button" class="dock-kebab" data-menu-for="${id}" data-menu-on="${on ? '1' : '0'}"
-      data-menu-url="${escapeHtml(url || '')}"
-      aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${id}" title="Actions">
-      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-        <circle cx="8" cy="3.1" r="1.45"/><circle cx="8" cy="8" r="1.45"/><circle cx="8" cy="12.9" r="1.45"/>
-      </svg>
-    </button>`;
-}
-
-/**
- * What goes in it. The items carry the same data attributes the buttons did,
- * so the click lands in the handlers that already exist rather than in a
- * second copy of them.
- *
- * Open is first and is a real link, not a button: the tile itself still opens
- * the app, and this is the same destination for anyone who arrived by keyboard
- * or opened the menu before noticing the tile was clickable.
- *
- * A stopped app leads with Start, and still offers Logs: "why did it stop" is
- * the question being asked, and the answer is in the log. It has no page worth
- * opening, so Open is left out rather than offered as a dead link.
- */
-function tileMenuItems(name, on, url) {
-  const id = escapeHtml(name);
-  if (!on) {
-    return `<button type="button" role="menuitem" class="menu-item is-go" data-container="${id}" data-caction="start">Start</button>
-      <button type="button" role="menuitem" class="menu-item" data-log-for="${id}">Logs</button>`;
-  }
-  const open = url
-    ? `<a role="menuitem" class="menu-item" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open</a>`
-    : '';
-  return `${open}
-    <button type="button" role="menuitem" class="menu-item" data-log-for="${id}">Logs</button>
-    <button type="button" role="menuitem" class="menu-item" data-container="${id}" data-caction="restart">Restart</button>
-    <button type="button" role="menuitem" class="menu-item is-stop" data-container="${id}" data-caction="stop"
-      title="Its data stays; start it again any time">Stop</button>`;
-}
-
-// Which tile's menu is open, by container name — not by element. The launcher
-// re-renders every 20 seconds and sorts by memory, so the button under an open
-// menu is replaced, and may have moved. A name survives that; a node does not.
-let openTileMenu = null;
-
-function tileMenuAnchor(name) {
-  return document.querySelector(`[data-menu-for="${CSS.escape(name)}"]`);
-}
-
-function closeTileMenu(refocus) {
-  if (!openTileMenu) return;
-  const { name, el } = openTileMenu;
-  openTileMenu = null;
-  el.remove();
-  const anchor = tileMenuAnchor(name);
-  if (anchor) {
-    anchor.setAttribute('aria-expanded', 'false');
-    if (refocus) anchor.focus();
-  }
-}
-
-/** Put it under the button, right edges aligned, flipped up when the bottom is close. */
-function placeTileMenu(el, anchor) {
-  const r = anchor.getBoundingClientRect();
-  const gap = 4;
-  const pad = 8;
-  const w = el.offsetWidth;
-  const h = el.offsetHeight;
-  let top = r.bottom + gap;
-  if (top + h > window.innerHeight - pad) top = Math.max(pad, r.top - h - gap);
-  const left = Math.max(pad, Math.min(r.right - w, window.innerWidth - w - pad));
-  // Page coordinates, so the menu scrolls with the tile it belongs to instead
-  // of floating away from it.
-  el.style.top = `${top + window.scrollY}px`;
-  el.style.left = `${left + window.scrollX}px`;
-}
-
-function showTileMenu(anchor) {
-  const name = anchor.dataset.menuFor;
-  if (openTileMenu && openTileMenu.name === name) { closeTileMenu(true); return; }
-  closeTileMenu(false);
-
-  const el = document.createElement('div');
-  el.className = 'menu';
-  el.setAttribute('role', 'menu');
-  el.innerHTML = tileMenuItems(name, anchor.dataset.menuOn === '1', anchor.dataset.menuUrl);
-  document.body.appendChild(el);
-  placeTileMenu(el, anchor);
-  anchor.setAttribute('aria-expanded', 'true');
-  openTileMenu = { name, el };
-
-  el.addEventListener('keydown', (event) => {
-    const items = [...el.querySelectorAll('[role="menuitem"]')];
-    const at = items.indexOf(document.activeElement);
-    if (event.key === 'ArrowDown') { event.preventDefault(); items[(at + 1) % items.length].focus(); }
-    else if (event.key === 'ArrowUp') { event.preventDefault(); items[(at - 1 + items.length) % items.length].focus(); }
-    else if (event.key === 'Escape') { event.preventDefault(); closeTileMenu(true); }
-  });
-  const first = el.querySelector('[role="menuitem"]');
-  if (first) first.focus();
-}
-
-/**
- * After the launcher re-renders: follow the tile, or give up if it is gone.
- * Without this the menu is left pointing at a button that no longer exists,
- * which is how a menu ends up hanging in the middle of the page.
- */
-function syncTileMenu() {
-  if (!openTileMenu) return;
-  const anchor = tileMenuAnchor(openTileMenu.name);
-  if (!anchor) { closeTileMenu(false); return; }
-  anchor.setAttribute('aria-expanded', 'true');
-  placeTileMenu(openTileMenu.el, anchor);
-}
 
 /** Logs / Restart / Stop / Start on one container, from the Overview list. */
 async function runContainerAction(name, action) {
@@ -1652,7 +1435,7 @@ const LOG_LEVEL_TOKEN = /(?:^|[\s[|(<])(trace|debug|dbug|dbg|info|inf|notice|war
 const LOG_LEVEL_KV = /\blevel=["']?(\w+)/i;
 
 function logLevel(body) {
-  const head = body.slice(0, 64);
+  const head = body.replace(APP_STAMP, '').slice(0, 64);
   const kv = LOG_LEVEL_KV.exec(body);
   const word = ((kv && kv[1]) || (LOG_LEVEL_TOKEN.exec(head) || [])[1] || '').toLowerCase();
   if (/^(error|err|eror|fatal|crit|critical|panic)$/.test(word)) return 'err';
@@ -5999,32 +5782,18 @@ document.addEventListener('click', async (event) => {
     runAction(actionBtn.dataset.id, actionBtn.dataset.action);
     return;
   }
-  // The tile menu, before anything else reads the click. Opening it is a
-  // click of its own; a click anywhere else closes it, INCLUDING a click on
-  // one of its items — which then falls through to the handlers below, since
-  // the items carry the same attributes the buttons used to.
-  const inlineLog = event.target.closest('[data-inline-log]');
-  if (inlineLog) {
-    event.preventDefault();
-    state.logOpen = !state.logOpen;
+  // The details sheet closes on a click outside it.
+  if (state.picked && !event.target.closest('#detail, [data-pick], .modal, .dialog')) {
+    state.picked = null;
     renderLauncher(state.modules);
-    return;
   }
-
   const pick = event.target.closest('[data-pick]');
   if (pick) {
-    state.picked = pick.dataset.pick;
+    state.picked = state.picked === pick.dataset.pick ? null : pick.dataset.pick;
     renderLauncher(state.modules);
     return;
   }
 
-  const kebab = event.target.closest('[data-menu-for]');
-  if (kebab) {
-    event.preventDefault();
-    showTileMenu(kebab);
-    return;
-  }
-  if (openTileMenu) closeTileMenu(false);
 
   const containerBtn = event.target.closest('[data-container][data-caction]');
   if (containerBtn) {
@@ -6367,9 +6136,6 @@ $('#log-picker').addEventListener('change', () => loadLogs());
 $('#log-tail').addEventListener('change', () => loadLogs());
 
 document.addEventListener('keydown', (event) => {
-  // The menu first: Escape inside it should close the menu, not the drawer
-  // underneath whatever it is sitting on.
-  if (event.key === 'Escape' && openTileMenu) { closeTileMenu(true); return; }
   if (event.key === 'Escape') closeSheet();
   if (event.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) {
     location.hash = '#apps';

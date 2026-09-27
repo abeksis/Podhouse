@@ -538,42 +538,6 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .dock-tile.is-down .dock-open { opacity: 0.6; }
 .dock-tile.is-down .dock-art { filter: grayscale(0.8); }
 
-/* The tile's actions live behind this one button; see tileMenuButton() for
-   why it is always drawn rather than appearing on hover. It is positioned
-   over the tile rather than placed in the head row, because the head row is
-   inside the <a> that opens the app and a button cannot go there. */
-.dock-tile { position: relative; }
-.dock-kebab {
-  position: absolute; top: 0.4rem; right: 0.4rem;
-  width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
-  padding: 0; border: 1px solid transparent; border-radius: 8px;
-  background: transparent; color: var(--muted); cursor: pointer;
-}
-.dock-kebab svg { fill: currentColor; }
-.dock-kebab:hover, .dock-kebab[aria-expanded="true"] {
-  color: var(--text); background: var(--surface-2); border-color: var(--line-strong);
-}
-/* Room for it, so a long name is cut by the button instead of running under it. */
-.dock-head { padding-right: 24px; }
-
-.menu {
-  position: absolute; z-index: 60; min-width: 132px; padding: 0.25rem;
-  background: var(--bg-raised); border: 1px solid var(--line-strong);
-  border-radius: var(--radius); box-shadow: var(--shadow);
-}
-.menu-item {
-  display: block; width: 100%; text-align: left;
-  padding: 0.4rem 0.6rem; border: 0; border-radius: var(--radius-s);
-  background: transparent; color: var(--text); font: inherit; font-size: 0.82rem; cursor: pointer;
-}
-/* Open is an <a> and the rest are buttons; they have to read as one list. */
-.menu-item:hover, .menu-item:focus-visible { background: var(--accent-soft); outline: none; text-decoration: none; color: var(--text); }
-.menu-item.is-go { color: var(--accent-text); }
-.menu-item.is-stop { color: var(--bad); }
-.menu-item.is-stop:hover, .menu-item.is-stop:focus-visible {
-  background: color-mix(in srgb, var(--bad) 14%, transparent);
-}
-
 /* Needs you — one row per thing waiting, each with the verb that clears it. */
 .needs { display: flex; flex-direction: column; }
 .need {
@@ -1392,88 +1356,64 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 /* equal weight, which is the same as giving none of them any.           */
 /* ===================================================================== */
 
-/* Nine equal boxes give nine things equal weight, which is the same as giving
-   none of them any. So: a quiet list of names, and one panel with the room to
-   say what an app is and what you can do to it. */
-/* The page must not grow with the number of apps.
-   With sixteen installed the index was an 800px column and two thirds of the
-   right-hand side was empty, so the whole Overview scrolled for a list. The
-   region has a height now and the LIST scrolls inside it: sixteen apps and
-   sixty apps make the same page. */
-.split {
-  display: grid; grid-template-columns: minmax(190px, 250px) 1fr;
-  gap: 1.6rem; align-items: stretch;
-  height: clamp(420px, calc(100vh - 290px), 760px);
+/* ---- Your apps: tiles, and a sheet for the details --------------------
+   Only an exception is coloured: red unhealthy, amber near its memory
+   limit, grey off. */
+.split.is-picture { display: block; height: auto; }
+#apps-panel:has(.pic) { background: none; border: 0; box-shadow: none; padding: 0; }
+.pic .art-img, .pic .monogram, .dt-art .art-img, .dt-art .monogram { width: 100%; height: 100%; object-fit: contain; }
+/* tiles — one line of state under each name, a sheet for the rest */
+.pic-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(230px, calc((100% - 3 * 10px) / 4)), 1fr)); gap: 10px; }
+.ha-app {
+  display: flex; align-items: center; gap: 0.8rem; min-width: 0;
+  padding: 0.7rem 0.85rem; border-radius: 16px; text-align: left;
+  background: var(--bg-raised); border: 1px solid var(--line); color: var(--text);
+  font: inherit; cursor: pointer; transition: background 0.15s, border-color 0.15s;
 }
-@media (max-width: 800px) {
-  .split { grid-template-columns: 1fr; height: auto; }
-  .index { max-height: 340px; }
+.ha-app:hover, .ha-app:focus-visible { background: var(--surface-2); outline: none; }
+.ha-app:focus-visible, .ha-app.is-on { border-color: var(--line-strong); }
+.ha-ic {
+  width: 40px; height: 40px; padding: 9px; border-radius: 50%; flex: none;
+  background: color-mix(in srgb, var(--app) 24%, transparent);
 }
+.ha-txt { min-width: 0; }
+.ha-txt b { display: block; font-weight: 500; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ha-txt small { display: block; font-size: 0.76rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ha-app[data-level="warn"] small { color: var(--warn); }
+.ha-app[data-level="bad"] small { color: var(--bad); }
+.ha-app[data-level="off"] .ha-ic { background: var(--surface-2); filter: grayscale(1); opacity: 0.6; }
+.ha-app[data-level="off"] b { color: var(--muted); }
 
-.index {
-  display: flex; flex-direction: column;
-  overflow-y: auto; overscroll-behavior: contain;
-  padding-right: 0.4rem;
-  /* A scrollbar that is there when it is needed and quiet when it is not. */
-  scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent;
+/* the details: a sheet over the page, fixed to the window */
+#detail {
+  position: fixed; background: var(--bg-raised); border: 1px solid var(--line-strong); z-index: 60; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(520px, calc(100vw - 32px)); margin: 0; padding: 1.3rem;
+  border-radius: 24px; border-color: var(--line-strong);
+  box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.9), 0 0 0 100vmax rgba(5, 6, 10, 0.55);
 }
-.index::-webkit-scrollbar { width: 6px; }
-.index::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
-.index::-webkit-scrollbar-track { background: transparent; }
-/* No categories either. See renderLauncher: eight headings and the space
-   above each of them were most of the height, and an index is for finding a
-   name. */
-.ix {
-  display: flex; align-items: center; gap: 0.6rem; width: 100%;
-  padding: 0.5rem 0.4rem; border: 0; border-bottom: 1px solid var(--line);
-  background: transparent; color: var(--muted); font: inherit; font-size: 0.85rem;
-  text-align: left; cursor: pointer;
+.dc-head { display: flex; align-items: center; gap: 0.85rem; }
+.dt-art { width: 46px; height: 46px; padding: 10px; border-radius: 50%; flex: none; background: color-mix(in srgb, var(--app, #64748b) 24%, transparent); }
+.dc-title { flex: 1; min-width: 0; }
+.dt-name { margin: 0; font-size: 1.1rem; font-weight: 600; letter-spacing: -0.01em; }
+.dc-facts { margin: 0.1rem 0 0; font-size: 0.8rem; color: var(--muted); }
+.dc-x { width: 32px; height: 32px; flex: none; border-radius: 50%; border: 0; background: var(--surface-2); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.dc-x:hover, .dc-x:focus-visible { color: var(--text); outline: none; box-shadow: 0 0 0 2px var(--line-strong); }
+.dc-x svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.dc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 1rem 0; }
+.dc-stats div { background: var(--well); border-radius: 12px; padding: 0.6rem 0.75rem; min-width: 0; }
+.dc-stats span { display: block; font-size: 0.7rem; color: var(--muted); }
+.dc-stats b { display: block; font-family: var(--mono); font-size: 0.95rem; font-weight: 500; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-stats b[data-level="bad"] { color: var(--bad); }
+.dc-stats b[data-level="warn"] { color: var(--warn); }
+.dc-stats b[data-level="off"] { color: var(--muted); }
+.dc-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+.dc-links { margin-right: auto; display: flex; gap: 0.9rem; }
+.dc-links .dt-link { margin: 0; }
+@media (max-width: 720px) {
+  .pic-tiles { grid-template-columns: 1fr 1fr; }
+  .ha-app { padding: 0.6rem; gap: 0.6rem; }
+  .ha-ic { width: 34px; height: 34px; padding: 7px; }
 }
-.ix:last-child { border-bottom: 0; }
-.ix:hover { color: var(--text-2); }
-.ix.is-on { color: var(--text); }
-/* The selected row is marked by a rule on its leading edge rather than a
-   filled block: a highlight bar competes with the panel it is pointing at. */
-.ix.is-on { box-shadow: inset 2px 0 0 var(--accent); }
-.ix-art { width: 22px; height: 22px; padding: 3px; border-radius: 6px; background: var(--plate); flex: none; font-size: 0.72rem; }
-.ix-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ix .dock-pip { position: static; width: 7px; height: 7px; border: 0; flex: none; }
-.ix.is-down .ix-art { filter: grayscale(0.85); opacity: 0.6; }
-
-.detail {
-  background: var(--bg-raised); border-radius: var(--radius-l);
-  padding: 1.3rem 1.4rem; min-width: 0;
-  display: flex; flex-direction: column; overflow: hidden;
-  position: relative;
-}
-/* The memory curve, lying under the panel's own text.
-   It stopped being a widget: no surface, no border, no axis, faded at both
-   ends and downwards. The range it covers is written into the figures
-   instead, because texture cannot be read off — a shape that looks like data
-   but cannot be measured is worse than no shape at all.
-
-   Anchored to the TOP. It was at the bottom first, which looked right in a
-   mockup where the panel was only as tall as its text; on a real box the
-   panel stretches to the height of the app list, so the curve ended up
-   hundreds of pixels below everything, and an open log drew straight over it.
-   At the top it sits behind the name and the figures at any panel height. */
-.dt-trace {
-  position: absolute; left: 0; right: 0; top: 0;
-  width: 100%; height: 190px; pointer-events: none; z-index: 0;
-}
-.detail > .dt-top,
-.detail > .dt-tips,
-.detail > .dt-log { position: relative; z-index: 1; }
-.dt-head { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 1rem; }
-.dt-art { width: 46px; height: 46px; padding: 8px; border-radius: 13px; background: var(--plate); flex: none; font-size: 1.3rem; }
-.dt-name { margin: 0; font-size: 1.25rem; font-weight: 500; letter-spacing: -0.01em; }
-.dt-state { margin: 0.15rem 0 0; font-size: 0.72rem; color: var(--muted); }
-.dt-state[data-level="bad"] { color: var(--bad); }
-.dt-desc { margin: 0 0 1.4rem; font-size: 0.82rem; line-height: 1.6; color: var(--text-2); max-width: 62ch; }
-.dt-facts { display: flex; flex-wrap: wrap; gap: 1.8rem; margin-bottom: 1.4rem; }
-.dt-facts span { display: block; font-size: 0.66rem; color: var(--muted); margin-bottom: 0.2rem; }
-.dt-facts b { font-family: var(--mono); font-size: 1rem; font-weight: 500; font-variant-numeric: tabular-nums; }
-.dt-acts { display: flex; flex-wrap: wrap; gap: 0.45rem; }
 
 /* The header from concept 1, above the index. */
 .stat-strip { display: none; }
@@ -1549,47 +1489,9 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   .say-cust { padding: 0.4rem; }
 }
 
-/* The panel: facts on the left, the shape on the right, the log underneath. */
-/* One column again: nothing sits beside the text any more. */
-.dt-top { min-width: 0; }
-.dt-main { min-width: 0; }
 .dt-link { font-size: 0.78rem; color: var(--muted); align-self: center; margin-left: 0.3rem; }
 .dt-link:hover { color: var(--accent-text); }
 .button.is-on { border-color: var(--accent-line); color: var(--accent-text); background: var(--accent-soft); }
-
-.dt-tips { margin: 1.3rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
-.dt-tips li {
-  font-size: 0.76rem; line-height: 1.55; color: var(--text-2);
-  padding-left: 0.85rem; border-left: 2px solid var(--line-strong);
-}
-
-/* The line belongs to the panel, not to the log.
-   It used to be the log's own border-top, so it blinked into existence when
-   you opened the log and vanished when you closed it — a rule that moves is
-   read as a glitch. It is drawn once, always, and the log simply appears
-   beneath it. */
-.dt-rule {
-  margin-top: 1.3rem; border-top: 1px solid var(--line); flex: none;
-  position: relative; z-index: 1;
-}
-/* Open, the log takes the room that was empty under a short description
-   instead of adding to the page. */
-.dt-log {
-  margin-top: 1rem;
-  flex: 1; min-height: 0; display: flex; flex-direction: column;
-}
-.dt-log-head {
-  margin: 0 0 0.6rem; font-size: 0.66rem; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--muted);
-}
-.dt-log-head span { font-family: var(--mono); letter-spacing: 0; text-transform: none; color: var(--text-2); margin-left: 0.4rem; }
-.dt-log-body {
-  margin: 0; padding: 0.85rem 1rem; border-radius: var(--radius);
-  background: var(--well); color: var(--text-2);
-  font-family: var(--mono); font-size: 0.72rem; line-height: 1.7;
-  white-space: pre-wrap; word-break: break-word;
-  flex: 1; min-height: 0; overflow: auto;
-}
 
 /* The top bar takes the voice the eyebrow had.
    The name and the address were a heading and a note in two different sizes,
