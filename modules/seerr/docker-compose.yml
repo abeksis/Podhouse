@@ -1,0 +1,80 @@
+# Seerr — a Podhouse module
+#
+# Requests for films and shows, connected to the media server and the *arr apps.
+
+x-homebox:
+  id: seerr
+  added_at: "2026-09-25"
+  title: "Seerr"
+  tagline: "Manage requests for your media library"
+  description: "Seerr is a free and open source application for managing requests for a Jellyfin, Plex or Emby media library. It connects to Sonarr and Radarr so approved films and shows can be collected automatically."
+  source: "https://github.com/seerr-team/seerr"
+  docs: "https://docs.seerr.dev"
+  license: "MIT"
+  icon: "seerr.svg"
+  category: "media"
+  required: false
+  default: false
+  ram: "~350MB"
+  theme:
+    emoji: "🎟️"
+    color: "#6366f1"
+    bg: "rgba(99,102,241,0.12)"
+  backup:
+    exclude:
+      - seerr/logs
+  tips:
+    - "Complete the setup wizard immediately after install — the first account becomes the administrator"
+    - "Connect Jellyfin at http://jellyfin:8096, then add Sonarr at http://sonarr:8989 and Radarr at http://radarr:7878"
+    - "Use the container names above inside Seerr; localhost points back to Seerr itself"
+  services:
+    seerr:
+      friendly_name: "Seerr"
+      color: "#6366f1"
+      description: "Media request manager"
+      icon: "seerr.svg"
+      port_map: 5055
+      url_scheme: "http"
+      first_login: "The first visit opens the setup wizard. Connect the media server and create the administrator account immediately."
+
+services:
+  seerr:
+    image: ghcr.io/seerr-team/seerr:v3.4.1
+    init: true
+    container_name: seerr
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      - TZ=${TZ:-UTC}
+      - LOG_LEVEL=info
+      - PORT=5055
+    ports:
+      - "5055:5055"
+    volumes:
+      - ${HB_ROOT:-/opt/podhouse}/modules/seerr/config/seerr:/app/config
+    networks:
+      - homebox_proxy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5055/api/v1/settings/public || exit 1"]
+      start_period: 20s
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.50'
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: always
+
+networks:
+  homebox_proxy:
+    external: true
