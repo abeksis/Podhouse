@@ -1701,60 +1701,52 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .up-ba.is-waiting .up-fill { animation: none; } }
 
 /* ---------------------------------------------------------------- sidebar
-   A lighter weight everywhere except the page you are on, and no thick
-   outline — the focus ring stays for the keyboard, drawn inside the item. */
-.side .nav-item { font-weight: 400; }
-.side .nav-item svg { stroke-width: 1.4; }
-.side .nav-item.is-current { font-weight: 550; }
-.side .nav-item:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
-.side .side-brand-text strong { font-weight: 550; }
-
-/* ---- track: the pages as stops on one line */
-.side .side-nav { position: relative; gap: 0; padding-left: 1.4rem; }
-.side .side-nav::before { content: ""; position: absolute; left: 0.62rem; top: 1rem; bottom: 1rem; width: 1px; background: var(--line-strong); }
-.side .nav-item { position: relative; padding: 0.56rem 0.6rem; background: none; color: var(--muted); font-weight: 300; }
-.side .nav-item::before {
-  content: ""; position: absolute; left: -1.05rem; top: 50%; width: 9px; height: 9px; margin-top: -4.5px;
-  border-radius: 50%; background: var(--bg-raised); border: 1px solid var(--line-strong);
+   A floating panel: how the box is on top, the pages in two labelled groups,
+   the current page marked by an accent edge on the panel's own margin. */
+.side { border-radius: 22px; gap: 1rem; }
+.sh-hero {
+  border-radius: 16px; padding: 0.95rem 1rem 1rem;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--good) 14%, var(--surface)), var(--surface) 62%);
+  border: 1px solid color-mix(in srgb, var(--good) 22%, transparent);
 }
-.side .nav-item:hover { background: none; color: var(--text); }
-.side .nav-item.is-current { background: none; color: var(--text); font-weight: 550; }
+.sh-hero[data-level="unknown"] { background: var(--surface); border-color: var(--line); }
+.sh-hero[data-level="warn"] { background: linear-gradient(160deg, color-mix(in srgb, var(--warn) 14%, var(--surface)), var(--surface) 62%); border-color: color-mix(in srgb, var(--warn) 26%, transparent); }
+.sh-hero[data-level="bad"] { background: linear-gradient(160deg, color-mix(in srgb, var(--bad) 14%, var(--surface)), var(--surface) 62%); border-color: color-mix(in srgb, var(--bad) 26%, transparent); }
+.sh-k { margin: 0; font-size: 0.66rem; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; color: var(--good); }
+.sh-hero[data-level="warn"] .sh-k { color: var(--warn); }
+.sh-hero[data-level="bad"] .sh-k { color: var(--bad); }
+.sh-big { margin: 0.15rem 0 0.1rem; font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
+.sh-sub { margin: 0; font-size: 0.76rem; line-height: 1.4; color: var(--text-2); }
+.sh-cells { display: flex; gap: 3px; margin-top: 0.75rem; }
+.sh-cells:empty { display: none; }
+.sh-cells i { flex: 1; height: 6px; border-radius: 2px; background: color-mix(in srgb, var(--good) 55%, transparent); }
+.sh-cells i[data-level="warn"] { background: var(--warn); }
+.sh-cells i[data-level="bad"] { background: var(--bad); }
+.sh-cells i[data-level="off"] { background: color-mix(in srgb, var(--text) 18%, transparent); }
+.side-label { margin: 0; padding: 0.9rem 0.8rem 0.35rem; font-size: 0.66rem; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.side-nav > .side-label:first-child { padding-top: 0.1rem; }
+.side .nav-item { padding: 0.62rem 0.75rem; border-radius: 10px; color: var(--text-2); font-weight: 400; background: none; }
+.side .nav-item:hover { background: var(--surface); color: var(--text); }
+.side .nav-item.is-current { background: var(--surface-2); color: var(--text); font-weight: 550; }
 .side .nav-item.is-current::before {
-  background: var(--accent); border-color: var(--accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+  content: ""; position: absolute; left: -0.8rem; top: 0.55rem; bottom: 0.55rem; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--accent);
 }
-.side .nav-item svg { opacity: 0.75; }
+.side .nav-item:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.nav-count { margin-left: auto; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sh-foot { display: flex; align-items: center; gap: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
+.sh-v { flex: 1; font-family: var(--mono); font-size: 0.7rem; color: var(--muted); }
+.sh-foot .side-out { border: 1px solid var(--line-strong); border-radius: 9px; margin: 0; padding: 0.4rem 0.7rem; font-size: 0.8rem; }
+.sh-foot .side-out:hover { background: var(--surface); }
 
-/* ---- track's foot: a lit card with the box's numbers and the way out */
-.sd-card {
-  border-radius: 14px; padding: 1rem 1rem 0.75rem;
-  background:
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 62%),
-    linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface) 60%);
-}
-.sd-k { margin: 0; font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); font-weight: 700; }
-.sd-up { margin: 0.15rem 0 0.8rem; font-size: 1.02rem; font-weight: 300; }
-.sd-up b { font-weight: 600; }
-.sd-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin-bottom: 0.75rem; }
-.sd-num > span { display: block; font-size: 0.64rem; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
-.sd-num > b { display: block; font-size: 1.3rem; font-weight: 250; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
-.sd-num > i { display: block; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--text) 8%, transparent); margin-top: 0.3rem; overflow: hidden; }
-.sd-num em { display: block; height: 100%; width: 0; background: var(--c, var(--accent)); transition: width 0.4s ease, background 0.4s ease; }
-.sd-card .side-out { width: 100%; border-top-color: color-mix(in srgb, var(--text) 10%, transparent); padding-top: 0.6rem; }
-
-/* On a phone the sidebar is a row across the top. The track — a vertical line
-   with a dot per page — has no meaning sideways, so the current page is
-   underlined instead. And the foot comes back as one thing: Log out, as an
-   icon beside the brand. Hiding the whole foot here used to be right, when
-   Sign out lived in the top bar; since 0.17.0 moved it into the sidebar, that
-   rule had left phones with no way to log out at all. */
+/* On a phone the sidebar is a row across the top: the hero, the labels and
+   the counts go, the current page is underlined, and Log out is an icon. */
 @media (max-width: 860px) {
-  .side .side-nav { padding-left: 0; }
-  .side .side-nav::before, .side .nav-item::before { display: none; }
-  .side .nav-item.is-current { box-shadow: inset 0 -2px 0 var(--accent); }
+  .sh-hero, .side-label, .nav-count, .sh-v { display: none; }
+  .side .nav-item.is-current::before { display: none; }
+  .side .nav-item.is-current { box-shadow: inset 0 -2px 0 var(--accent); background: none; }
   .side-foot { display: block; order: 2; margin: 0 0 0 auto; padding: 0; }
-  .sd-card { background: none; padding: 0; border-radius: 0; }
-  .sd-k, .sd-up, .sd-nums { display: none; }
-  .sd-card .side-out { width: auto; border-top: 0; padding: 0.35rem; margin: 0; }
-  .sd-card .side-out span { display: none; }
+  .sh-foot { border: 0; padding: 0; }
+  .sh-foot .side-out { border: 0; padding: 0.35rem; }
+  .sh-foot .side-out span { display: none; }
 }

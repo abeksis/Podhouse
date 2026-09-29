@@ -58,7 +58,16 @@
     </span>
   </a>
 
+  <!-- How the box is, before anything else: filled in by renderSideHero(). -->
+  <div class="sh-hero" id="side-hero" data-level="unknown">
+    <p class="sh-k" id="side-hero-k">&nbsp;</p>
+    <p class="sh-big" id="side-hero-big">&nbsp;</p>
+    <p class="sh-sub" id="side-hero-sub"></p>
+    <div class="sh-cells" id="side-hero-cells"></div>
+  </div>
+
   <nav class="side-nav" aria-label="Sections">
+    <p class="side-label" aria-hidden="true">Your box</p>
     <a href="#home" data-page="home" class="nav-item is-current" aria-current="page">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
       <span>Overview</span>
@@ -66,15 +75,18 @@
     <a href="#apps" data-page="apps" class="nav-item">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
       <span>Apps</span>
+      <span class="nav-count" id="nav-count-apps"></span>
     </a>
     <a href="#logs" data-page="logs" class="nav-item">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M5 10h14M5 15h9M5 20h6"/></svg>
       <span>Logs</span>
+      <span class="nav-count" id="nav-count-logs"></span>
     </a>
     <a href="#reports" data-page="reports" class="nav-item">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
       <span>Reports</span>
     </a>
+    <p class="side-label" aria-hidden="true">Maintenance</p>
     <a href="#updates" data-page="updates" class="nav-item">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>
       <span>Updates</span>
@@ -86,15 +98,7 @@
     </a>
   </nav>
 
-  <!-- The bottom of the column: what the box is doing, and the way out.
-       The three meters are the glance — you do not open Reports to learn that
-       the disk is at 28%, you look. Reports is where the same three numbers
-       get their history and their units; here they are a shape and a
-       percentage. Sign out sits under them because it belongs to the session,
-       and the top bar is about the box. It is here and not there — one place
-       each. -->
-  <!-- The meters and Log out, drawn by buildSideFoot() in app.js: the two
-       sidebar designs lay them out differently. -->
+  <!-- The version, how long the box has been up, and Log out. -->
   <div class="side-foot" id="side-foot"></div>
 </aside>
 

@@ -339,85 +339,70 @@ document.addEventListener('click', (event) => {
 /* --------------------------------------------------------------- the sidebar */
 
 /**
- * The sidebar: the pages hang on one thin line, like stops on a route, and the
- * one you are on is a lit dot. At the foot, a card lit like the greeting holds
- * how long the box has been up, its three numbers, and Log out — leaving
- * belongs with "this box". Only the page you are on is in a regular weight,
- * so the weight itself says where you are, instead of a thick outline.
- */
-
-/**
- * Each meter has a colour of its own, and it moves as the number climbs.
+ * The sidebar: a floating panel whose first thing is how the box is — a card
+ * that says "All good" or what needs a look, how many apps run, one line
+ * naming the exception, and a strip with one cell per installed app, coloured
+ * only for the app that is the exception. The pages sit in two labelled
+ * groups (Your box, Maintenance) with counts beside Apps and Logs, the current
+ * one marked by an accent edge on the panel's margin. The version, the uptime
+ * and Log out share the last line.
  *
- * Calm below 60% — the meter's own colour, so the three are told apart at a
- * glance. From 60% it mixes toward amber, reaching it at 85%; from 85% toward
- * red, reaching it at 95%. Mixed in oklab so the way from blue to red does not
- * pass through a green that would read as "fine" halfway to full.
+ * The three meters that used to live here are on Reports, with their history;
+ * the sidebar answers "is anything wrong", not "how busy is it".
  */
-const METER_COLOUR = { cpu: '#38bdf8', memory: '#a78bfa', disk: '#2dd4bf' };
-
-function meterColour(kind, pct) {
-  const base = METER_COLOUR[kind];
-  if (pct == null) return base;
-  const toWarn = Math.max(0, Math.min(1, (pct - 60) / 25));
-  const toBad = Math.max(0, Math.min(1, (pct - 85) / 10));
-  const warm = `color-mix(in oklab, ${base} ${Math.round((1 - toWarn) * 100)}%, var(--warn))`;
-  return toBad ? `color-mix(in oklab, ${warm} ${Math.round((1 - toBad) * 100)}%, var(--bad))` : warm;
-}
-
-const SIDE_METERS = [
-  { kind: 'cpu', id: 'side-cpu', label: 'CPU', title: 'Processor load right now' },
-  { kind: 'memory', id: 'side-ram', label: 'Memory', short: 'Mem', title: 'Memory in use right now' },
-  { kind: 'disk', id: 'side-disk', label: 'Disk', title: 'How full the system disk is' },
-];
 
 const LOG_OUT = `<button type="button" class="side-out" id="sign-out">
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 8l-4 4 4 4M6 12h9"/></svg>
   <span>Log out</span></button>`;
 
-/** The foot of the column, built once; renderSideMeters fills in the numbers. */
+/** The last line of the column, built once; renderSideHero fills in the text. */
 function buildSideFoot() {
   const foot = $('#side-foot');
   if (!foot) return;
-  foot.innerHTML = `
-    <div class="sd-card">
-      <p class="sd-k">This box</p>
-      <p class="sd-up">Up <b id="side-uptime">—</b></p>
-      <div class="sd-nums">${SIDE_METERS.map((m) => `
-        <div class="sd-num" id="${m.id}" title="${m.title}"><span>${m.short || m.label}</span><b>--</b><i><em></em></i></div>`).join('')}
-      </div>
-      ${LOG_OUT}
-    </div>`;
-}
-
-/** One meter's number, bar and colour. */
-function paintSideMeter(m, pct) {
-  const el = $(`#${m.id}`);
-  if (!el) return;
-  const clamped = pct == null ? 0 : Math.max(0, Math.min(100, pct));
-  el.style.setProperty('--c', meterColour(m.kind, pct));
-  $('b', el).textContent = pct == null ? '--' : `${pct}%`;
-  $('em', el).style.width = `${clamped}%`;
+  foot.innerHTML = `<div class="sh-foot"><span class="sh-v" id="side-foot-v"></span>${LOG_OUT}</div>`;
 }
 
 /**
- * The foot of the sidebar: processor, memory and disk, a number and a thin bar
- * each — and the samples the Reports page draws from.
- *
- * The bars are the glance. They say nothing about units or history, and they
- * are not supposed to: Reports is where the same three numbers get their size
- * in gigabytes and their last hour. What this has to answer is "is anything
- * climbing", and a bar answers that without being read.
+ * The hero. A cell per installed app: red if one of its containers is
+ * unhealthy, grey if all are stopped (a choice, not a fault), amber if one is
+ * at 80% of its own memory limit — a "limit" as large as the host's memory is
+ * Docker saying there is none. Everything else is the same quiet green, so
+ * the eye goes to the one that is different.
+ */
+function renderSideHero(summary) {
+  const { health, counts, host, version } = summary;
+  const m = summary.metrics || {};
+  $('#side-version').textContent = (host && host.name) || 'This box';
+  $('#side-foot-v').textContent = [`v${version}`, m.uptime ? `up ${duration(m.uptime)}` : ''].filter(Boolean).join(' · ');
+  const hostMem = m.memory && m.memory.total;
+  const cells = (state.modules || []).filter((mod) => mod.installed).map((mod) => {
+    const cs = mod.containers || [];
+    let level = '';
+    if (cs.some((c) => c.state === 'unhealthy')) level = 'bad';
+    else if (cs.length && cs.every((c) => c.state === 'stopped')) level = 'off';
+    else if (cs.some((c) => c.memory && c.memoryLimit && (!hostMem || c.memoryLimit < hostMem * 0.9) && c.memory / c.memoryLimit >= 0.8)) level = 'warn';
+    return { title: mod.title || mod.id, level };
+  });
+  const good = !health || health.level === 'good' || health.level === 'unknown';
+  const warn = cells.find((c) => c.level === 'warn');
+  const hero = $('#side-hero');
+  hero.dataset.level = good ? 'good' : health.level;
+  $('#side-hero-k').textContent = good ? 'All good' : 'Needs a look';
+  $('#side-hero-big').textContent = counts ? `${counts.installed} app${counts.installed === 1 ? '' : 's'} running` : '';
+  $('#side-hero-sub').textContent = !good ? health.title : warn ? `${warn.title} is close to its memory limit` : 'Nothing needs you right now';
+  $('#side-hero-cells').innerHTML = cells.map((c) => `<i data-level="${c.level}" title="${escapeHtml(c.title)}"></i>`).join('');
+  if (counts) {
+    $('#nav-count-apps').textContent = String(counts.installed);
+    $('#nav-count-logs').textContent = String(counts.containers);
+  }
+}
+
+/**
+ * The sidebar's text, and the samples the Reports page draws from.
  */
 function renderSideMeters(summary) {
-  $('#side-version').textContent = `v${summary.version}`;
-
+  renderSideHero(summary);
   const m = summary.metrics || {};
-  paintSideMeter(SIDE_METERS[0], m.cpu);
-  paintSideMeter(SIDE_METERS[1], m.memory && m.memory.percent);
-  paintSideMeter(SIDE_METERS[2], m.disk && m.disk.percent);
-  const up = $('#side-uptime');
-  if (up) up.textContent = m.uptime ? duration(m.uptime) : '—';
 
   const push = (key, value) => {
     if (value == null) return;
@@ -3643,6 +3628,9 @@ function loadModules(force = false) {
       state.categories = data.categories || [];
       state.host = data.host || state.host;
       state.containers = state.modules.flatMap((m) => m.containers).concat(state.unclaimed);
+      // The sidebar's strip has one cell per installed app, and this is the
+      // list it counts; without the redraw it sits empty until the next summary.
+      if (state.summary) renderSideHero(state.summary);
       renderCategories();
       renderApps();
       renderLogPicker();
