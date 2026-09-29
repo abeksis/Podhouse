@@ -121,6 +121,9 @@ const DEFAULT_PREFS = {
   home: Object.fromEntries(HOME_SECTIONS.map((name) => [name, true])),
   // Empty means: the city in the box's timezone (lib/weather.js).
   weatherPlace: '',
+  weatherUnits: 'c',
+  // Tile keys in the order they were arranged; empty is alphabetical.
+  appOrder: [],
 };
 
 /**
@@ -128,6 +131,30 @@ const DEFAULT_PREFS = {
  * are whitelisted rather than escaped — an unknown name falls back to the
  * default instead of producing a selector that matches nothing.
  */
+// A place name in any script, with a little punctuation — it is sent on to the
+// geocoder and shown on the page, so nothing else gets through.
+const PLACE_TEXT = /^[\p{L}\p{M}\p{N} .,'()-]{0,80}$/u;
+
+/**
+ * The forecast's place: a name to look up, or one picked from the tile's
+ * suggestions — its name, region, country and coordinates, each checked.
+ */
+function cleanPlace(v) {
+  if (typeof v === 'string') return PLACE_TEXT.test(v.trim()) ? v.trim() : '';
+  if (!v || typeof v !== 'object') return '';
+  const lat = Number(v.lat);
+  const lon = Number(v.lon);
+  const text = (s) => (typeof s === 'string' && PLACE_TEXT.test(s.trim()) ? s.trim() : '');
+  if (!text(v.name) || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return '';
+  return { name: text(v.name), region: text(v.region), country: text(v.country), lat, lon };
+}
+
+/** The order of the app tiles, as tile keys (module/service); anything else is dropped. */
+function cleanOrder(v) {
+  if (!Array.isArray(v)) return [];
+  return v.filter((k) => typeof k === 'string' && /^[\w.-]{1,64}\/[\w.-]{1,64}$/.test(k)).slice(0, 300);
+}
+
 function cleanPrefs(input) {
   const p = input && typeof input === 'object' ? input : {};
   const i = p.insights && typeof p.insights === 'object' ? p.insights : {};
@@ -154,8 +181,9 @@ function cleanPrefs(input) {
     // A place name typed into the weather tile: letters, digits, spaces and
     // a little punctuation, in any script, and short — anything else is
     // dropped, since it is sent on to the geocoder and shown on the page.
-    weatherPlace: typeof p.weatherPlace === 'string' && /^[\p{L}\p{M}\p{N} .,'()-]{0,80}$/u.test(p.weatherPlace.trim())
-      ? p.weatherPlace.trim() : '',
+    weatherPlace: cleanPlace(p.weatherPlace),
+    weatherUnits: p.weatherUnits === 'f' ? 'f' : 'c',
+    appOrder: cleanOrder(p.appOrder),
   };
 }
 
@@ -1113,11 +1141,20 @@ const server = http.createServer(async (req, res) => {
     // lib/insights.js for why a source that cannot be reached says so rather
     // than reporting a zero. POST is the same read with the caches dropped,
     // which is what the card's own refresh button wants.
+    // Places for the weather tile's suggestion list, as a name is typed.
+    if (route === '/api/weather/places') {
+      try {
+        return sendJson(res, 200, { places: await weather.search(url.searchParams.get('q')) });
+      } catch (err) {
+        return sendJson(res, 200, { places: [], error: err.message });
+      }
+    }
+
     // The Overview's forecast, fetched by the box and cached (lib/weather.js).
     if (route === '/api/weather') {
       try {
         const prefs = cleanPrefs(await state.readJson('prefs.json', DEFAULT_PREFS));
-        return sendJson(res, 200, await weather.forecast({ place: prefs.weatherPlace }));
+        return sendJson(res, 200, await weather.forecast({ place: prefs.weatherPlace, units: prefs.weatherUnits }));
       } catch (err) {
         return sendJson(res, 200, { enabled: true, error: err.message });
       }

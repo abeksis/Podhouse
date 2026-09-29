@@ -450,8 +450,10 @@ function ensureAppsHead(tiles) {
         <div class="fam-chips" id="fam-chips" role="group" aria-label="Show"></div>
         <label class="app-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <input id="app-find" type="search" placeholder="Find an app" autocomplete="off" aria-label="Find an app"></label>
+        <button type="button" class="button is-small" id="apps-arrange" aria-pressed="false">Arrange</button>
         <a class="button is-primary is-small" href="#apps" data-page="apps">+ Add app</a>
-      </div>`;
+      </div>
+      <p class="arrange-hint" id="arrange-hint" hidden>Drag a tile — or tap one, then tap where it goes. Arrow keys work too. <button type="button" class="arrange-reset" id="arrange-reset">Back to A–Z</button></p>`;
     $('#app-find').addEventListener('input', (e) => { appFilter.find = e.target.value.trim().toLowerCase(); applyAppFilter(); });
     $('#fam-chips').addEventListener('click', (e) => {
       const b = e.target.closest('[data-fam-chip]');
@@ -523,7 +525,7 @@ async function loadWeather() {
     }
     const day = (iso) => new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(new Date(`${iso}T12:00:00`));
     box.innerHTML = `
-      <div class="wx-now" title="${escapeHtml(`${w.now.label} · feels ${w.now.feels}° · wind ${w.now.wind} km/h · humidity ${w.now.humidity}%`)}">
+      <div class="wx-now" title="${escapeHtml(`${w.now.label} · feels ${w.now.feels}° · wind ${w.now.wind} ${w.units === 'f' ? 'mph' : 'km/h'} · humidity ${w.now.humidity}%`)}">
         <span class="wx-ic">${w.now.icon}</span>
         <span><b>${w.now.temp}°</b><small><button type="button" class="wx-place" data-wx-edit title="Change the city">${escapeHtml(w.place)}</button> · ${escapeHtml(w.now.label)}${w.stale ? ' · not updated' : ''}</small></span>
       </div>
@@ -533,29 +535,169 @@ async function loadWeather() {
   }
 }
 
-// Changing the forecast's city: a small form in place of the tile's text.
+// The forecast's settings, in place of the tile's text: a city picked from
+// suggestions that follow the typing (the geocoder only knows exact
+// spellings, but it matches from the start of a name), and °C or °F.
 const WX_EDIT = '<button type="button" class="wx-set" data-wx-edit>Set city</button>';
+const wxPick = { timer: null, places: [], seq: 0 };
+
+function placeLabel(p) {
+  if (!p) return '';
+  if (typeof p === 'string') return p;
+  return [p.name, p.region && p.region !== p.name ? p.region : '', p.country].filter(Boolean).join(', ');
+}
+
+function openWeatherSettings() {
+  const box = $('#wx');
+  const prefs = state.prefs || {};
+  const units = prefs.weatherUnits === 'f' ? 'f' : 'c';
+  box.innerHTML = `<div class="wx-form">
+      <div class="wx-find">
+        <input id="wx-city" type="text" maxlength="80" placeholder="Search a city, e.g. Beersheba" value="${escapeHtml(placeLabel(prefs.weatherPlace))}"
+          autocomplete="off" aria-label="City for the forecast" aria-controls="wx-list">
+        <ul class="wx-list" id="wx-list" role="listbox" hidden></ul>
+      </div>
+      <div class="wx-units" role="group" aria-label="Temperature in">
+        <button type="button" data-wx-units="c" aria-pressed="${units === 'c'}">°C</button>
+        <button type="button" data-wx-units="f" aria-pressed="${units === 'f'}">°F</button>
+      </div>
+      <button type="button" class="button is-small" data-wx-local title="The city of the box's timezone">Use the box's timezone</button>
+      <button type="button" class="button is-small" data-wx-cancel>Done</button>
+    </div>`;
+  const input = $('#wx-city');
+  input.focus();
+  input.select();
+}
+
+async function suggestPlaces(q) {
+  const list = $('#wx-list');
+  if (!list) return;
+  const seq = ++wxPick.seq;
+  if (q.trim().length < 2) { list.hidden = true; return; }
+  try {
+    const res = await fetch(`api/weather/places?q=${encodeURIComponent(q.trim())}`);
+    const data = await res.json();
+    if (seq !== wxPick.seq) return; // a newer keystroke already asked
+    wxPick.places = data.places || [];
+    list.innerHTML = wxPick.places.length
+      ? wxPick.places.map((p, i) => `<li role="option"><button type="button" data-wx-place="${i}"><b>${escapeHtml(p.name)}</b><span>${escapeHtml([p.region, p.country].filter(Boolean).join(', '))}</span></button></li>`).join('')
+      : `<li class="wx-none">${data.error ? escapeHtml(data.error) : 'No place by that name — try fewer letters'}</li>`;
+    list.hidden = false;
+  } catch {
+    list.hidden = true;
+  }
+}
+
+async function pickPlace(p) {
+  await savePrefs({ weatherPlace: p });
+  loadWeather();
+}
+
+document.addEventListener('input', (event) => {
+  if (event.target.id !== 'wx-city') return;
+  clearTimeout(wxPick.timer);
+  wxPick.timer = setTimeout(() => suggestPlaces(event.target.value), 250);
+});
+document.addEventListener('keydown', (event) => {
+  if (event.target.id !== 'wx-city') return;
+  // Enter takes the first suggestion; Escape leaves the settings.
+  if (event.key === 'Enter') { event.preventDefault(); if (wxPick.places[0]) pickPlace(wxPick.places[0]); }
+  if (event.key === 'Escape') loadWeather();
+});
 document.addEventListener('click', (event) => {
-  const edit = event.target.closest('[data-wx-edit]');
-  if (edit) {
-    const box = $('#wx');
-    const current = (state.prefs && state.prefs.weatherPlace) || '';
-    box.innerHTML = `<form class="wx-form" id="wx-form">
-      <input id="wx-city" type="text" maxlength="80" placeholder="City, e.g. Haifa" value="${escapeHtml(current)}" aria-label="City for the forecast">
-      <button type="submit" class="button is-primary is-small">Save</button>
-      <button type="button" class="button is-small" data-wx-cancel>Cancel</button>
-      <small>Empty uses the box's timezone</small>
-    </form>`;
-    $('#wx-city').focus();
+  if (event.target.closest('[data-wx-edit]')) { openWeatherSettings(); return; }
+  const pick = event.target.closest('[data-wx-place]');
+  if (pick) { pickPlace(wxPick.places[Number(pick.dataset.wxPlace)]); return; }
+  const units = event.target.closest('[data-wx-units]');
+  if (units) {
+    savePrefs({ weatherUnits: units.dataset.wxUnits });
+    for (const b of document.querySelectorAll('[data-wx-units]')) b.setAttribute('aria-pressed', String(b === units));
     return;
   }
+  if (event.target.closest('[data-wx-local]')) { pickPlace(''); return; }
   if (event.target.closest('[data-wx-cancel]')) loadWeather();
 });
-document.addEventListener('submit', async (event) => {
-  if (event.target.id !== 'wx-form') return;
+
+/* ---------------------------------------------------- arranging the tiles */
+
+// Arrange mode: drag a tile with a mouse; on a phone, tap a tile and then tap
+// where it goes; from the keyboard, the arrow keys. A tile moves within its
+// own group — the groups are what the apps are for, not a place to put them.
+// The order is saved in prefs.json, so it is the same on every device.
+const arrange = { on: false, held: null };
+
+function setArranging(on) {
+  arrange.on = on;
+  arrange.held = null;
+  $('#apps-panel').classList.toggle('is-arranging', on);
+  const b = $('#apps-arrange');
+  if (b) { b.setAttribute('aria-pressed', String(on)); b.textContent = on ? 'Done' : 'Arrange'; }
+  for (const t of document.querySelectorAll('#dock .ha-app')) { t.draggable = on; t.classList.remove('is-held'); }
+  const hint = $('#arrange-hint');
+  if (hint) hint.hidden = !on;
+}
+
+function saveArrangement() {
+  const order = [...document.querySelectorAll('#dock .ha-app')].map((t) => t.dataset.pick);
+  savePrefs({ appOrder: order });
+}
+
+/** Put `tile` where `target` is, if they share a group; returns whether it moved. */
+function moveTile(tile, target) {
+  if (!tile || !target || tile === target || tile.parentElement !== target.parentElement) return false;
+  const tiles = [...target.parentElement.children];
+  target.parentElement.insertBefore(tile, tiles.indexOf(tile) < tiles.indexOf(target) ? target.nextSibling : target);
+  return true;
+}
+
+document.addEventListener('click', (event) => {
+  if (event.target.closest('#apps-arrange')) { setArranging(!arrange.on); return; }
+  if (event.target.closest('#arrange-reset')) { savePrefs({ appOrder: [] }); setArranging(false); renderLauncher(state.modules); return; }
+  if (!arrange.on) return;
+  const tile = event.target.closest('#dock .ha-app');
+  if (!tile) return;
+  // In arrange mode a tap arranges; it never opens the app's sheet.
   event.preventDefault();
-  await savePrefs({ weatherPlace: $('#wx-city').value.trim() });
-  loadWeather();
+  event.stopImmediatePropagation();
+  if (!arrange.held) { arrange.held = tile; tile.classList.add('is-held'); return; }
+  const held = arrange.held;
+  held.classList.remove('is-held');
+  arrange.held = null;
+  if (held !== tile && moveTile(held, tile)) saveArrangement();
+  else if (held !== tile) { arrange.held = tile; tile.classList.add('is-held'); }
+}, true);
+
+document.addEventListener('keydown', (event) => {
+  if (!arrange.on || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  const tile = event.target.closest && event.target.closest('#dock .ha-app');
+  if (!tile) return;
+  event.preventDefault();
+  const back = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
+  const next = back ? tile.previousElementSibling : tile.nextElementSibling;
+  if (next && moveTile(tile, next)) { tile.focus(); saveArrangement(); }
+});
+
+document.addEventListener('dragstart', (event) => {
+  const tile = arrange.on && event.target.closest && event.target.closest('#dock .ha-app');
+  if (!tile) return;
+  arrange.held = tile;
+  tile.classList.add('is-held');
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', tile.dataset.pick);
+});
+document.addEventListener('dragover', (event) => {
+  const target = arrange.on && event.target.closest && event.target.closest('#dock .ha-app');
+  if (target && arrange.held && target.parentElement === arrange.held.parentElement) event.preventDefault();
+});
+document.addEventListener('drop', (event) => {
+  const target = arrange.on && event.target.closest && event.target.closest('#dock .ha-app');
+  if (!target || !arrange.held) return;
+  event.preventDefault();
+  if (moveTile(arrange.held, target)) saveArrangement();
+});
+document.addEventListener('dragend', () => {
+  if (arrange.held) arrange.held.classList.remove('is-held');
+  arrange.held = null;
 });
 
 /**
@@ -748,10 +890,13 @@ function renderLauncher(modules) {
 
   // The picture replaces the index. Nothing is picked until you click: the
   // picture is the resting state, and the card under it is a question you ask.
-  const all = tiles.slice().sort(byName);
+  const order = new Map(((state.prefs && state.prefs.appOrder) || []).map((k, i) => [k, i]));
+  const at = (t) => (order.has(tileKey(t.module.id, t.name)) ? order.get(tileKey(t.module.id, t.name)) : Infinity);
+  const all = tiles.slice().sort((a, b) => (at(a) - at(b)) || byName(a, b));
   $('#apps-panel .split').classList.add('is-picture');
   $('#dock').innerHTML = appTiles(all);
   applyAppFilter();
+  if (arrange.on) setArranging(true);
   if (!all.some((t) => tileKey(t.module.id, t.name) === state.picked)) state.picked = null;
   renderDetail(all.find((t) => tileKey(t.module.id, t.name) === state.picked) || null, peak);
 

@@ -1795,6 +1795,24 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .wx-place { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
 .wx-place:hover { color: var(--text); }
 .wx-set { font: inherit; font-size: 0.72rem; color: var(--text); background: rgba(255, 255, 255, 0.08); border: 0; border-radius: 8px; padding: 0.3rem 0.6rem; cursor: pointer; }
+
+/* ---- weather settings: suggestions and units */
 .wx-form { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
-.wx-form input { width: 150px; background: rgba(0, 0, 0, 0.3); border: 1px solid color-mix(in srgb, var(--text) 15%, transparent); border-radius: 8px; color: var(--text); font: inherit; font-size: 0.82rem; padding: 0.3rem 0.55rem; }
-.wx-form small { width: 100%; font-size: 0.66rem; color: color-mix(in srgb, var(--text) 60%, transparent); }
+.wx-find { position: relative; }
+.wx-find input { width: 210px; background: rgba(0, 0, 0, 0.3); border: 1px solid color-mix(in srgb, var(--text) 15%, transparent); border-radius: 8px; color: var(--text); font: inherit; font-size: 0.82rem; padding: 0.35rem 0.6rem; }
+.wx-list { position: absolute; z-index: 40; left: 0; top: calc(100% + 4px); width: 300px; margin: 0; padding: 4px; list-style: none; background: var(--bg-raised); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow); max-height: 280px; overflow: auto; }
+.wx-list button { display: flex; flex-direction: column; align-items: flex-start; width: 100%; text-align: left; font: inherit; color: var(--text); background: none; border: 0; border-radius: 8px; padding: 0.4rem 0.55rem; cursor: pointer; }
+.wx-list button:hover, .wx-list button:focus-visible { background: var(--surface-2); outline: none; }
+.wx-list b { font-size: 0.85rem; font-weight: 600; }
+.wx-list span { font-size: 0.72rem; color: var(--muted); }
+.wx-none { padding: 0.5rem 0.6rem; font-size: 0.78rem; color: var(--muted); }
+.wx-units { display: inline-flex; border: 1px solid color-mix(in srgb, var(--text) 15%, transparent); border-radius: 8px; overflow: hidden; }
+.wx-units button { font: inherit; font-size: 0.78rem; color: var(--text-2); background: none; border: 0; padding: 0.3rem 0.6rem; cursor: pointer; }
+.wx-units button[aria-pressed="true"] { background: rgba(255, 255, 255, 0.12); color: var(--text); }
+
+/* ---- arranging the tiles */
+.arrange-hint { width: 100%; margin: 0.2rem 0 0; font-size: 0.76rem; color: var(--muted); }
+.arrange-reset { font: inherit; color: var(--accent-text); background: none; border: 0; padding: 0; margin-left: 0.4rem; cursor: pointer; text-decoration: underline; }
+#apps-arrange[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-line); }
+#apps-panel.is-arranging .ha-app { cursor: grab; outline: 1px dashed color-mix(in srgb, var(--text) 18%, transparent); outline-offset: -1px; }
+#apps-panel.is-arranging .ha-app.is-held { outline: 2px solid var(--accent); background: var(--surface-2); cursor: grabbing; }
