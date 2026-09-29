@@ -484,8 +484,12 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
 }
+/* Each tile's width is its saved span out of twelve (applyHomeLayout). */
+.home-layout > [data-widget] { grid-column: span var(--span, 12); min-width: 0; }
+.home-tools { position: relative; display: flex; justify-content: flex-end; gap: 0.5rem; margin: 0 0 0.8rem; }
+.home-tools .cust-pop { right: 0; top: calc(100% + 0.4rem); }
 .area-dock { grid-column: 1 / -1; }
 .area-wide { grid-column: 1 / -1; }
 
@@ -1425,7 +1429,7 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
    whichever accent is set, so it follows the theme rather than fighting it. */
 .say {
   position: relative;
-  max-width: 1920px; margin: 0 auto 1.4rem;
+  margin: 0;
   padding: 1.7rem 1.6rem;
   border-radius: var(--radius-l);
   /* The wash and the light are both BACKGROUNDS, not an ::after circle that
@@ -1474,13 +1478,11 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 /* What Customize switches off. The render functions are untouched: they still
    decide whether a panel has anything to say, and this decides whether the
    page was asked for it at all. */
-#screen-home[data-off~="welcome"] .say-text { display: none; }
-#screen-home[data-off~="welcome"] .say { background: none; padding: 0 0 0.3rem; }
-#screen-home[data-off~="welcome"] .cust-pop { right: 0; }
+#screen-home[data-off~="welcome"] #say,
 #screen-home[data-off~="apps"] #apps-panel,
 #screen-home[data-off~="links"] #links-panel,
 #screen-home[data-off~="pulse"] #pulse-panel,
-#screen-home[data-off~="weather"] #wx { display: none; }
+#screen-home[data-off~="weather"] #w-weather { display: none; }
 
 @media (max-width: 720px) {
   .say { padding: 1.25rem 1.1rem; gap: 0.6rem; }
@@ -1813,6 +1815,35 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 /* ---- arranging the tiles */
 .arrange-hint { width: 100%; margin: 0.2rem 0 0; font-size: 0.76rem; color: var(--muted); }
 .arrange-reset { font: inherit; color: var(--accent-text); background: none; border: 0; padding: 0; margin-left: 0.4rem; cursor: pointer; text-decoration: underline; }
-#apps-arrange[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-line); }
 #apps-panel.is-arranging .ha-app { cursor: grab; outline: 1px dashed color-mix(in srgb, var(--text) 18%, transparent); outline-offset: -1px; }
 #apps-panel.is-arranging .ha-app.is-held { outline: 2px solid var(--accent); background: var(--surface-2); cursor: grabbing; }
+
+/* ---- the status and weather tiles */
+.w-status .say-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); height: 100%; align-content: center; }
+.w-status .say-stats div { background: var(--well); min-width: 0; }
+.w-status .say-stats span { color: var(--muted); }
+.w-weather { display: flex; align-items: center; }
+.w-weather .wx { background: none; padding: 0; width: 100%; flex-wrap: wrap; }
+.w-weather .wx-now small, .w-weather .wx-days div, .w-weather .wx-err { color: var(--muted); }
+.w-weather .wx-days { border-left-color: var(--line); margin-left: auto; }
+
+/* ---- arranging the page: a bar on every tile */
+.w-bar { display: flex; align-items: center; gap: 0.5rem; width: 100%; margin: 0 0 0.7rem; padding: 0.4rem 0.5rem; border-radius: 10px; background: var(--surface-2); cursor: grab; font-size: 0.8rem; flex-wrap: wrap; }
+.w-bar b { font-weight: 600; }
+.w-grip { color: var(--muted); font-size: 1rem; line-height: 1; }
+.w-sizes { display: inline-flex; margin-left: auto; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+.w-sizes button, .w-move { font: inherit; font-size: 0.74rem; color: var(--text-2); background: none; border: 0; padding: 0.2rem 0.5rem; cursor: pointer; }
+.w-sizes button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.w-move { border: 1px solid var(--line-strong); border-radius: 7px; }
+#screen-home.is-arranging #home-layout > [data-widget] { outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 3px; }
+#screen-home.is-arranging #home-layout > [data-widget].is-held { outline: 2px solid var(--accent); }
+/* While arranging, even an empty or switched-off tile shows, so it can be placed. */
+#screen-home.is-arranging #home-layout > [data-widget][hidden],
+#screen-home.is-arranging #home-layout > [data-widget] { display: flex !important; flex-direction: column; opacity: 1; }
+#screen-home.is-arranging .say { flex-wrap: wrap; }
+#page-arrange[aria-pressed="true"] { color: var(--accent-text); border-color: var(--accent-line); background: var(--accent-soft); }
+#page-arrange svg { fill: none; }
+
+@media (max-width: 860px) {
+  .home-layout > [data-widget] { grid-column: 1 / -1; }
+}

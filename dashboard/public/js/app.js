@@ -450,10 +450,9 @@ function ensureAppsHead(tiles) {
         <div class="fam-chips" id="fam-chips" role="group" aria-label="Show"></div>
         <label class="app-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <input id="app-find" type="search" placeholder="Find an app" autocomplete="off" aria-label="Find an app"></label>
-        <button type="button" class="button is-small" id="apps-arrange" aria-pressed="false">Arrange</button>
         <a class="button is-primary is-small" href="#apps" data-page="apps">+ Add app</a>
       </div>
-      <p class="arrange-hint" id="arrange-hint" hidden>Drag a tile — or tap one, then tap where it goes. Arrow keys work too. <button type="button" class="arrange-reset" id="arrange-reset">Back to A–Z</button></p>`;
+      <p class="arrange-hint" id="arrange-hint" hidden>Apps move within their group the same way. <button type="button" class="arrange-reset" id="arrange-reset">Apps back to A–Z</button></p>`;
     $('#app-find').addEventListener('input', (e) => { appFilter.find = e.target.value.trim().toLowerCase(); applyAppFilter(); });
     $('#fam-chips').addEventListener('click', (e) => {
       const b = e.target.closest('[data-fam-chip]');
@@ -484,9 +483,8 @@ function applyAppFilter() {
 function renderSayStatus(summary) {
   const say = $('#say');
   if (!say) return;
-  if (!$('#say-side')) {
-    const cust = $('#customize-open');
-    cust.insertAdjacentHTML('beforebegin', '<div class="say-side" id="say-side"><div class="say-stats" id="say-stats"></div><div class="wx" id="wx" hidden></div></div>');
+  if (!renderSayStatus.started) {
+    renderSayStatus.started = true;
     loadWeather();
     setInterval(loadWeather, 20 * 60 * 1000);
   }
@@ -630,8 +628,6 @@ function setArranging(on) {
   arrange.on = on;
   arrange.held = null;
   $('#apps-panel').classList.toggle('is-arranging', on);
-  const b = $('#apps-arrange');
-  if (b) { b.setAttribute('aria-pressed', String(on)); b.textContent = on ? 'Done' : 'Arrange'; }
   for (const t of document.querySelectorAll('#dock .ha-app')) { t.draggable = on; t.classList.remove('is-held'); }
   const hint = $('#arrange-hint');
   if (hint) hint.hidden = !on;
@@ -651,8 +647,7 @@ function moveTile(tile, target) {
 }
 
 document.addEventListener('click', (event) => {
-  if (event.target.closest('#apps-arrange')) { setArranging(!arrange.on); return; }
-  if (event.target.closest('#arrange-reset')) { savePrefs({ appOrder: [] }); setArranging(false); renderLauncher(state.modules); return; }
+  if (event.target.closest('#arrange-reset')) { savePrefs({ appOrder: [] }); renderLauncher(state.modules); return; }
   if (!arrange.on) return;
   const tile = event.target.closest('#dock .ha-app');
   if (!tile) return;
@@ -680,6 +675,7 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('dragstart', (event) => {
   const tile = arrange.on && event.target.closest && event.target.closest('#dock .ha-app');
   if (!tile) return;
+  event.stopPropagation();
   arrange.held = tile;
   tile.classList.add('is-held');
   event.dataTransfer.effectAllowed = 'move';
@@ -698,6 +694,139 @@ document.addEventListener('drop', (event) => {
 document.addEventListener('dragend', () => {
   if (arrange.held) arrange.held.classList.remove('is-held');
   arrange.held = null;
+});
+
+/* ------------------------------------------------------ the page's tiles */
+
+// The Overview's tiles, their names in the Arrange bar, and their widths out
+// of twelve columns before anyone arranges them — the greeting, the figures
+// and the weather share the first row; the rest are full width.
+const HOME_WIDGETS = [
+  { id: 'welcome', label: 'Welcome', span: 6 },
+  { id: 'status', label: 'Status', span: 3 },
+  { id: 'weather', label: 'Weather', span: 3 },
+  { id: 'apps', label: 'Your apps', span: 12 },
+  { id: 'links', label: 'Links', span: 12 },
+  { id: 'pulse', label: 'Right now', span: 12 },
+];
+const WIDGET_SPANS = [[3, '¼'], [4, '⅓'], [6, '½'], [8, '⅔'], [12, 'Full']];
+
+/** The saved layout, completed with anything it does not mention (a tile new in this version). */
+function homeLayout() {
+  const saved = (state.prefs && Array.isArray(state.prefs.homeLayout)) ? state.prefs.homeLayout : [];
+  const known = new Map(HOME_WIDGETS.map((w) => [w.id, w]));
+  const out = saved.filter((w) => known.has(w.id));
+  for (const w of HOME_WIDGETS) if (!out.some((o) => o.id === w.id)) out.push({ id: w.id, span: w.span });
+  return out;
+}
+
+/** Put the tiles in the saved order, at the saved widths. */
+function applyHomeLayout() {
+  const grid = $('#home-layout');
+  if (!grid) return;
+  for (const w of homeLayout()) {
+    const el = grid.querySelector(`:scope > [data-widget="${w.id}"]`);
+    if (!el) continue;
+    el.style.setProperty('--span', w.span);
+    grid.appendChild(el); // appending an existing node moves it: DOM order is the order
+    const bar = el.querySelector(':scope > .w-bar');
+    if (bar) for (const b of bar.querySelectorAll('[data-span]')) b.setAttribute('aria-pressed', String(Number(b.dataset.span) === w.span));
+  }
+}
+
+function saveHomeLayout() {
+  const layout = [...document.querySelectorAll('#home-layout > [data-widget]')].map((el) => ({
+    id: el.dataset.widget, span: Number(getComputedStyle(el).getPropertyValue('--span')) || 12,
+  }));
+  savePrefs({ homeLayout: layout });
+}
+
+const pageArrange = { on: false, held: null };
+
+/** Arrange mode for the whole page: a bar on every tile to move it and size it. */
+function setPageArranging(on) {
+  pageArrange.on = on;
+  pageArrange.held = null;
+  $('#screen-home').classList.toggle('is-arranging', on);
+  const b = $('#page-arrange');
+  b.setAttribute('aria-pressed', String(on));
+  $('span', b).textContent = on ? 'Done' : 'Arrange';
+  for (const el of document.querySelectorAll('#home-layout > [data-widget]')) {
+    let bar = el.querySelector(':scope > .w-bar');
+    if (on && !bar) {
+      const meta = HOME_WIDGETS.find((w) => w.id === el.dataset.widget);
+      el.insertAdjacentHTML('afterbegin', `<div class="w-bar" draggable="true" data-bar="${el.dataset.widget}">
+        <span class="w-grip" aria-hidden="true">⠿</span><b>${escapeHtml(meta ? meta.label : el.dataset.widget)}</b>
+        <span class="w-sizes" role="group" aria-label="Width">${WIDGET_SPANS.map(([n, l]) => `<button type="button" data-span="${n}" aria-pressed="false">${l}</button>`).join('')}</span>
+        <button type="button" class="w-move" data-wmove="-1" aria-label="Move earlier">‹</button><button type="button" class="w-move" data-wmove="1" aria-label="Move later">›</button>
+      </div>`);
+    } else if (!on && bar) bar.remove();
+    el.classList.remove('is-held');
+  }
+  // Hidden tiles (a panel with nothing to show yet, or one switched off in
+  // Customize) still show while arranging, so they can be put somewhere.
+  if (on) applyHomeLayout();
+  setArranging(on);
+}
+
+function moveWidget(el, target) {
+  if (!el || !target || el === target) return false;
+  const all = [...target.parentElement.children];
+  target.parentElement.insertBefore(el, all.indexOf(el) < all.indexOf(target) ? target.nextSibling : target);
+  return true;
+}
+
+document.addEventListener('click', (event) => {
+  if (event.target.closest('#page-arrange')) { setPageArranging(!pageArrange.on); return; }
+  if (!pageArrange.on) return;
+  const size = event.target.closest('.w-bar [data-span]');
+  if (size) {
+    const el = size.closest('[data-widget]');
+    el.style.setProperty('--span', size.dataset.span);
+    for (const b of size.parentElement.children) b.setAttribute('aria-pressed', String(b === size));
+    saveHomeLayout();
+    return;
+  }
+  const step = event.target.closest('.w-bar [data-wmove]');
+  if (step) {
+    const el = step.closest('[data-widget]');
+    const to = Number(step.dataset.wmove) < 0 ? el.previousElementSibling : el.nextElementSibling;
+    if (to && to.matches('[data-widget]') && moveWidget(el, to)) saveHomeLayout();
+    return;
+  }
+  // Tap a tile's bar, then another's: the first goes where the second is.
+  const bar = event.target.closest('.w-bar');
+  if (!bar) return;
+  const el = bar.closest('[data-widget]');
+  if (!pageArrange.held) { pageArrange.held = el; el.classList.add('is-held'); return; }
+  const held = pageArrange.held;
+  held.classList.remove('is-held');
+  pageArrange.held = null;
+  if (moveWidget(held, el)) saveHomeLayout();
+});
+
+document.addEventListener('dragstart', (event) => {
+  const bar = pageArrange.on && event.target.closest && event.target.closest('.w-bar');
+  if (!bar) return;
+  pageArrange.held = bar.closest('[data-widget]');
+  pageArrange.held.classList.add('is-held');
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', bar.dataset.bar);
+});
+document.addEventListener('dragover', (event) => {
+  if (!pageArrange.on || !pageArrange.held || !event.target.closest) return;
+  if (event.target.closest('#home-layout > [data-widget]')) event.preventDefault();
+});
+document.addEventListener('drop', (event) => {
+  if (!pageArrange.on || !pageArrange.held || !event.target.closest) return;
+  const target = event.target.closest('#home-layout > [data-widget]');
+  if (!target) return;
+  event.preventDefault();
+  if (moveWidget(pageArrange.held, target)) saveHomeLayout();
+});
+document.addEventListener('dragend', () => {
+  if (pageArrange.held) pageArrange.held.classList.remove('is-held');
+  pageArrange.held = null;
 });
 
 /**
@@ -4109,6 +4238,7 @@ function applyPrefs(prefs) {
   renderChoices();
   renderInsightToggles();
   applyHomeSections();
+  applyHomeLayout();
   // A panel that was just switched off should leave the card now, not at the
   // next poll — the checkbox is a claim about the page and it should be true
   // by the time the eye moves back to it.

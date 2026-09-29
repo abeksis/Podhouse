@@ -136,25 +136,45 @@
          spent on a preview of the screen. A fault does not belong here
          either: the Status tile says it in its own words and carries the
          button that fixes it, and the chip in the top bar says it again. -->
-    <section class="say" id="say">
+    <!-- The page's own controls, apart from any tile: Customize says what is
+         shown, Arrange where. A control that could be hidden or moved away
+         with the tile it sat in could not be used to bring that tile back. -->
+    <div class="home-tools">
+      <button type="button" class="say-cust" id="page-arrange" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="17" height="7" rx="1.5"/></svg>
+        <span>Arrange</span>
+      </button>
+    <!-- Customize. It stays here even when the greeting itself is switched
+         off — the band collapses to this button alone, because a control
+         that hides itself cannot be used to bring anything back. -->
+    <button type="button" class="say-cust" id="customize-open" aria-expanded="false" aria-controls="customize-pop">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h8M16 7h4M4 17h4M12 17h8"/><circle cx="14" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
+      <span>Customize</span>
+    </button>
+
+    <div class="cust-pop" id="customize-pop" hidden>
+      <p class="cust-title">Show on this page</p>
+      <div id="customize-list"></div>
+      <p class="cust-foot">Status always shows. It is the answer to &ldquo;is my server OK&rdquo;.</p>
+    </div>
+    </div>
+
+    <div class="home-layout" id="home-layout">
+    <section class="say" id="say" data-widget="welcome">
       <div class="say-text">
         <p class="say-line">Welcome to <b>Podhouse</b></p>
         <p class="say-tag">Your box, your apps, nothing leaving the house.</p>
       </div>
 
-      <!-- Customize. It stays here even when the greeting itself is switched
-           off — the band collapses to this button alone, because a control
-           that hides itself cannot be used to bring anything back. -->
-      <button type="button" class="say-cust" id="customize-open" aria-expanded="false" aria-controls="customize-pop">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h8M16 7h4M4 17h4M12 17h8"/><circle cx="14" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
-        <span>Customize</span>
-      </button>
+    </section>
 
-      <div class="cust-pop" id="customize-pop" hidden>
-        <p class="cust-title">Show on this page</p>
-        <div id="customize-list"></div>
-        <p class="cust-foot">Status always shows. It is the answer to &ldquo;is my server OK&rdquo;.</p>
-      </div>
+    <!-- How the box is, as three figures; and the forecast. Tiles of their
+         own so each can go where it is wanted. -->
+    <section class="panel w-status" id="w-status" data-widget="status" aria-label="Status">
+      <div class="say-stats" id="say-stats"></div>
+    </section>
+    <section class="panel w-weather" id="w-weather" data-widget="weather" aria-label="Weather">
+      <div class="wx" id="wx"></div>
     </section>
 
     <div class="stat-strip">
@@ -204,10 +224,9 @@
       </a>
     </div>
 
-    <div class="home-layout">
       <!-- APPS — every installed app with a web page, one click away. This is
            the main Overview workspace, so it uses the full available width. -->
-      <section class="panel area-dock" id="apps-panel">
+      <section class="panel area-dock" id="apps-panel" data-widget="apps">
         <div class="panel-head">
           <h2 class="panel-title">Your apps</h2>
           <span class="panel-note mono" id="dock-count"></span>
@@ -221,7 +240,7 @@
       </section>
 
       <!-- LINKS — bookmarks to things that are NOT on this box -->
-      <section class="panel area-wide" id="links-panel" hidden>
+      <section class="panel area-wide" id="links-panel" data-widget="links" hidden>
         <div class="panel-head">
           <h2 class="panel-title">Links</h2>
           <span class="panel-note mono" id="links-count"></span>
@@ -236,7 +255,7 @@
 
       <!-- RIGHT NOW — what the media apps are doing. Hidden until there is
            something to say, so a box without them never shows an empty panel. -->
-      <section class="panel area-wide" id="pulse-panel" hidden>
+      <section class="panel area-wide" id="pulse-panel" data-widget="pulse" hidden>
         <div class="panel-head">
           <h2 class="panel-title">Right now</h2>
           <button type="button" class="panel-note mono linkish" id="pulse-time" title="Ask the apps again"></button>

@@ -124,6 +124,8 @@ const DEFAULT_PREFS = {
   weatherUnits: 'c',
   // Tile keys in the order they were arranged; empty is alphabetical.
   appOrder: [],
+  // The Overview's tiles in order with their widths; empty is the default layout.
+  homeLayout: [],
 };
 
 /**
@@ -147,6 +149,22 @@ function cleanPlace(v) {
   const text = (s) => (typeof s === 'string' && PLACE_TEXT.test(s.trim()) ? s.trim() : '');
   if (!text(v.name) || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return '';
   return { name: text(v.name), region: text(v.region), country: text(v.country), lat, lon };
+}
+
+// The Overview's tiles and the widths they may take, out of twelve columns.
+const HOME_WIDGETS = ['welcome', 'status', 'weather', 'apps', 'links', 'pulse'];
+const WIDGET_SPANS = [3, 4, 6, 8, 12];
+/** The Overview's layout: known tiles, once each, at an allowed width. */
+function cleanLayout(v) {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const w of v) {
+    if (!w || !HOME_WIDGETS.includes(w.id) || seen.has(w.id)) continue;
+    seen.add(w.id);
+    out.push({ id: w.id, span: WIDGET_SPANS.includes(Number(w.span)) ? Number(w.span) : 12 });
+  }
+  return out;
 }
 
 /** The order of the app tiles, as tile keys (module/service); anything else is dropped. */
@@ -184,6 +202,7 @@ function cleanPrefs(input) {
     weatherPlace: cleanPlace(p.weatherPlace),
     weatherUnits: p.weatherUnits === 'f' ? 'f' : 'c',
     appOrder: cleanOrder(p.appOrder),
+    homeLayout: cleanLayout(p.homeLayout),
   };
 }
 
