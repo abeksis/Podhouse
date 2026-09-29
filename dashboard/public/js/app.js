@@ -493,8 +493,9 @@ function renderSayStatus(summary) {
 }
 
 /**
- * The line under "Welcome to Podhouse": the day, and the weather in a few
- * words. It used to be the status sentence, which the sidebar's card already
+ * The line under "Welcome to Podhouse": a greeting, the date and the time
+ * (the weather has a tile of its own). It used to be the status sentence,
+ * which the sidebar's card already
  * says on every page — the same words twice on one screen.
  */
 function paintSayTag() {
@@ -504,10 +505,9 @@ function paintSayTag() {
   const hour = now.getHours();
   const hello = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 22 ? 'Good evening' : 'Good night';
   const date = now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-  const w = paintSayTag.weather;
-  const off = state.prefs && state.prefs.home && state.prefs.home.weather === false;
-  const sky = w && w.now && !off ? ` · ${w.place} ${w.now.temp}°, ${w.now.label.toLowerCase()}` : '';
-  tag.textContent = `${hello} · ${date}${sky}`;
+  // The weather has a tile of its own; the time is what this line adds.
+  const time = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  tag.textContent = `${hello} · ${date} · ${time}`;
   delete tag.dataset.level;
 }
 
@@ -519,8 +519,6 @@ async function loadWeather() {
   try {
     const res = await fetch('api/weather');
     const w = await res.json();
-    paintSayTag.weather = w.now ? w : null;
-    paintSayTag();
     if (!w.enabled) { box.hidden = true; return; }
     box.hidden = false;
     if (w.error && !w.now) {
