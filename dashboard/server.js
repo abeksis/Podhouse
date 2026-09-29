@@ -152,7 +152,7 @@ function cleanPlace(v) {
 }
 
 // The Overview's tiles and the widths they may take, out of twelve columns.
-const HOME_WIDGETS = ['welcome', 'status', 'weather', 'apps', 'links', 'pulse'];
+const HOME_WIDGETS = ['welcome', 'weather', 'apps', 'links', 'pulse'];
 const WIDGET_SPANS = [3, 4, 6, 8, 12];
 /** The Overview's layout: known tiles, once each, at an allowed width. */
 function cleanLayout(v) {

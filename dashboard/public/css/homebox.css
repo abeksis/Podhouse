@@ -1774,13 +1774,6 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 #apps-panel .ha-app:hover { background: var(--surface); }
 .ha-txt small.is-moving { color: var(--accent-text); }
 .say-tag[data-level="good"]::first-line { color: var(--text-2); }
-.say-side { display: flex; align-items: center; gap: 0.8rem; margin-left: auto; position: relative; }
-.say-stats { display: grid; grid-template-columns: repeat(3, auto); gap: 0.45rem; }
-.say-stats div { border-radius: 12px; background: rgba(0, 0, 0, 0.22); padding: 0.5rem 0.8rem; min-width: 86px; }
-.say-stats span { display: block; font-size: 0.68rem; color: color-mix(in srgb, var(--text) 65%, transparent); }
-.say-stats b { display: block; font-family: var(--mono); font-size: 1.05rem; font-weight: 600; }
-.say-stats [data-level="good"] b { color: color-mix(in srgb, var(--good) 75%, #fff); }
-.say-stats [data-level="warn"] b { color: var(--warn); }
 .wx { display: flex; align-items: center; gap: 0.9rem; border-radius: 12px; background: rgba(0, 0, 0, 0.22); padding: 0.45rem 0.85rem; }
 .wx-now { display: flex; align-items: center; gap: 0.55rem; }
 .wx-ic { font-size: 1.7rem; line-height: 1; }
@@ -1793,7 +1786,7 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .wx-days small { font-size: 0.66rem; }
 .wx-err { margin: 0; font-size: 0.72rem; color: color-mix(in srgb, var(--text) 60%, transparent); max-width: 220px; }
 @media (max-width: 1100px) { .say { flex-wrap: wrap; } .say-side { margin-left: 0; order: 3; width: 100%; flex-wrap: wrap; } }
-@media (max-width: 720px) { .say-stats { grid-template-columns: repeat(3, 1fr); width: 100%; } .wx-days { display: none; } .app-find input { width: 110px; } }
+@media (max-width: 720px) { .wx-days { display: none; } .app-find input { width: 110px; } }
 .wx-place { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
 .wx-place:hover { color: var(--text); }
 .wx-set { font: inherit; font-size: 0.72rem; color: var(--text); background: rgba(255, 255, 255, 0.08); border: 0; border-radius: 8px; padding: 0.3rem 0.6rem; cursor: pointer; }
@@ -1818,10 +1811,7 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 #apps-panel.is-arranging .ha-app { cursor: grab; outline: 1px dashed color-mix(in srgb, var(--text) 18%, transparent); outline-offset: -1px; }
 #apps-panel.is-arranging .ha-app.is-held { outline: 2px solid var(--accent); background: var(--surface-2); cursor: grabbing; }
 
-/* ---- the status and weather tiles */
-.w-status .say-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); height: 100%; align-content: center; }
-.w-status .say-stats div { background: var(--well); min-width: 0; }
-.w-status .say-stats span { color: var(--muted); }
+/* ---- the weather tile */
 .w-weather { display: flex; align-items: center; }
 .w-weather .wx { background: none; padding: 0; width: 100%; flex-wrap: wrap; }
 .w-weather .wx-now small, .w-weather .wx-days div, .w-weather .wx-err { color: var(--muted); }

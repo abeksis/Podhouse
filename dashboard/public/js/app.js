@@ -489,7 +489,6 @@ function renderSayStatus(summary) {
     setInterval(loadWeather, 20 * 60 * 1000);
   }
   const { health, counts, host } = summary;
-  const m = summary.metrics || {};
   const good = !health || health.level === 'good' || health.level === 'unknown';
   const tag = $('.say-tag');
   const warn = document.querySelector('.ha-app[data-level="warn"]');
@@ -499,12 +498,6 @@ function renderSayStatus(summary) {
       : health.title;
     tag.dataset.level = good ? 'good' : health.level;
   }
-  const cell = (k, v, level) => `<div data-level="${level || ''}"><span>${k}</span><b>${v}</b></div>`;
-  $('#say-stats').innerHTML = [
-    cell('Running', counts.containers ? `${counts.running}/${counts.containers}` : '—', counts.running === counts.containers ? 'good' : 'warn'),
-    cell('Memory', m.memory ? `${m.memory.percent}%` : '—', m.memory && m.memory.percent >= 85 ? 'warn' : ''),
-    cell('Disk', m.disk ? `${m.disk.percent}%` : '—', m.disk && m.disk.percent >= 85 ? 'warn' : ''),
-  ].join('');
 }
 
 async function loadWeather() {
@@ -699,12 +692,13 @@ document.addEventListener('dragend', () => {
 /* ------------------------------------------------------ the page's tiles */
 
 // The Overview's tiles, their names in the Arrange bar, and their widths out
-// of twelve columns before anyone arranges them — the greeting, the figures
-// and the weather share the first row; the rest are full width.
+// of twelve columns before anyone arranges them — the greeting and the
+// weather share the first row; the rest are full width. (A Status tile with
+// running / memory / disk was here in 0.27.0: Reports has those numbers, and
+// the greeting's line already says whether all is well.)
 const HOME_WIDGETS = [
-  { id: 'welcome', label: 'Welcome', span: 6 },
-  { id: 'status', label: 'Status', span: 3 },
-  { id: 'weather', label: 'Weather', span: 3 },
+  { id: 'welcome', label: 'Welcome', span: 8 },
+  { id: 'weather', label: 'Weather', span: 4 },
   { id: 'apps', label: 'Your apps', span: 12 },
   { id: 'links', label: 'Links', span: 12 },
   { id: 'pulse', label: 'Right now', span: 12 },
