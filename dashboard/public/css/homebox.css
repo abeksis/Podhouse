@@ -1360,7 +1360,7 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
    Only an exception is coloured: red unhealthy, amber near its memory
    limit, grey off. */
 .split.is-picture { display: block; height: auto; }
-#apps-panel:has(.pic) { background: none; border: 0; box-shadow: none; padding: 0; }
+
 .pic .art-img, .pic .monogram, .dt-art .art-img, .dt-art .monogram { width: 100%; height: 100%; object-fit: contain; }
 /* tiles — one line of state under each name, a sheet for the rest */
 .pic-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(230px, calc((100% - 3 * 10px) / 4)), 1fr)); gap: 10px; }
@@ -1479,7 +1479,8 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 #screen-home[data-off~="welcome"] .cust-pop { right: 0; }
 #screen-home[data-off~="apps"] #apps-panel,
 #screen-home[data-off~="links"] #links-panel,
-#screen-home[data-off~="pulse"] #pulse-panel { display: none; }
+#screen-home[data-off~="pulse"] #pulse-panel,
+#screen-home[data-off~="weather"] #wx { display: none; }
 
 @media (max-width: 720px) {
   .say { padding: 1.25rem 1.1rem; gap: 0.6rem; }
@@ -1750,3 +1751,50 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
   .sh-foot .side-out { border: 0; padding: 0.35rem; }
   .sh-foot .side-out span { display: none; }
 }
+
+
+/* ---- Overview design 4: status in the greeting, apps by family ---- */
+.area-dock .panel-head { display: flex; flex-wrap: wrap; justify-content: flex-start; }
+.area-dock .panel-head .panel-note { margin-right: auto; }
+.apps-tools { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.fam-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.fam-chip { font: inherit; font-size: 0.78rem; color: var(--text-2); background: none; border: 1px solid var(--line-strong); border-radius: 999px; padding: 0.25rem 0.7rem; cursor: pointer; }
+.fam-chip i { font-style: normal; font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-left: 0.2rem; }
+.fam-chip[aria-pressed="true"] { background: var(--surface-2); color: var(--text); border-color: transparent; }
+.app-find { display: flex; align-items: center; gap: 0.4rem; border-radius: 9px; background: var(--well); border: 1px solid var(--line); padding: 0.3rem 0.6rem; }
+.app-find svg { width: 14px; height: 14px; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; }
+.app-find input { background: none; border: 0; outline: 0; color: var(--text); font: inherit; font-size: 0.82rem; width: 150px; }
+.fam + .fam { margin-top: 1rem; }
+.fam-h { margin: 0 0 0.5rem; font-size: 0.68rem; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: flex; gap: 0.5rem; }
+.fam-h i { font-style: normal; font-family: var(--mono); letter-spacing: 0; }
+/* Inside a panel the tiles are recessed: darker than it, with a faint ring. */
+#apps-panel .ha-app { background: color-mix(in srgb, var(--bg) 55%, var(--bg-raised)); border-color: transparent; box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 5%, transparent); }
+#apps-panel .ha-app:hover { background: var(--surface); }
+.ha-txt small.is-moving { color: var(--accent-text); }
+.say-tag[data-level="good"]::first-line { color: var(--text-2); }
+.say-side { display: flex; align-items: center; gap: 0.8rem; margin-left: auto; position: relative; }
+.say-stats { display: grid; grid-template-columns: repeat(3, auto); gap: 0.45rem; }
+.say-stats div { border-radius: 12px; background: rgba(0, 0, 0, 0.22); padding: 0.5rem 0.8rem; min-width: 86px; }
+.say-stats span { display: block; font-size: 0.68rem; color: color-mix(in srgb, var(--text) 65%, transparent); }
+.say-stats b { display: block; font-family: var(--mono); font-size: 1.05rem; font-weight: 600; }
+.say-stats [data-level="good"] b { color: color-mix(in srgb, var(--good) 75%, #fff); }
+.say-stats [data-level="warn"] b { color: var(--warn); }
+.wx { display: flex; align-items: center; gap: 0.9rem; border-radius: 12px; background: rgba(0, 0, 0, 0.22); padding: 0.45rem 0.85rem; }
+.wx-now { display: flex; align-items: center; gap: 0.55rem; }
+.wx-ic { font-size: 1.7rem; line-height: 1; }
+.wx-now b { display: block; font-size: 1.25rem; font-weight: 600; }
+.wx-now small { display: block; font-size: 0.68rem; color: color-mix(in srgb, var(--text) 65%, transparent); white-space: nowrap; }
+.wx-days { display: flex; gap: 0.7rem; padding-left: 0.8rem; border-left: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
+.wx-days div { display: flex; flex-direction: column; align-items: center; font-size: 0.68rem; color: color-mix(in srgb, var(--text) 65%, transparent); }
+.wx-days i { font-style: normal; font-size: 1rem; line-height: 1.3; }
+.wx-days b { font-size: 0.78rem; color: var(--text); }
+.wx-days small { font-size: 0.66rem; }
+.wx-err { margin: 0; font-size: 0.72rem; color: color-mix(in srgb, var(--text) 60%, transparent); max-width: 220px; }
+@media (max-width: 1100px) { .say { flex-wrap: wrap; } .say-side { margin-left: 0; order: 3; width: 100%; flex-wrap: wrap; } }
+@media (max-width: 720px) { .say-stats { grid-template-columns: repeat(3, 1fr); width: 100%; } .wx-days { display: none; } .app-find input { width: 110px; } }
+.wx-place { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.wx-place:hover { color: var(--text); }
+.wx-set { font: inherit; font-size: 0.72rem; color: var(--text); background: rgba(255, 255, 255, 0.08); border: 0; border-radius: 8px; padding: 0.3rem 0.6rem; cursor: pointer; }
+.wx-form { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.wx-form input { width: 150px; background: rgba(0, 0, 0, 0.3); border: 1px solid color-mix(in srgb, var(--text) 15%, transparent); border-radius: 8px; color: var(--text); font: inherit; font-size: 0.82rem; padding: 0.3rem 0.55rem; }
+.wx-form small { width: 100%; font-size: 0.66rem; color: color-mix(in srgb, var(--text) 60%, transparent); }

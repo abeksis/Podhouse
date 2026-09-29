@@ -36,6 +36,7 @@ const auth = require('./lib/auth');
 const updates = require('./lib/updates');
 const platform = require('./lib/platform');
 const insights = require('./lib/insights');
+const weather = require('./lib/weather');
 const storage = require('./lib/storage');
 const reset = require('./lib/reset');
 const restore = require('./lib/restore');
@@ -108,7 +109,7 @@ const INSIGHT_PANELS = ['transfers', 'queues', 'upcoming'];
  * emptied completely is a page someone can lock themselves out of the answer
  * to "is my server OK", and that answer is what this dashboard is for.
  */
-const HOME_SECTIONS = ['welcome', 'apps', 'links', 'pulse'];
+const HOME_SECTIONS = ['welcome', 'weather', 'apps', 'links', 'pulse'];
 
 const DEFAULT_PREFS = {
   theme: 'dark',
@@ -118,6 +119,8 @@ const DEFAULT_PREFS = {
   // Everything on by default: a box someone has just installed should show
   // what it can do, not the least it can do.
   home: Object.fromEntries(HOME_SECTIONS.map((name) => [name, true])),
+  // Empty means: the city in the box's timezone (lib/weather.js).
+  weatherPlace: '',
 };
 
 /**
@@ -148,6 +151,11 @@ function cleanPrefs(input) {
     background: BACKGROUNDS.includes(p.background) ? p.background : DEFAULT_PREFS.background,
     insights,
     home,
+    // A place name typed into the weather tile: letters, digits, spaces and
+    // a little punctuation, in any script, and short — anything else is
+    // dropped, since it is sent on to the geocoder and shown on the page.
+    weatherPlace: typeof p.weatherPlace === 'string' && /^[\p{L}\p{M}\p{N} .,'()-]{0,80}$/u.test(p.weatherPlace.trim())
+      ? p.weatherPlace.trim() : '',
   };
 }
 
@@ -1105,6 +1113,16 @@ const server = http.createServer(async (req, res) => {
     // lib/insights.js for why a source that cannot be reached says so rather
     // than reporting a zero. POST is the same read with the caches dropped,
     // which is what the card's own refresh button wants.
+    // The Overview's forecast, fetched by the box and cached (lib/weather.js).
+    if (route === '/api/weather') {
+      try {
+        const prefs = cleanPrefs(await state.readJson('prefs.json', DEFAULT_PREFS));
+        return sendJson(res, 200, await weather.forecast({ place: prefs.weatherPlace }));
+      } catch (err) {
+        return sendJson(res, 200, { enabled: true, error: err.message });
+      }
+    }
+
     if (route === '/api/insights') {
       if (req.method === 'POST') insights.invalidate();
       try {

@@ -416,6 +416,148 @@ function renderSideMeters(summary) {
   if ($('#screen-reports').classList.contains('is-shown')) renderReports(summary);
 }
 
+/* ------------------------------------------------ the Overview, design 4 */
+
+const APP_FAMILIES = [['media', 'Media'], ['data', 'Your data'], ['box', 'This box'], ['links', 'Your links']];
+const FAMILY_OF = { media: 'media', photos: 'data', files: 'data', productivity: 'data', passwords: 'data', _custom: 'links' };
+function appFamily(tile) { return FAMILY_OF[tile.module.category] || 'box'; }
+
+/** qBittorrent's live rates, from the same reading Right now uses (every 8s). */
+function qbitSpeeds() {
+  const q = typeof insightsData !== 'undefined' && insightsData ? insightsData.qbittorrent : null;
+  if (!q || !q.installed || q.error) return null;
+  return `↓ ${rate(q.downSpeed)}  ·  ↑ ${rate(q.upSpeed)}`;
+}
+function paintQbitTile() {
+  const el = document.querySelector('[data-live="qbit"]');
+  const s = qbitSpeeds();
+  if (!el || !s) return;
+  el.textContent = s;
+  const q = insightsData.qbittorrent;
+  el.classList.toggle('is-moving', (q.downSpeed || 0) + (q.upSpeed || 0) > 0);
+}
+
+/** The apps panel's header, built once so typing in the search is never redrawn away. */
+const appFilter = { fam: 'all', find: '' };
+function ensureAppsHead(tiles) {
+  const head = $('#apps-panel .panel-head');
+  if (!head) return;
+  if (!head.dataset.built) {
+    head.dataset.built = '1';
+    head.innerHTML = `
+      <h2 class="panel-title">Your apps</h2><span class="panel-note mono" id="dock-count"></span>
+      <div class="apps-tools">
+        <div class="fam-chips" id="fam-chips" role="group" aria-label="Show"></div>
+        <label class="app-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="app-find" type="search" placeholder="Find an app" autocomplete="off" aria-label="Find an app"></label>
+        <a class="button is-primary is-small" href="#apps" data-page="apps">+ Add app</a>
+      </div>`;
+    $('#app-find').addEventListener('input', (e) => { appFilter.find = e.target.value.trim().toLowerCase(); applyAppFilter(); });
+    $('#fam-chips').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-fam-chip]');
+      if (!b) return;
+      appFilter.fam = b.dataset.famChip;
+      applyAppFilter();
+    });
+  }
+  const counts = { all: tiles.length };
+  for (const t of tiles) counts[appFamily(t)] = (counts[appFamily(t)] || 0) + 1;
+  $('#fam-chips').innerHTML = [['all', 'All'], ...APP_FAMILIES].filter(([k]) => counts[k])
+    .map(([k, label]) => `<button type="button" class="fam-chip" data-fam-chip="${k}" aria-pressed="${appFilter.fam === k}">${label} <i>${counts[k]}</i></button>`).join('');
+}
+function applyAppFilter() {
+  for (const b of document.querySelectorAll('[data-fam-chip]')) b.setAttribute('aria-pressed', String(b.dataset.famChip === appFilter.fam));
+  for (const sec of document.querySelectorAll('#dock .fam')) {
+    let shown = 0;
+    for (const t of sec.querySelectorAll('.ha-app')) {
+      const ok = (appFilter.fam === 'all' || t.dataset.fam === appFilter.fam) && (!appFilter.find || t.dataset.name.includes(appFilter.find));
+      t.hidden = !ok;
+      if (ok) shown += 1;
+    }
+    sec.hidden = !shown;
+  }
+}
+
+/** The greeting's answer: how the box is, three numbers, and the weather. */
+function renderSayStatus(summary) {
+  const say = $('#say');
+  if (!say) return;
+  if (!$('#say-side')) {
+    const cust = $('#customize-open');
+    cust.insertAdjacentHTML('beforebegin', '<div class="say-side" id="say-side"><div class="say-stats" id="say-stats"></div><div class="wx" id="wx" hidden></div></div>');
+    loadWeather();
+    setInterval(loadWeather, 20 * 60 * 1000);
+  }
+  const { health, counts, host } = summary;
+  const m = summary.metrics || {};
+  const good = !health || health.level === 'good' || health.level === 'unknown';
+  const tag = $('.say-tag');
+  const warn = document.querySelector('.ha-app[data-level="warn"]');
+  if (tag) {
+    tag.textContent = good
+      ? `All good · ${counts.installed} apps running on ${(host && host.name) || 'this box'}${warn ? ` · ${warn.querySelector('b').textContent} is close to its memory limit` : ''}`
+      : health.title;
+    tag.dataset.level = good ? 'good' : health.level;
+  }
+  const cell = (k, v, level) => `<div data-level="${level || ''}"><span>${k}</span><b>${v}</b></div>`;
+  $('#say-stats').innerHTML = [
+    cell('Running', counts.containers ? `${counts.running}/${counts.containers}` : '—', counts.running === counts.containers ? 'good' : 'warn'),
+    cell('Memory', m.memory ? `${m.memory.percent}%` : '—', m.memory && m.memory.percent >= 85 ? 'warn' : ''),
+    cell('Disk', m.disk ? `${m.disk.percent}%` : '—', m.disk && m.disk.percent >= 85 ? 'warn' : ''),
+  ].join('');
+}
+
+async function loadWeather() {
+  const box = $('#wx');
+  if (!box) return;
+  // Switched off in Customize: nothing is fetched, so nothing leaves the box.
+  if (state.prefs && state.prefs.home && state.prefs.home.weather === false) { box.hidden = true; return; }
+  try {
+    const res = await fetch('api/weather');
+    const w = await res.json();
+    if (!w.enabled) { box.hidden = true; return; }
+    box.hidden = false;
+    if (w.error && !w.now) {
+      box.innerHTML = `<p class="wx-err">${escapeHtml(w.error)}</p>${WX_EDIT}`;
+      return;
+    }
+    const day = (iso) => new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(new Date(`${iso}T12:00:00`));
+    box.innerHTML = `
+      <div class="wx-now" title="${escapeHtml(`${w.now.label} · feels ${w.now.feels}° · wind ${w.now.wind} km/h · humidity ${w.now.humidity}%`)}">
+        <span class="wx-ic">${w.now.icon}</span>
+        <span><b>${w.now.temp}°</b><small><button type="button" class="wx-place" data-wx-edit title="Change the city">${escapeHtml(w.place)}</button> · ${escapeHtml(w.now.label)}${w.stale ? ' · not updated' : ''}</small></span>
+      </div>
+      <div class="wx-days">${w.days.slice(1, 4).map((d) => `<div title="${escapeHtml(d.label)}${d.rain != null ? ` · rain ${d.rain}%` : ''}"><span>${escapeHtml(day(d.date))}</span><i>${d.icon}</i><b>${d.max}°</b><small>${d.min}°</small></div>`).join('')}</div>`;
+  } catch {
+    box.hidden = true;
+  }
+}
+
+// Changing the forecast's city: a small form in place of the tile's text.
+const WX_EDIT = '<button type="button" class="wx-set" data-wx-edit>Set city</button>';
+document.addEventListener('click', (event) => {
+  const edit = event.target.closest('[data-wx-edit]');
+  if (edit) {
+    const box = $('#wx');
+    const current = (state.prefs && state.prefs.weatherPlace) || '';
+    box.innerHTML = `<form class="wx-form" id="wx-form">
+      <input id="wx-city" type="text" maxlength="80" placeholder="City, e.g. Haifa" value="${escapeHtml(current)}" aria-label="City for the forecast">
+      <button type="submit" class="button is-primary is-small">Save</button>
+      <button type="button" class="button is-small" data-wx-cancel>Cancel</button>
+      <small>Empty uses the box's timezone</small>
+    </form>`;
+    $('#wx-city').focus();
+    return;
+  }
+  if (event.target.closest('[data-wx-cancel]')) loadWeather();
+});
+document.addEventListener('submit', async (event) => {
+  if (event.target.id !== 'wx-form') return;
+  event.preventDefault();
+  await savePrefs({ weatherPlace: $('#wx-city').value.trim() });
+  loadWeather();
+});
+
 /**
  * Clear the layers rebuilds left behind.
  *
@@ -609,6 +751,7 @@ function renderLauncher(modules) {
   const all = tiles.slice().sort(byName);
   $('#apps-panel .split').classList.add('is-picture');
   $('#dock').innerHTML = appTiles(all);
+  applyAppFilter();
   if (!all.some((t) => tileKey(t.module.id, t.name) === state.picked)) state.picked = null;
   renderDetail(all.find((t) => tileKey(t.module.id, t.name) === state.picked) || null, peak);
 
@@ -671,6 +814,10 @@ function appColor(tile) {
 
 /** The line under a tile's name: how it is, in words. */
 function appStateLine(tile) {
+  if (tile.module.id === 'qbittorrent') {
+    const speeds = qbitSpeeds();
+    if (speeds && tile.container && tile.container.state !== 'stopped') return speeds;
+  }
   const st = tile.container ? tile.container.state : null;
   if (!tile.container) return 'Link';
   if (st === 'stopped') return 'Stopped';
@@ -687,12 +834,19 @@ function appTiles(tiles) {
     const key = tileKey(t.module.id, t.name);
     const mark = appMark(t);
     return `<button type="button" class="ha-app${state.picked === key ? ' is-on' : ''}" data-pick="${escapeHtml(key)}"
-      data-level="${mark}" style="--app:${appColor(t)}" title="${escapeHtml(appTitle(t))}">
+      data-level="${mark}" data-fam="${appFamily(t)}" data-name="${escapeHtml(t.friendly_name.toLowerCase())}" style="--app:${appColor(t)}" title="${escapeHtml(appTitle(t))}">
       <span class="ha-ic">${appArtOf(t)}</span>
-      <span class="ha-txt"><b>${escapeHtml(t.friendly_name)}</b><small>${escapeHtml(appStateLine(t))}</small></span>
+      <span class="ha-txt"><b>${escapeHtml(t.friendly_name)}</b><small${t.module.id === 'qbittorrent' ? ' data-live="qbit"' : ''}>${escapeHtml(appStateLine(t))}</small></span>
     </button>`;
+  });
+  // Grouped by what the apps are for; the header's chips and search filter
+  // these in place, so typing never waits for a redraw.
+  const byFam = (k) => items.filter((it) => it.includes(`data-fam="${k}"`));
+  ensureAppsHead(tiles);
+  return APP_FAMILIES.map(([k, label]) => {
+    const list = byFam(k);
+    return list.length ? `<section class="fam" data-fam-sec="${k}"><h3 class="fam-h">${label}<i>${list.length}</i></h3><div class="pic pic-tiles">${list.join('')}</div></section>` : '';
   }).join('');
-  return `<div class="pic pic-tiles">${items}</div>`;
 }
 
 /**
@@ -3524,6 +3678,7 @@ document.addEventListener('change', (event) => {
     const home = { ...((state.prefs && state.prefs.home) || {}) };
     home[section.dataset.homeSection] = section.checked;
     savePrefs({ home });
+    if (section.dataset.homeSection === 'weather' && section.checked) loadWeather();
   }
   // Picking a file IS the upload: there is no second "go" button to forget.
   if (event.target.id === 'restore-file') {
@@ -3672,6 +3827,7 @@ function applySummary(summary) {
   renderSideMeters(summary);
   renderTopbar(summary);
   renderHealth(summary);
+  renderSayStatus(summary);
   renderNeeds(summary.needs);
   if (state.modules.length) renderStoreStats();
   renderSettings();
@@ -3693,6 +3849,7 @@ function applySummary(summary) {
  */
 const HOME_SECTIONS = [
   { id: 'welcome', label: 'Welcome' },
+  { id: 'weather', label: 'Weather' },
   { id: 'apps', label: 'Your apps' },
   { id: 'links', label: 'Links' },
   { id: 'pulse', label: 'Right now' },
@@ -4279,7 +4436,9 @@ function marqueeView(data) {
     const next = rows[0];
     kicker = whenText(next.date);
     head = next.detail ? `${next.title} — ${next.detail}` : next.title;
-    meta = next.have ? 'Already downloaded' : 'Sonarr is watching for it';
+    // Films come from Radarr and episodes from Sonarr; naming the wrong one
+    // sends someone to the wrong app to look.
+    meta = next.have ? 'Already downloaded' : `${next.source === 'radarr' ? 'Radarr' : 'Sonarr'} is watching for it`;
     // The poster belongs to the series, not the episode: an episode that has
     // not aired has no artwork of its own. Served by this box from the copy
     // the *arr app downloaded when the series was added — never from the
@@ -4327,6 +4486,7 @@ function marqueeView(data) {
 
 function renderInsights(data) {
   insightsData = data;
+  paintQbitTile();
   const card = $('#pulse-panel');
   const box = $('#pulse-body');
   if (!card || !box) return;
