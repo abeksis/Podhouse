@@ -487,17 +487,28 @@ function renderSayStatus(summary) {
     renderSayStatus.started = true;
     loadWeather();
     setInterval(loadWeather, 20 * 60 * 1000);
+    setInterval(paintSayTag, 60 * 1000);
   }
-  const { health, counts, host } = summary;
-  const good = !health || health.level === 'good' || health.level === 'unknown';
+  paintSayTag();
+}
+
+/**
+ * The line under "Welcome to Podhouse": the day, and the weather in a few
+ * words. It used to be the status sentence, which the sidebar's card already
+ * says on every page — the same words twice on one screen.
+ */
+function paintSayTag() {
   const tag = $('.say-tag');
-  const warn = document.querySelector('.ha-app[data-level="warn"]');
-  if (tag) {
-    tag.textContent = good
-      ? `All good · ${counts.installed} apps running on ${(host && host.name) || 'this box'}${warn ? ` · ${warn.querySelector('b').textContent} is close to its memory limit` : ''}`
-      : health.title;
-    tag.dataset.level = good ? 'good' : health.level;
-  }
+  if (!tag) return;
+  const now = new Date();
+  const hour = now.getHours();
+  const hello = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 22 ? 'Good evening' : 'Good night';
+  const date = now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  const w = paintSayTag.weather;
+  const off = state.prefs && state.prefs.home && state.prefs.home.weather === false;
+  const sky = w && w.now && !off ? ` · ${w.place} ${w.now.temp}°, ${w.now.label.toLowerCase()}` : '';
+  tag.textContent = `${hello} · ${date}${sky}`;
+  delete tag.dataset.level;
 }
 
 async function loadWeather() {
@@ -508,6 +519,8 @@ async function loadWeather() {
   try {
     const res = await fetch('api/weather');
     const w = await res.json();
+    paintSayTag.weather = w.now ? w : null;
+    paintSayTag();
     if (!w.enabled) { box.hidden = true; return; }
     box.hidden = false;
     if (w.error && !w.now) {
@@ -4684,30 +4697,35 @@ function marqueeView(data) {
   const qb = data.qbittorrent || {};
   const moving = (qb.torrents || []).slice().sort((a, b) => (b.progress || 0) - (a.progress || 0));
   const rows = data.upcoming || [];
-
-  const arrs = [data.radarr, data.sonarr].filter((a) => a && a.installed !== false && !a.error);
-  const missing = arrs.reduce((n, a) => n + (a.missing || 0), 0);
-  const queue = arrs.reduce((n, a) => n + (a.queue || 0), 0);
+  const radarr = data.radarr && data.radarr.installed !== false && !data.radarr.error ? data.radarr : null;
+  const sonarr = data.sonarr && data.sonarr.installed !== false && !data.sonarr.error ? data.sonarr : null;
+  const appName = (source) => (source === 'radarr' ? 'Radarr' : 'Sonarr');
 
   let kicker;
   let head;
-  let meta;
+  let sub = '';
+  let why;
+  let open = null;
   let art = null;
   if (moving.length) {
     // Something is actually happening, so that is the headline.
     const top = moving[0];
-    kicker = 'Downloading';
+    kicker = 'Downloading now';
     head = top.name;
     const eta = etaText(top.eta);
-    meta = `${top.progress.toFixed(0)}% done · ${rate(top.downSpeed)}${eta ? ` · ${eta}` : ''}`
+    why = `${top.progress.toFixed(0)}% done · ${rate(top.downSpeed)}${eta ? ` · ${eta}` : ''}`
       + (moving.length > 1 ? ` · and ${moving.length - 1} more` : '');
+    open = 'qbittorrent';
   } else if (rows.length) {
     const next = rows[0];
-    kicker = whenText(next.date);
-    head = next.detail ? `${next.title} — ${next.detail}` : next.title;
+    // What it is and when, then why it is on this card at all.
+    kicker = `${whenText(next.date)} · ${next.source === 'radarr' ? 'film' : 'episode'}`;
+    head = next.title;
+    sub = next.detail || '';
     // Films come from Radarr and episodes from Sonarr; naming the wrong one
     // sends someone to the wrong app to look.
-    meta = next.have ? 'Already downloaded' : `${next.source === 'radarr' ? 'Radarr' : 'Sonarr'} is watching for it`;
+    why = next.have ? 'Already downloaded — ready to watch' : `Not downloaded yet — ${appName(next.source)} is watching for it`;
+    open = next.source;
     // The poster belongs to the series, not the episode: an episode that has
     // not aired has no artwork of its own. Served by this box from the copy
     // the *arr app downloaded when the series was added — never from the
@@ -4716,24 +4734,32 @@ function marqueeView(data) {
   } else {
     kicker = 'Right now';
     head = 'Nothing on';
-    meta = 'No downloads, nothing airing in the days ahead';
+    why = 'No downloads, nothing airing in the days ahead';
   }
 
-  const rest = (moving.length ? rows : rows.slice(1)).slice(0, 4).map((r) => `
-    <span><b>${escapeHtml(r.title)}</b> ${escapeHtml((r.detail || '').split(' ')[0])} · ${escapeHtml(whenText(r.date))}</span>`).join('');
-  const more = Math.max(0, (moving.length ? rows.length : rows.length - 1) - 4);
+  const next = (moving.length ? rows : rows.slice(1));
+  const chips = next.slice(0, 5).map((r) => `
+    <span><i aria-hidden="true">${r.source === 'radarr' ? '🎬' : '📺'}</i><b>${escapeHtml(r.title)}</b> ${escapeHtml((r.detail || '').split(' · ')[0])} <em>${escapeHtml(whenText(r.date))}</em></span>`).join('');
+  const more = Math.max(0, next.length - 5);
 
-  const foot = [];
-  if (qb.installed !== false) {
-    foot.push(moving.length
-      ? `<span><b>${escapeHtml(rate(qb.downSpeed))}</b> down · <b>${escapeHtml(rate(qb.upSpeed))}</b> up</span>`
-      : '<span>Nothing downloading</span>');
+  // The four answers the card used to leave out.
+  const figs = [];
+  if (qb.installed !== false && !qb.error) {
+    figs.push(['Downloading', moving.length ? `${moving.length} item${moving.length > 1 ? 's' : ''}` : 'Nothing', `↓ ${rate(qb.downSpeed)} · ↑ ${rate(qb.upSpeed)}`]);
+    if (qb.downSession != null) figs.push(['This session', `↓ ${bytes(qb.downSession || 0)}`, `↑ ${bytes(qb.upSession || 0)} uploaded`]);
   }
-  if (arrs.length) {
-    foot.push(`<span><b>${missing}</b> still wanted${queue ? ` · <b>${queue}</b> being fetched` : ''}</span>`);
+  if (radarr || sonarr) {
+    const films = radarr ? radarr.missing || 0 : 0;
+    const eps = sonarr ? sonarr.missing || 0 : 0;
+    const main = films ? `${films} film${films === 1 ? '' : 's'}` : eps ? `${eps} episode${eps === 1 ? '' : 's'}` : 'Nothing';
+    const rest = films && sonarr ? `${eps} episode${eps === 1 ? '' : 's'}` : !films && radarr ? '0 films' : '';
+    figs.push(['Still wanted', main, [rest, films || eps ? 'being looked for' : 'you have it all'].filter(Boolean).join(' · ')]);
+    figs.push(['In the queue', String((radarr ? radarr.queue || 0 : 0) + (sonarr ? sonarr.queue || 0 : 0)),
+      [radarr ? `Radarr ${radarr.queue || 0}` : '', sonarr ? `Sonarr ${sonarr.queue || 0}` : ''].filter(Boolean).join(' · ')]);
   }
-  if (!foot.length && !rows.length) return '';
+  if (!figs.length && !rows.length && !moving.length) return '';
 
+  const url = open ? appUrl(open) : null;
   // `onerror` removes the frame rather than leaving a broken-image glyph:
   // a series added a minute ago has no artwork yet, and that is ordinary.
   const poster = art
@@ -4745,12 +4771,20 @@ function marqueeView(data) {
       ${poster}
       <div class="mq-text">
         <p class="mq-kicker">${escapeHtml(kicker)}</p>
-        <h3 class="mq-head">${escapeHtml(head)}</h3>
-        <p class="mq-meta">${escapeHtml(meta)}</p>
-        ${rest ? `<div class="mq-rest">${rest}${more ? `<span>+${more} more</span>` : ''}</div>` : ''}
+        <h3 class="mq-head">${escapeHtml(head)}${sub ? ` <span class="mq-sub">${escapeHtml(sub)}</span>` : ''}</h3>
+        <p class="mq-meta"><i class="mq-dot" aria-hidden="true"></i>${escapeHtml(why)}</p>
+        ${url ? `<a class="button is-small mq-open" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open ${escapeHtml(open === 'qbittorrent' ? 'qBittorrent' : appName(open))}</a>` : ''}
       </div>
     </div>
-    ${foot.length ? `<div class="mq-foot">${foot.join('')}</div>` : ''}`;
+    ${chips ? `<p class="mq-label">Next up</p><div class="mq-rest">${chips}${more ? `<span>+${more} more</span>` : ''}</div>` : ''}
+    ${figs.length ? `<div class="mq-figs">${figs.map(([k, v, s]) => `<div><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b><small>${escapeHtml(s)}</small></div>`).join('')}</div>` : ''}`;
+}
+
+/** The web address of an installed app, by module id — for the card's Open button. */
+function appUrl(moduleId) {
+  const mod = (state.modules || []).find((m) => m.id === moduleId && m.installed);
+  const svc = mod && (mod.services || []).find((s) => s.url && !s.internal);
+  return svc ? svc.url : null;
 }
 
 function renderInsights(data) {
@@ -4768,7 +4802,8 @@ function renderInsights(data) {
 
   box.innerHTML = view;
   box.classList.add('is-marquee');
-  $('#pulse-time').textContent = new Date(data.at).toLocaleTimeString();
+  // When it was read, not a clock: a clock says nothing about the card.
+  $('#pulse-time').textContent = `updated ${new Date(data.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} ↻`;
 }
 
 async function loadInsights({ force = false } = {}) {

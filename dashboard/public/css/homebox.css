@@ -1837,3 +1837,18 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 @media (max-width: 860px) {
   .home-layout > [data-widget] { grid-column: 1 / -1; }
 }
+
+/* ---- Right now, made clear */
+.mq-sub { font-size: 1.1rem; font-weight: 400; color: var(--text-2); letter-spacing: 0; }
+.mq-meta { display: flex; align-items: center; gap: 0.45rem; }
+.mq-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+.mq-open { margin-top: 0.7rem; }
+.mq-label { margin: 1.1rem 0 0.5rem; font-size: 0.66rem; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.mq-label + .mq-rest { margin-top: 0; }
+.mq-rest span i { font-style: normal; margin-right: 0.3rem; }
+.mq-rest span em { font-style: normal; color: var(--accent-text); margin-left: 0.2rem; }
+.mq-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.5rem; margin-top: 1.1rem; }
+.mq-figs div { border-radius: 12px; background: var(--well); padding: 0.6rem 0.8rem; min-width: 0; }
+.mq-figs span { display: block; font-size: 0.7rem; color: var(--muted); }
+.mq-figs b { display: block; font-size: 1.02rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mq-figs small { display: block; font-size: 0.74rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
