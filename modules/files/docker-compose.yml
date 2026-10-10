@@ -44,7 +44,7 @@ x-homebox:
 
 services:
   filebrowser:
-    image: gtstef/filebrowser:1.5.6-stable
+    image: gtstef/filebrowser:2.0.0-stable
     container_name: filebrowser
     user: "${PUID:-1000}:${PGID:-1000}"
     ports:
@@ -52,9 +52,13 @@ services:
     environment:
       - TZ=${TZ:-UTC}
       - FILEBROWSER_CONFIG=/home/filebrowser/config.yaml
-      - FILEBROWSER_DATABASE=/home/filebrowser/data/filebrowser.db
+      # The database path is in config.yaml (server.database.path), written by
+      # setup.sh. Two variables 1.x had are deliberately NOT here, because 2.x
+      # refuses to start with either: FILEBROWSER_DATABASE (removed), and
+      # FILEBROWSER_JWT_TOKEN_SECRET — 2.x keeps its signing key in the
+      # database, imports the old one from the 1.x database, and then fails
+      # on any key from outside that differs from it. Tested on a real box.
       - FILEBROWSER_ADMIN_PASSWORD=${FILEBROWSER_ADMIN_PASSWORD:-}
-      - FILEBROWSER_JWT_TOKEN_SECRET=${FILEBROWSER_JWT_SECRET:-}
     volumes:
       # The whole pool, not just media: books, photos and downloads are
       # siblings of media/ and would be invisible if this bound one subfolder.
