@@ -1038,8 +1038,10 @@ function renderLauncher(modules) {
 
 /**
  * Your apps: one compact tile each, with how it is written under its name
- * ("Up 11h · 201MB"), and a click that opens a sheet over the page for the
- * rest — so the page never grows with the app you are looking at. The idea is
+ * ("Up 11h · 201MB"). A click opens the app; the "..." on the tile opens a
+ * sheet over the page for the rest — so the page never grows with the app
+ * you are looking at. (Until 0.30 the click opened the sheet, and after two
+ * weeks of use that was one click too many on the thing done most.) The idea is
  * the one smart-home dashboards use for devices; nothing else is borrowed.
  * Only an exception is coloured: red for unhealthy, amber near its memory
  * limit, grey for stopped. Nothing says "fine" sixteen times.
@@ -1112,11 +1114,16 @@ function appTiles(tiles) {
   const items = tiles.map((t) => {
     const key = tileKey(t.module.id, t.name);
     const mark = appMark(t);
-    return `<button type="button" class="ha-app${state.picked === key ? ' is-on' : ''}" data-pick="${escapeHtml(key)}"
+    // The tile opens the app, as a real link; a stopped app has nothing to
+    // open, so its tile opens the sheet. The sheet is otherwise behind the "...".
+    const url = t.url && !(t.container && t.container.state === 'stopped') ? t.url : '';
+    const body = `<span class="ha-ic">${appArtOf(t)}</span>
+      <span class="ha-txt"><b>${escapeHtml(t.friendly_name)}</b><small${t.module.id === 'qbittorrent' ? ' data-live="qbit"' : ''}>${escapeHtml(appStateLine(t))}</small></span>`;
+    return `<div class="ha-app${state.picked === key ? ' is-on' : ''}" data-pick="${escapeHtml(key)}"
       data-level="${mark}" data-fam="${appFamily(t)}" data-name="${escapeHtml(t.friendly_name.toLowerCase())}" style="--app:${appColor(t)}" title="${escapeHtml(appTitle(t))}">
-      <span class="ha-ic">${appArtOf(t)}</span>
-      <span class="ha-txt"><b>${escapeHtml(t.friendly_name)}</b><small${t.module.id === 'qbittorrent' ? ' data-live="qbit"' : ''}>${escapeHtml(appStateLine(t))}</small></span>
-    </button>`;
+      ${url ? `<a class="ha-open" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${body}</a>` : `<button type="button" class="ha-open">${body}</button>`}
+      ${t.container ? `<button type="button" class="ha-more" aria-label="${escapeHtml(t.friendly_name)} details" title="Details"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>` : ''}
+    </div>`;
   });
   // Grouped by what the apps are for; the header's chips and search filter
   // these in place, so typing never waits for a redraw.
@@ -6238,7 +6245,8 @@ document.addEventListener('click', async (event) => {
     renderLauncher(state.modules);
   }
   const pick = event.target.closest('[data-pick]');
-  if (pick) {
+  // A tile's link opens the app on its own; only the rest of a tile picks.
+  if (pick && !event.target.closest('a.ha-open')) {
     state.picked = state.picked === pick.dataset.pick ? null : pick.dataset.pick;
     renderLauncher(state.modules);
     return;
