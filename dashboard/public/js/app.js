@@ -5396,6 +5396,12 @@ function renderUpdates(data) {
   // migrate data; and with a single rebuild the row's own button is the same
   // action, one click closer.
   $('#updates-all').hidden = rebuilds.length < 2;
+  // New versions in one go, but only the ones that stay on their major
+  // version: a build bump (-ls366 -> -ls368) or a patch. A major jump is
+  // where migrations live, so it keeps its own button and its own warning.
+  const batch = versions.filter(sameMajor);
+  $('#upgrade-all').hidden = batch.length < 2;
+  $('#upgrade-all').textContent = `Upgrade all (${batch.length})`;
 
   if (!data.lastCheck) {
     list.innerHTML = '<p class="note-box">Press <strong>Check now</strong> to compare every app against its registry.</p>';
@@ -5752,7 +5758,64 @@ async function upgradeVersion(container, from, to) {
   if (!ok) return;
 
   openUpgrade(container, from, to);
-  let success = false;
+  const result = await streamUpgrade(container);
+  closeUpgrade(result);
+  toast(result.ok
+    ? `${container} upgraded to ${to}.`
+    : `${container} was put back on ${from} — the log says why.`, result.ok ? 'success' : 'error', 12000);
+  loadUpdates();
+}
+
+/** "v1.6.2-ls366" -> 1. Null when a tag does not start with a number. */
+function upMajor(tag) {
+  const m = /^v?(\d+)/i.exec(upShort(tag));
+  return m ? Number(m[1]) : null;
+}
+function sameMajor(v) {
+  const a = upMajor(v.tag);
+  return a != null && a === upMajor(v.newerVersion);
+}
+
+/**
+ * Every new version that stays on its major version, one after another, after
+ * one confirmation. Each is the same upgrade as its own button — backup
+ * first, previous version back if it does not come up — and the server runs
+ * one at a time anyway. One that fails is put back and the rest go on.
+ */
+async function upgradeAll() {
+  const list = ((updatesState && updatesState.newVersions) || []).filter(sameMajor);
+  if (!list.length) return;
+  const ok = await confirmDialog({
+    title: `Upgrade ${list.length} apps?`,
+    bodyHtml: `
+      <ul class="up-list">${list.map((v) => `<li><b>${escapeHtml(v.title || v.container)}</b>
+        <span class="mono">${escapeHtml(v.tag)} → ${escapeHtml(v.newerVersion)}</span></li>`).join('')}</ul>
+      <p class="signin-note">One at a time. Each app is backed up first, and one that does not come back
+      healthy is put back on its previous version while the rest carry on.</p>`,
+    confirmLabel: `Upgrade ${list.length}`,
+    wide: true,
+  });
+  if (!ok) return;
+
+  const failed = [];
+  for (const [i, v] of list.entries()) {
+    const run = openUpgrade(v.container, v.tag, v.newerVersion);
+    run.layer.querySelector('#up-title').textContent = `Upgrading ${run.name} · ${i + 1} of ${list.length}`;
+    const result = await streamUpgrade(v.container);
+    if (!result.ok) failed.push(run.name);
+    closeUpgrade(result);
+    run.layer.remove();
+  }
+  const done = list.length - failed.length;
+  toast(failed.length
+    ? `${done} of ${list.length} upgraded. Put back on the previous version: ${failed.join(', ')} — Past updates says why.`
+    : `All ${list.length} apps upgraded.`, failed.length ? 'error' : 'success', 15000);
+  loadModules(true);
+  loadUpdates();
+}
+
+/** POST one upgrade and feed its stream to the open dialog; resolves to the final result. */
+async function streamUpgrade(container) {
   let result = { ok: false };
   try {
     const res = await fetch('api/updates/upgrade', {
@@ -5773,7 +5836,7 @@ async function upgradeVersion(container, from, to) {
         if (!raw.trim()) continue;
         let msg;
         try { msg = JSON.parse(raw); } catch { continue; }
-        if (msg.done) { success = msg.ok === true; result = msg; }
+        if (msg.done) result = { ...msg, ok: msg.ok === true };
         else if (msg.event) upgradeEvent(msg.event);
         else if (typeof msg.line === 'string') upgradeLine(msg.line, msg.err);
       }
@@ -5781,11 +5844,7 @@ async function upgradeVersion(container, from, to) {
   } catch (err) {
     upgradeLine(`ERROR: ${err.message}`, true);
   }
-  closeUpgrade(result);
-  toast(success
-    ? `${container} upgraded to ${to}.`
-    : `${container} was put back on ${from} — the log says why.`, success ? 'success' : 'error', 12000);
-  loadUpdates();
+  return result;
 }
 
 async function runUpdateCheck({ quiet = false } = {}) {
@@ -6578,6 +6637,7 @@ $('#storage-probe').addEventListener('click', (event) => {
 
 $('#check-updates').addEventListener('click', () => runUpdateCheck());
 $('#updates-all').addEventListener('click', () => applyUpdate('all'));
+$('#upgrade-all').addEventListener('click', () => upgradeAll());
 $('#update-items').addEventListener('click', (event) => {
   const btn = event.target.closest('[data-update]');
   if (btn) { applyUpdate(btn.dataset.update); return; }
