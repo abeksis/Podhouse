@@ -290,6 +290,65 @@ function bazarrLink(arr, port) {
   };
 }
 
+/**
+ * Without a languages profile Bazarr knows what is in the library and looks
+ * for nothing ("Missing languages profile"). Seed one: Hebrew, with English
+ * as the fallback — the cutoff is Hebrew, so English is fetched while Hebrew
+ * is missing and the search stops once Hebrew is found. It becomes the
+ * default for series and films Bazarr learns about from now on.
+ *
+ * Only on a Bazarr with no profile at all. Subtitle PROVIDERS are not
+ * chosen here: like indexers, where subtitles come from is the user's call.
+ */
+const bazarrLanguages = {
+  id: 'bazarr-languages',
+  needs: ['bazarr'],
+  async run() {
+    const b = await bazarrApp();
+    const headers = { 'x-api-key': b.key };
+    const get = async (p) => {
+      const res = await fetch(`${b.base}${p}`, { headers, signal: AbortSignal.timeout(20000) });
+      if (!res.ok) throw new Error(`bazarr ${p} answered ${res.status}`);
+      return res.json();
+    };
+    const profiles = await get('/api/system/languages/profiles');
+    if (Array.isArray(profiles) && profiles.length) return 'already had one';
+
+    const item = (id, language) => ({
+      id, language, audio_exclude: 'False', hi: 'False', forced: 'False', audio_only_include: 'False',
+    });
+    const body = new URLSearchParams({
+      'languages-profiles': JSON.stringify([{
+        profileId: 1,
+        name: 'Hebrew, then English',
+        items: [item(1, 'he'), item(2, 'en')],
+        cutoff: 1,
+        mustContain: [],
+        mustNotContain: [],
+        originalFormat: false,
+        tag: null,
+      }]),
+      'settings-general-serie_default_enabled': 'true',
+      'settings-general-serie_default_profile': '1',
+      'settings-general-movie_default_enabled': 'true',
+      'settings-general-movie_default_profile': '1',
+    });
+    // languages-enabled REPLACES the enabled set, so send what is on already too.
+    const languages = await get('/api/system/languages');
+    const on = new Set((Array.isArray(languages) ? languages : []).filter((l) => l.enabled).map((l) => l.code2));
+    for (const code of new Set([...on, 'he', 'en'])) body.append('languages-enabled', code);
+
+    const res = await fetch(`${b.base}/api/system/settings`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
+      body,
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) throw new Error(`bazarr refused the languages profile (${res.status})`);
+    return 'added Hebrew, then English';
+  },
+};
+
 const LINKS = [
   qbitPaths,
   rootFolder('sonarr', 'HB_MEDIA_TV', 'media/tv'),
@@ -301,6 +360,7 @@ const LINKS = [
   flaresolverr,
   bazarrLink('sonarr', 8989),
   bazarrLink('radarr', 7878),
+  bazarrLanguages,
 ];
 
 /**
