@@ -591,15 +591,28 @@ const seerrSetup = {
     const pub = (await sr(base, 'GET', '/api/v1/settings/public')).data;
     if (pub.initialized) return 'already set up';
     const { user, pass } = jfLogin(env);
-    const jfPort = 8096;
-    const login = await sr(base, 'POST', '/api/v1/auth/jellyfin', {
-      body: { username: user, password: pass, hostname: 'jellyfin', port: jfPort, useSsl: false, urlBase: '', email: `${user}@podhouse.local`, serverType: 2 },
-    });
+    // Once Jellyfin is configured in Seerr (a run that stopped halfway),
+    // naming the server again is refused — "Jellyfin hostname already
+    // configured" — and a plain sign-in is what it takes.
+    const server = pub.mediaServerType === 2 ? {}
+      : { hostname: 'jellyfin', port: 8096, useSsl: false, urlBase: '', email: `${user}@podhouse.local`, serverType: 2 };
+    const login = await sr(base, 'POST', '/api/v1/auth/jellyfin', { body: { username: user, password: pass, ...server } });
     const cookie = (/connect\.sid=[^;]+/.exec(login.cookie || '') || [])[0];
     if (!cookie) throw new Error('seerr did not open a session for the Jellyfin admin');
-    const libs = (await sr(base, 'POST', '/api/v1/settings/jellyfin/library/sync', { cookie })).data || [];
-    for (const lib of libs) {
-      await sr(base, 'PUT', `/api/v1/settings/jellyfin/library/${lib.id}`, { cookie, body: { enabled: true } });
+    // The library API changed between Seerr versions. 3.5: a POST to sync and
+    // a PUT per library. 3.4: GET ?sync=true, then GET ?enable=<ids>.
+    let libs;
+    const sync = await sr(base, 'POST', '/api/v1/settings/jellyfin/library/sync', { cookie }).catch(() => null);
+    if (sync) {
+      libs = sync.data || [];
+      for (const lib of libs) {
+        await sr(base, 'PUT', `/api/v1/settings/jellyfin/library/${lib.id}`, { cookie, body: { enabled: true } });
+      }
+    } else {
+      libs = (await sr(base, 'GET', '/api/v1/settings/jellyfin/library?sync=true', { cookie })).data || [];
+      if (libs.length) {
+        await sr(base, 'GET', `/api/v1/settings/jellyfin/library?enable=${libs.map((l) => l.id).join(',')}`, { cookie });
+      }
     }
     await sr(base, 'POST', '/api/v1/settings/initialize', { cookie });
     return `signed in as ${user}, ${libs.length} libraries`;
