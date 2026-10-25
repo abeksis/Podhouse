@@ -1499,6 +1499,20 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST') {
         try {
           const changes = (await readBody(req)).changes || {};
+          // The export path from Network Storage ("/mnt/media/media_disk" on the
+          // NAS) is the natural thing to type as Library root, and it is wrong:
+          // on this box nothing is there, Docker creates it empty, and Sonarr and
+          // Radarr show an empty library. Name the folder it is mounted at.
+          if (typeof changes.HB_MEDIA_ROOT === 'string' && changes.HB_MEDIA_ROOT.trim()) {
+            const root = changes.HB_MEDIA_ROOT.trim().replace(/\/+$/, '');
+            const { mounts } = await storage.list().catch(() => ({ mounts: [] }));
+            const nas = mounts.find((m) => m.target !== root
+              && (m.source === root || m.source.endsWith(`:${root}`) || m.source.endsWith(root)));
+            if (nas) {
+              throw new Error(`${root} is the folder's path on the NAS (${nas.source}). `
+                + `On this box it is mounted at ${nas.target} — use that as Library root.`);
+            }
+          }
           // Told before saving: the old login is the one that still opens it.
           await mediaWire.changeQbitLogin(insights.readEnv(), changes);
           const saved = await config.save(changes);

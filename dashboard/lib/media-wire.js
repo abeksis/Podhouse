@@ -117,6 +117,67 @@ function rootFolder(arr, envKey, fallback) {
   };
 }
 
+/**
+ * A root folder full of films is still an empty Radarr: nothing is in its
+ * library until each folder is added ("No movies found"). Add them, the way
+ * Library Import does without the clicking.
+ *
+ * Only a folder the lookup matches with confidence — its own suggested
+ * folder name, or the same title and year — is added; the rest stay for
+ * Library Import rather than being guessed at. Nothing is searched for:
+ * films come in unmonitored and series watch only FUTURE episodes, so an
+ * imported library does not turn into a queue of upgrade downloads.
+ *
+ * An app that already has anything in its library is someone's library and
+ * is left alone.
+ */
+function importLibrary(arr, envKey, fallback) {
+  const kind = arr === 'radarr' ? 'movie' : 'series';
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  return {
+    id: `${arr}-import`,
+    needs: [arr],
+    stampExtra: (env) => libraryPath(env, envKey, fallback),
+    async run(env, prev) {
+      const a = await app(arr, 'v3');
+      const have = await api(a.base, a.key, 'GET', `/api/v3/${kind}`);
+      if (have.length && !prev) return 'library already in use';
+      const path = libraryPath(env, envKey, fallback);
+      const root = (await api(a.base, a.key, 'GET', '/api/v3/rootfolder'))
+        .find((r) => r.path.replace(/\/+$/, '') === path);
+      if (!root) throw new Error(`${path} is not a root folder yet`);
+      const folders = root.unmappedFolders || [];
+      if (!folders.length) return 'nothing to import';
+      const profile = (await api(a.base, a.key, 'GET', '/api/v3/qualityprofile'))[0];
+
+      let added = 0;
+      for (const folder of folders) {
+        const m = /^(.*?)(?:\s*\((\d{4})\))?$/.exec(folder.name);
+        const title = norm(m[1]);
+        const year = m[2] ? Number(m[2]) : null;
+        const found = await api(a.base, a.key, 'GET', `/api/v3/${kind}/lookup?term=${encodeURIComponent(folder.name)}`)
+          .catch(() => []);
+        // Exactly one match, or none: "Cape Fear" with no year is three titles.
+        const match = (list) => (list.length === 1 ? list[0] : null);
+        const hit = match(found.filter((c) => c.folder && c.folder.toLowerCase() === folder.name.toLowerCase()))
+          || match(found.filter((c) => norm(c.title) === title && (!year || c.year === year)));
+        if (!hit) continue;
+        const body = kind === 'movie'
+          ? { ...hit, qualityProfileId: profile.id, rootFolderPath: path, path: folder.path,
+            monitored: false, minimumAvailability: 'released', addOptions: { searchForMovie: false } }
+          : { ...hit, qualityProfileId: profile.id, rootFolderPath: path, path: folder.path,
+            monitored: true, seasonFolder: true,
+            addOptions: { monitor: 'future', searchForMissingEpisodes: false, searchForCutoffUnmetEpisodes: false } };
+        try {
+          await api(a.base, a.key, 'POST', `/api/v3/${kind}`, body);
+          added += 1;
+        } catch { /* already there, or refused: leave it for Library Import */ }
+      }
+      return `imported ${added} of ${folders.length}`;
+    },
+  };
+}
+
 // Prowlarr pushes indexers on its own schedule; after a link changes, push now.
 const syncIndexers = (p) => api(p.base, p.key, 'POST', '/api/v1/command', { name: 'ApplicationIndexerSync' }).catch(() => {});
 
@@ -353,6 +414,8 @@ const LINKS = [
   qbitPaths,
   rootFolder('sonarr', 'HB_MEDIA_TV', 'media/tv'),
   rootFolder('radarr', 'HB_MEDIA_MOVIES', 'media/movies'),
+  importLibrary('sonarr', 'HB_MEDIA_TV', 'media/tv'),
+  importLibrary('radarr', 'HB_MEDIA_MOVIES', 'media/movies'),
   downloadClient('sonarr', { field: 'tvCategory', value: 'tv-sonarr' }),
   downloadClient('radarr', { field: 'movieCategory', value: 'radarr' }),
   prowlarrApp('sonarr', 'Sonarr'),
