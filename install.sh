@@ -447,12 +447,11 @@ added="$(HOMEBOX_ROOT="$HB_ROOT" node -e '
 # An `if`, not `[ ... ] && printf`: the latter returns 1 whenever the test is
 # false, and under the `set -e` at the top of this file that aborts the whole
 # install on the ordinary case of having nothing to generate.
+# One line, not one per key: a list of 30 variable names is noise to someone
+# installing, and `homebox secrets <app>` prints any of them when needed.
 if [ -n "$added" ]; then
-  for secret in $added; do
-    printf '  %s %sgenerated for a module that declares it%s\n' "$secret" "$DIM" "$RESET"
-  done
-else
-  printf '  %severy module secret already present%s\n' "$DIM" "$RESET"
+  printf '  %s passwords and keys generated for the apps %s(homebox secrets <app> prints one)%s\n' \
+    "$(printf '%s\n' $added | wc -l)" "$DIM" "$RESET"
 fi
 
 # set_env never overwrites, so a value the user has since changed stands.
@@ -462,7 +461,6 @@ while IFS= read -r pair; do
   value="${pair#*=}"
   if ! grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
     set_env "$key" "$value"
-    printf '  %s=%s %sdefault from the module that declares it%s\n' "$key" "$value" "$DIM" "$RESET"
   fi
 done <<EOF
 $(declared_defaults | sort -u)
@@ -471,7 +469,6 @@ EOF
 # Podhouse user cannot read the secrets the installer just generated.
 $SUDO chown "$HB_USER:$HB_USER" "$ENV_FILE"
 chmod 600 "$ENV_FILE"
-printf '  %s secrets, mode 600\n' "$(grep -c '=' "$ENV_FILE")"
 
 # ---------------------------------------------------------------------------
 # Migrations: baseline a NEW box, never replay history on it.
@@ -499,9 +496,7 @@ if [ -d "$HB_ROOT/migrations" ]; then
       const names = fs.readdirSync(dir).filter((n) => fs.existsSync(path.join(dir, n, "up.sh")));
       fs.writeFileSync(path.join(root, "state", "migrations-done.json"), JSON.stringify(names.sort(), null, 2) + "\n");
       if (names.length) console.log(names.length);
-    ' "$HB_ROOT" 2>/dev/null | while read -r n; do
-      printf '  %s%s migrations marked done — a new box has nothing to carry forward%s\n' "$DIM" "$n" "$RESET"
-    done
+    ' "$HB_ROOT" >/dev/null 2>&1 || true
   fi
 fi
 
@@ -527,9 +522,19 @@ done
 # writes the Portainer admin password file. Skipping it leaves Docker to
 # create a DIRECTORY at that bind-mount path, and Portainer restart-loops on
 # "failed getting admin password file" forever.
+#
+# Docker's own lines (Pulling, Creating, Started for every container) go to
+# a log and are shown only when something fails — then they are the point.
 step "Starting core and dashboard"
-"$HB_ROOT/homebox" install core
-"$HB_ROOT/homebox" install dashboard
+INSTALL_LOG="$HB_ROOT/state/install.log"
+for mod in core dashboard; do
+  if "$HB_ROOT/homebox" install "$mod" >>"$INSTALL_LOG" 2>&1; then
+    printf '  %s %sstarted%s\n' "$mod" "$DIM" "$RESET"
+  else
+    tail -n 40 "$INSTALL_LOG" | sed 's/^/  /'
+    die "$mod did not start — the lines above are from $INSTALL_LOG"
+  fi
+done
 
 # The dashboard has a login now, and this is the only place the token to
 # claim it appears. Printed last so it is the thing still on screen.
