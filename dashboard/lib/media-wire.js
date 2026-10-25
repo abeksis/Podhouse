@@ -20,12 +20,14 @@
  */
 
 const crypto = require('crypto');
+const fsp = require('fs/promises');
+const path = require('path');
 const state = require('./state-store');
 const docker = require('./docker');
 const { arrApiKey, addressOf, readEnv } = require('./insights');
 
 const STATE_FILE = 'media-wired.json';
-const MEDIA_IDS = new Set(['sonarr', 'radarr', 'prowlarr', 'qbittorrent', 'flaresolverr']);
+const MEDIA_IDS = new Set(['sonarr', 'radarr', 'prowlarr', 'qbittorrent', 'flaresolverr', 'bazarr']);
 
 async function api(base, key, method, path, body) {
   const res = await fetch(base + path, {
@@ -242,6 +244,52 @@ const qbitPaths = {
   },
 };
 
+/**
+ * Bazarr reads Sonarr's and Radarr's libraries to know what needs subtitles.
+ * Its own API key is in config.yaml (written on its first start); its
+ * settings API takes form fields named settings-<section>-<key>.
+ */
+async function bazarrApp() {
+  const yaml = await fsp.readFile(
+    path.join(state.ROOT, 'modules', 'bazarr', 'config', 'bazarr', 'config', 'config.yaml'), 'utf8',
+  ).catch(() => '');
+  const key = /^auth:\n(?:[ \t]+.*\n)*?[ \t]+apikey:[ \t]*'?([A-Za-z0-9]+)/m.exec(yaml);
+  if (!key) throw new Error('bazarr has not written its API key yet');
+  return { base: await addressOf('bazarr'), key: key[1] };
+}
+
+function bazarrLink(arr, port) {
+  return {
+    id: `bazarr-${arr}`,
+    needs: ['bazarr', arr],
+    async run(env, prev) {
+      const b = await bazarrApp();
+      const target = await app(arr, 'v3');
+      const headers = { 'x-api-key': b.key };
+      const res = await fetch(`${b.base}/api/system/settings`, { headers, signal: AbortSignal.timeout(20000) });
+      if (!res.ok) throw new Error(`bazarr settings answered ${res.status}`);
+      const settings = await res.json();
+      // First run on a Bazarr connected by hand: theirs, leave it.
+      if (settings.general && settings.general[`use_${arr}`] && !prev) return 'already had one';
+      const save = await fetch(`${b.base}/api/system/settings`, {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          [`settings-general-use_${arr}`]: 'true',
+          [`settings-${arr}-ip`]: arr,
+          [`settings-${arr}-port`]: String(port),
+          [`settings-${arr}-base_url`]: '/',
+          [`settings-${arr}-ssl`]: 'false',
+          [`settings-${arr}-apikey`]: target.key,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!save.ok) throw new Error(`bazarr refused the ${arr} settings (${save.status})`);
+      return 'added';
+    },
+  };
+}
+
 const LINKS = [
   qbitPaths,
   rootFolder('sonarr', 'HB_MEDIA_TV', 'media/tv'),
@@ -251,6 +299,8 @@ const LINKS = [
   prowlarrApp('sonarr', 'Sonarr'),
   prowlarrApp('radarr', 'Radarr'),
   flaresolverr,
+  bazarrLink('sonarr', 8989),
+  bazarrLink('radarr', 7878),
 ];
 
 /**
