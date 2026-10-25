@@ -181,7 +181,9 @@ async function mediaFolders(id, { onLine = null } = {}) {
   });
   const owner = `${env.PUID || 1000}:${env.PGID || 1000}`;
   return compose(id, ['run', '--rm', '--no-deps', '-T', '--entrypoint', 'sh', id, '-c',
-    'mkdir -p "$@" && chown "$0" "$@"', owner, ...dirs], { timeout: 120000, onLine });
+    // A NAS that squashes root refuses the chown, and its own mapping already
+    // decides the owner; only a folder that could not be made is a failure.
+    'mkdir -p "$@" || exit 1; chown "$0" "$@" 2>/dev/null || true', owner, ...dirs], { timeout: 120000, onLine });
 }
 
 /** Full install: seed, pull, start. Returns the combined transcript. */
