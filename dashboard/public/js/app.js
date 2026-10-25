@@ -1694,7 +1694,197 @@ function fitTaglines(root) {
 }
 window.addEventListener('resize', () => fitTaglines($('#catalog-grid')));
 
+/* ------------------------------------------- "Movies & series at home" */
+
+/**
+ * The media apps as one set, laid out as the path a request takes: asked for
+ * in Seerr, tracked by Radarr/Sonarr, searched by Prowlarr, downloaded by
+ * qBittorrent, watched in Jellyfin. Installing goes through the ordinary
+ * queue below, so the review dialog and the progress log are the same ones;
+ * what this adds is the "connecting" step after it, read from the server's
+ * media wiring (lib/media-wire.js).
+ *
+ * FlareSolverr starts unticked: it is only useful once an indexer sits
+ * behind Cloudflare, and it is one of the heavier apps here.
+ */
+const MEDIA_SET = [
+  { step: 'Ask', apps: [['seerr', 'Requests from home']] },
+  { step: 'Keep track', apps: [['radarr', 'Films'], ['sonarr', 'Series']] },
+  { step: 'Search', apps: [['prowlarr', 'Your indexers'], ['flaresolverr', 'Only for Cloudflare sites']] },
+  { step: 'Download', apps: [['qbittorrent', 'Downloads']] },
+  { step: 'Watch', apps: [['jellyfin', 'On every screen']] },
+];
+const MEDIA_EXTRAS = [['bazarr', 'Subtitles — Hebrew, then English']];
+const MEDIA_SET_IDS = [...MEDIA_SET.flatMap((s) => s.apps), ...MEDIA_EXTRAS].map(([id]) => id);
+const mediaSetOff = new Set(['flaresolverr']);
+
+function mediaSetModules() {
+  const byId = new Map(state.modules.map((m) => [m.id, m]));
+  return MEDIA_SET_IDS.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function renderMediaSet() {
+  const box = $('#media-set');
+  if (!box) return;
+  const mods = mediaSetModules();
+  const legacy = state.modules.find((m) => m.id === 'media' && m.installed);
+  const show = !legacy && mods.length === MEDIA_SET_IDS.length
+    && !state.appQuery.trim() && ['all', 'media'].includes(state.category);
+  box.hidden = !show;
+  if (!show) return;
+
+  const byId = new Map(mods.map((m) => [m.id, m]));
+  const chosen = mods.filter((m) => !m.installed && !mediaSetOff.has(m.id));
+  const have = mods.filter((m) => m.installed);
+  const ram = [...chosen, ...have].reduce((sum, m) => sum + parseRam(m.ram), 0);
+  const total = state.summary && state.summary.metrics ? state.summary.metrics.memory.total : null;
+
+  const tile = ([id, role]) => {
+    const m = byId.get(id);
+    const cls = m.installed ? 'is-have' : (mediaSetOff.has(id) ? 'is-off' : 'is-on');
+    const tip = id === 'flaresolverr'
+      ? ' title="Some indexer sites check for a real browser first (Cloudflare). FlareSolverr is that browser, for Prowlarr. Only needed if one of your indexers asks for it."'
+      : '';
+    return `<button type="button" class="ms-app ${cls}" data-ms-app="${escapeHtml(id)}"${tip}${m.installed ? ' aria-disabled="true"' : ` aria-pressed="${cls === 'is-on'}"`}>
+      <span class="ms-art">${iconHtml(m.icon, m.title, m.theme)}</span>
+      <span><span class="ms-n">${escapeHtml(m.title)}</span><br><span class="ms-r">${escapeHtml(role)}</span></span>
+      <span class="ms-ck"></span>
+    </button>`;
+  };
+
+  const all = have.length === mods.length;
+  const action = all
+    ? '<button type="button" class="button" id="ms-connections">Show connections</button>'
+    : `<button type="button" class="button is-primary" id="ms-go"${chosen.length ? '' : ' disabled'}>Install ${chosen.length} app${chosen.length === 1 ? '' : 's'}</button>`;
+  const haveNote = have.length && !all
+    ? ` <b>${escapeHtml(have.map((m) => m.title).join(', '))} ${have.length === 1 ? 'is' : 'are'} already installed</b> — connected, not reinstalled.`
+    : '';
+
+  box.innerHTML = `
+    <div class="ms-head">
+      <div>
+        <div class="ms-kicker">A ready-made set</div>
+        <div class="ms-title">Movies &amp; series at home</div>
+        <p class="ms-sub">Ask for a film on your phone and it turns up on the TV. Podhouse installs these apps together and connects them to each other — you don't copy a single key between them.</p>
+      </div>
+      <div class="ms-total"><b>${escapeHtml(bytes(ram))}</b><span>${chosen.length + have.length} apps${total ? ` · of ${escapeHtml(bytes(total))} on this box` : ''}</span></div>
+    </div>
+    <div class="ms-flow">
+      ${MEDIA_SET.map((s, i) => `<div class="ms-step"><div class="ms-step-label">${i + 1} · ${escapeHtml(s.step)}</div>${s.apps.map(tile).join('')}</div>`).join('')}
+    </div>
+    <div class="ms-extras"><div class="ms-step-label">Alongside</div>${MEDIA_EXTRAS.map(tile).join('')}</div>
+    <div class="ms-foot">
+      <p class="ms-note">${all ? 'All installed and connected.' : 'Click an app to leave it out, or to add FlareSolverr.'}${haveNote} Indexers and subtitle providers are not chosen for you.</p>
+      ${action}
+    </div>`;
+}
+
+async function installMediaSet() {
+  const ids = mediaSetModules().filter((m) => !m.installed && !mediaSetOff.has(m.id)).map((m) => m.id);
+  if (!ids.length) return;
+  for (const id of ids) state.pending.set(id, true);
+  const ok = await applyPending();
+  if (ok === undefined) {
+    // Cancelled at the review: leave the rest of the queue as it was.
+    for (const id of ids) state.pending.delete(id);
+    renderApps();
+    renderApplyBar();
+    return;
+  }
+  if (!ok) return; // The progress dialog stays open with the log that says why.
+  document.querySelectorAll('.dialog.is-progress').forEach((d) => d.closest('.dialog-layer').remove());
+  loadModules(true);
+  openMediaConnect();
+}
+
+/**
+ * The step after installing: each link the server makes, as it is made.
+ * Polls /api/media/wiring, which also nudges the next pass, until every link
+ * is done, then says what is still the user's to choose.
+ */
+function openMediaConnect() {
+  const layer = document.createElement('div');
+  layer.className = 'dialog-layer';
+  layer.innerHTML = `
+    <div class="dialog is-wide" role="dialog" aria-modal="true" aria-labelledby="ms-dlg-title">
+      <h3 class="dialog-title" id="ms-dlg-title">Movies &amp; series at home</h3>
+      <div class="dialog-body is-markup" id="ms-dlg-body"><p class="ms-sub">Asking the apps…</p></div>
+      <div class="dialog-actions" id="ms-dlg-actions">
+        <button type="button" class="button" data-ms-close>Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(layer);
+
+  let timer = null;
+  const close = () => { clearTimeout(timer); layer.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  layer.addEventListener('click', (e) => { if (e.target.closest('[data-ms-close]')) close(); });
+
+  const byId = new Map(state.modules.map((m) => [m.id, m]));
+  const art = (id) => {
+    const m = byId.get(id);
+    return m ? `<span class="ms-art">${iconHtml(m.icon, m.title, m.theme)}</span>` : '';
+  };
+  const pair = (needs) => needs.map(art).join('<span class="muted">→</span>');
+
+  const render = (links) => {
+    const body = layer.querySelector('#ms-dlg-body');
+    const left = links.filter((l) => l.state !== 'done');
+    if (!links.length) {
+      body.innerHTML = '<p class="ms-sub">None of the media apps are running yet.</p>';
+      return false;
+    }
+    const list = `<ul class="ms-links">${links.map((l) => `<li>
+        ${l.state === 'done' ? '<span class="ms-ok">✓</span>' : '<span class="ms-spin" aria-label="waiting"></span>'}
+        <span class="ms-pair">${pair(l.needs)}</span>
+        <span class="ms-what">${escapeHtml(l.label)}</span>
+        <span class="ms-st${l.state === 'done' ? ' ms-ok' : ''}"${l.note ? ` title="${escapeHtml(l.note)}"` : ''}>${l.state === 'done' ? 'done' : 'waiting…'}</span>
+      </li>`).join('')}</ul>`;
+
+    if (left.length) {
+      body.innerHTML = `<p class="ms-sub">The apps are in. Now they are being introduced to each other — ${links.length - left.length} of ${links.length} done.</p>
+        <div class="ms-phase"><span class="is-done">✓ Install</span><span class="is-now">Connect</span><span>Ready</span></div>
+        ${list}
+        <p class="ms-note" style="margin-top:0.75rem">The first time takes a few minutes: each app has to start before it can be connected. You can close this — it carries on.</p>`;
+      return false;
+    }
+
+    const open = (id, label, primary) => {
+      const url = appUrl(id);
+      return url ? `<a class="button is-small${primary ? ' is-primary' : ''}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>` : '';
+    };
+    const yours = [];
+    if (byId.get('prowlarr') && byId.get('prowlarr').installed) {
+      yours.push(`<div>${art('prowlarr')}<p><b>Add an indexer in Prowlarr</b>Until you do, requests wait. Whatever you add reaches Radarr and Sonarr by itself.</p>${open('prowlarr', 'Open Prowlarr', true)}</div>`);
+    }
+    if (byId.get('bazarr') && byId.get('bazarr').installed) {
+      yours.push(`<div>${art('bazarr')}<p><b>Pick a subtitle provider in Bazarr</b>Hebrew first, English while there is none — it only needs to know where to look.</p>${open('bazarr', 'Open Bazarr')}</div>`);
+    }
+    const jf = byId.get('jellyfin') && byId.get('jellyfin').installed;
+    body.innerHTML = `<p class="ms-sub">All ${links.length} connections made.${yours.length ? ' What is left is yours to choose, on purpose: Podhouse does not pick where content comes from.' : ''}</p>
+      <div class="ms-phase"><span class="is-done">✓ Install</span><span class="is-done">✓ Connect</span><span class="is-now">Ready</span></div>
+      ${yours.length ? `<div class="ms-yours">${yours.join('')}</div>` : ''}
+      ${jf ? '<p class="ms-login">Sign in to Jellyfin and Seerr with the Jellyfin admin account — Settings › Passwords has it. Everyone else at home gets their own Jellyfin account.</p>' : ''}`;
+    const actions = layer.querySelector('#ms-dlg-actions');
+    const seerr = appUrl('seerr');
+    actions.innerHTML = `<button type="button" class="button" data-ms-close>Close</button>${seerr ? `<a class="button is-primary" href="${escapeHtml(seerr)}" target="_blank" rel="noopener noreferrer">Open Seerr</a>` : ''}`;
+    return true;
+  };
+
+  const poll = async () => {
+    if (!layer.isConnected) return;
+    try {
+      const res = await fetch('api/media/wiring');
+      if (res.ok && render((await res.json()).links || [])) return;
+    } catch { /* the next poll tries again */ }
+    timer = setTimeout(poll, 3000);
+  };
+  poll();
+}
+
 function renderApps() {
+  renderMediaSet();
   const query = state.appQuery.trim().toLowerCase();
   const list = state.modules
     .filter(offered)
@@ -6237,7 +6427,7 @@ function installDisclosure(installIds, removeIds) {
 async function applyPending() {
   const installIds = [...state.pending.entries()].filter(([, v]) => v).map(([k]) => k);
   const removeIds = [...state.pending.entries()].filter(([, v]) => !v).map(([k]) => k);
-  if (!(await installDisclosure(installIds, removeIds))) return;
+  if (!(await installDisclosure(installIds, removeIds))) return undefined;
 
   state.pending.clear();
   renderApplyBar();
@@ -6258,6 +6448,7 @@ async function applyPending() {
   closeProgress(ok, ok ? 'Done' : 'Something went wrong');
   if (ok) toast(total === 1 ? 'Done.' : `${total} apps done.`, 'success');
   else toast('Something failed — the log in the dialog says what.', 'error', 10000);
+  return ok;
 }
 
 /* ----------------------------------------------------------------- wiring */
@@ -6271,6 +6462,18 @@ document.addEventListener('toggle', (event) => {
 }, true);
 
 document.addEventListener('click', async (event) => {
+  const msApp = event.target.closest('[data-ms-app]');
+  if (msApp) {
+    const id = msApp.dataset.msApp;
+    const mod = state.modules.find((m) => m.id === id);
+    if (mod && !mod.installed) {
+      if (mediaSetOff.has(id)) mediaSetOff.delete(id); else mediaSetOff.add(id);
+      renderMediaSet();
+    }
+    return;
+  }
+  if (event.target.closest('#ms-go')) { installMediaSet(); return; }
+  if (event.target.closest('#ms-connections')) { openMediaConnect(); return; }
   const queueBtn = event.target.closest('[data-queue]');
   if (queueBtn) {
     event.preventDefault();

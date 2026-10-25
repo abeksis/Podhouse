@@ -738,11 +738,63 @@ async function wireOnce() {
       await state.writeJson(STATE_FILE, done);
       made.push({ id: link.id, result });
       console.log(`[media-wire] ${link.id}: ${result}`);
+      lastError.delete(link.id);
     } catch (err) {
+      lastError.set(link.id, err.message);
       console.log(`[media-wire] ${link.id} not yet: ${err.message}`);
     }
   }
+  lastRun = Date.now();
   return made;
+}
+
+// Why each link that is not made yet is not, from the last pass. Memory only:
+// it describes "now", and a restart starts a fresh pass anyway.
+const lastError = new Map();
+let lastRun = 0;
+
+// What each link does, in the words the "Movies & series at home" dialog
+// shows. A link with no entry here is plumbing nobody needs to watch.
+const LABELS = {
+  'radarr-qbittorrent': 'Radarr sends downloads to qBittorrent',
+  'sonarr-qbittorrent': 'Sonarr sends downloads to qBittorrent',
+  'qbittorrent-paths': 'qBittorrent saves where Radarr and Sonarr look',
+  'radarr-rootfolder': 'Radarr files films in the library',
+  'sonarr-rootfolder': 'Sonarr files series in the library',
+  'radarr-import': 'Films already there are added to Radarr',
+  'sonarr-import': 'Series already there are added to Sonarr',
+  'prowlarr-radarr': 'Prowlarr feeds its indexers to Radarr',
+  'prowlarr-sonarr': 'Prowlarr feeds its indexers to Sonarr',
+  'prowlarr-flaresolverr': 'Prowlarr can get past Cloudflare',
+  'bazarr-radarr': 'Bazarr watches the films',
+  'bazarr-sonarr': 'Bazarr watches the series',
+  'bazarr-languages': 'Bazarr looks for Hebrew, then English',
+  'jellyfin-setup': 'Jellyfin gets its admin account',
+  'jellyfin-libraries': 'Jellyfin shows Movies and TV',
+  'seerr-setup': 'Seerr signs in through Jellyfin',
+  'seerr-radarr': 'Film requests go to Radarr',
+  'seerr-sonarr': 'Series requests go to Sonarr',
+};
+
+/**
+ * Every link whose apps are all installed, and where it stands: done,
+ * waiting (an app still starting) or why it is not done yet. Asking also
+ * nudges a pass, at most every 15 seconds, so the dialog moves on its own.
+ */
+async function status() {
+  const containers = await docker.listContainers();
+  const present = new Set(containers.map((c) => c.service));
+  const done = await state.readJson(STATE_FILE, {});
+  if (!running && Date.now() - lastRun > 15000) wire().catch(() => {});
+  return LINKS
+    .filter((l) => LABELS[l.id] && l.needs.every((n) => present.has(n)))
+    .map((l) => ({
+      id: l.id,
+      needs: l.needs,
+      label: LABELS[l.id],
+      state: done[l.id] ? 'done' : 'waiting',
+      note: done[l.id] ? done[l.id].result : (lastError.get(l.id) || null),
+    }));
 }
 
 /**
@@ -758,4 +810,4 @@ function soon(onMade) {
   setTimeout(go, 15000).unref();
 }
 
-module.exports = { wire, soon, changeQbitLogin, changeJellyfinLogin, MEDIA_IDS, LINKS };
+module.exports = { wire, soon, status, changeQbitLogin, changeJellyfinLogin, MEDIA_IDS, LINKS };

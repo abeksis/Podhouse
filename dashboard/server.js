@@ -1574,6 +1574,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (route === '/api/summary') return sendJson(res, 200, await apiSummary());
+    if (route === '/api/media/wiring') return sendJson(res, 200, { links: await mediaWire.status() });
     if (route === '/api/modules') return sendJson(res, 200, await apiModules());
     if (route === '/api/containers') return sendJson(res, 200, { containers: await docker.listContainers() });
     if (route === '/api/metrics') return sendJson(res, 200, await hostMetrics.snapshot());

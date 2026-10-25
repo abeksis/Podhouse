@@ -30,7 +30,7 @@ x-homebox:
     color: "#6c7a89"
     bg: "#6c7a891f"
   tips:
-    - "It has no page of its own. In Prowlarr, add it under Settings > Indexers as a FlareSolverr proxy at http://flaresolverr:8191."
+    - "It has no page of its own. Podhouse adds it to Prowlarr as a proxy by itself; give an indexer that sits behind Cloudflare the tag flaresolverr and its searches go through it."
   services:
     flaresolverr:
       friendly_name: "FlareSolverr"
