@@ -128,7 +128,14 @@ cat <<'BANNER'
 
  Your own apps, on your own box. No account, no cloud in between.
 BANNER
-printf ' %ssource:%s %s@%s\n' "$DIM" "$RESET" "$HB_REPO" "$HB_REF"
+# The repository is named only when it is not the default one (a fork, a
+# test copy) — that is when it tells the person something. Otherwise the
+# release is what matters, not the owner's GitHub name.
+if [ "$HB_REPO" = abeksis/Podhouse ]; then
+  printf ' %srelease:%s %s\n' "$DIM" "$RESET" "$HB_REF"
+else
+  printf ' %ssource:%s %s@%s\n' "$DIM" "$RESET" "$HB_REPO" "$HB_REF"
+fi
 if [ "$HB_REF_ASKED" -eq 0 ] && [ "$HB_REF" = main ]; then
   warn "no release found (manifest unreachable, no tags) — installing the development branch"
 fi
@@ -203,7 +210,7 @@ if [ "$HB_TARBALL_ASKED" -eq 1 ]; then
   tar -xzf "$TMP/homebox.tar.gz" -C "$HB_ROOT" --strip-components=1
   FROM_TARBALL=1
 else
-  step "Cloning $HB_REPO ($HB_REF)"
+  step "Downloading Podhouse $HB_REF"
   # --depth 1: nobody needs the history of a box they are installing, and it
   # turns a clone into about a second. `git pull` still works on a shallow
   # clone, which is the whole point of doing it this way.
