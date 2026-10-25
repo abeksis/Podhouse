@@ -24,9 +24,8 @@ x-homebox:
     exclude:
       - seerr/logs
   tips:
-    - "Complete the setup wizard immediately after install — the first account becomes the administrator"
-    - "Connect Jellyfin at http://jellyfin:8096, then add Sonarr at http://sonarr:8989 and Radarr at http://radarr:7878"
-    - "Use the container names above inside Seerr; localhost points back to Seerr itself"
+    - "With Jellyfin installed, Podhouse finishes Seerr's setup for you: sign in with the Jellyfin admin account, and requests go to Radarr and Sonarr."
+    - "Family members sign in with their own Jellyfin accounts; give them one in Jellyfin first."
   services:
     seerr:
       friendly_name: "Seerr"
@@ -35,7 +34,7 @@ x-homebox:
       icon: "seerr.svg"
       port_map: 5055
       url_scheme: "http"
-      first_login: "The first visit opens the setup wizard. Connect the media server and create the administrator account immediately."
+      first_login: "With Jellyfin installed, sign in with the Jellyfin admin username and password from Settings > Passwords. Without it, the first visit opens the setup wizard."
 
 services:
   seerr:

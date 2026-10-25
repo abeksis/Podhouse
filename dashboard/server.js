@@ -1515,8 +1515,9 @@ const server = http.createServer(async (req, res) => {
           }
           // Told before saving: the old login is the one that still opens it.
           await mediaWire.changeQbitLogin(insights.readEnv(), changes);
+          await mediaWire.changeJellyfinLogin(insights.readEnv(), changes);
           const saved = await config.save(changes);
-          if ('HB_QBIT_USER' in changes || 'HB_QBIT_PASS' in changes) mediaWire.soon(noteWired);
+          if (['HB_QBIT_USER', 'HB_QBIT_PASS', 'HB_JELLYFIN_USER', 'HB_JELLYFIN_PASS'].some((k) => k in changes)) mediaWire.soon(noteWired);
           return sendJson(res, 200, { ok: true, ...saved, ...(await applySaved(saved.applied)) });
         } catch (err) {
           return sendJson(res, 400, { ok: false, error: err.message });

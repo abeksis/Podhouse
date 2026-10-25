@@ -27,7 +27,7 @@ const docker = require('./docker');
 const { arrApiKey, addressOf, readEnv } = require('./insights');
 
 const STATE_FILE = 'media-wired.json';
-const MEDIA_IDS = new Set(['sonarr', 'radarr', 'prowlarr', 'qbittorrent', 'flaresolverr', 'bazarr']);
+const MEDIA_IDS = new Set(['sonarr', 'radarr', 'prowlarr', 'qbittorrent', 'flaresolverr', 'bazarr', 'jellyfin', 'seerr']);
 
 async function api(base, key, method, path, body) {
   const res = await fetch(base + path, {
@@ -412,6 +412,230 @@ const bazarrLanguages = {
   },
 };
 
+/* --------------------------------------------------------- Jellyfin, Seerr */
+
+// Jellyfin 12 takes a token ONLY in this header: X-Emby-Token and ?api_key
+// answer 401 now. Measured on 12.0.0.
+const JF_CLIENT = 'MediaBrowser Client="Podhouse", Device="Podhouse", DeviceId="podhouse-dashboard", Version="1"';
+
+async function jf(base, method, p, { token, body } = {}) {
+  const res = await fetch(base + p, {
+    method,
+    headers: {
+      authorization: token ? `${JF_CLIENT}, Token="${token}"` : JF_CLIENT,
+      'content-type': 'application/json',
+      accept: 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(30000),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`jellyfin ${method} ${p} answered ${res.status}`);
+  return text ? JSON.parse(text) : null;
+}
+
+const jfLogin = (env) => ({ user: env.HB_JELLYFIN_USER || 'admin', pass: env.HB_JELLYFIN_PASS || '' });
+
+async function jfSession(env) {
+  const base = await addressOf('jellyfin');
+  const { user, pass } = jfLogin(env);
+  const auth = await jf(base, 'POST', '/Users/AuthenticateByName', { body: { Username: user, Pw: pass } })
+    .catch(() => { throw new Error('the Jellyfin admin login in Settings does not open Jellyfin'); });
+  return { base, token: auth.AccessToken, userId: auth.User && auth.User.Id };
+}
+
+/**
+ * A fresh Jellyfin opens on a wizard that makes you invent an admin before
+ * anything works, and every other app here needs that admin. Run the wizard
+ * through its own API with the login from .env (Settings > Passwords).
+ * A Jellyfin whose wizard was finished is someone's: left alone.
+ */
+const jellyfinSetup = {
+  id: 'jellyfin-setup',
+  needs: ['jellyfin'],
+  async run(env) {
+    const base = await addressOf('jellyfin');
+    const info = await jf(base, 'GET', '/System/Info/Public');
+    if (info.StartupWizardCompleted) return 'already set up';
+    const { user, pass } = jfLogin(env);
+    if (pass.length < 6) throw new Error('no Jellyfin admin password in .env yet');
+    await jf(base, 'GET', '/Startup/User'); // makes the wizard's first user exist
+    await jf(base, 'POST', '/Startup/User', { body: { Name: user, Password: pass } });
+    await jf(base, 'POST', '/Startup/RemoteAccess', { body: { EnableRemoteAccess: true } });
+    await jf(base, 'POST', '/Startup/Complete');
+    return `created ${user}`;
+  },
+};
+
+/**
+ * Movies and TV libraries on the folders Radarr and Sonarr file into, so a
+ * download shows up in Jellyfin with nobody pointing it anywhere. Follows
+ * Configuration > Media like the root folders do; the path it added before is
+ * swapped for the new one. A Jellyfin with libraries of its own the first
+ * time this runs is left alone.
+ */
+const jellyfinLibraries = {
+  id: 'jellyfin-libraries',
+  needs: ['jellyfin'],
+  stampExtra: (env) => [env.HB_MEDIA_ROOT || '', libraryPath(env, 'HB_MEDIA_MOVIES', 'media/movies'),
+    libraryPath(env, 'HB_MEDIA_TV', 'media/tv')].join(':'),
+  async run(env, prev) {
+    const s = await jfSession(env);
+    const have = await jf(s.base, 'GET', '/Library/VirtualFolders', { token: s.token });
+    if (have.length && !prev) return 'already had libraries';
+    const made = [];
+    for (const [name, type, path] of [
+      ['Movies', 'movies', libraryPath(env, 'HB_MEDIA_MOVIES', 'media/movies')],
+      ['TV', 'tvshows', libraryPath(env, 'HB_MEDIA_TV', 'media/tv')],
+    ]) {
+      const lib = have.find((l) => l.Name === name);
+      if (!lib) {
+        const q = new URLSearchParams({ name, collectionType: type, paths: path, refreshLibrary: 'true' });
+        await jf(s.base, 'POST', `/Library/VirtualFolders?${q}`, { token: s.token, body: { LibraryOptions: {} } });
+        made.push(`${name} ${path}`);
+        continue;
+      }
+      const locations = lib.Locations || [];
+      if (locations.includes(path)) continue;
+      await jf(s.base, 'POST', '/Library/VirtualFolders/Paths?refreshLibrary=true',
+        { token: s.token, body: { Name: name, PathInfo: { Path: path } } });
+      // Our old folder goes; one the user added stays.
+      for (const old of locations.filter((l) => prev && String(prev.result || '').includes(l))) {
+        await jf(s.base, 'DELETE', `/Library/VirtualFolders/Paths?${new URLSearchParams({ name, path: old, refreshLibrary: 'true' })}`,
+          { token: s.token }).catch(() => {});
+      }
+      made.push(`${name} ${path}`);
+    }
+    return made.length ? `libraries ${made.join(', ')}` : 'libraries already right';
+  },
+};
+
+/**
+ * The Jellyfin login under Settings, applied to Jellyfin before it is saved
+ * (the same order as qBittorrent's). Seerr signs people in through Jellyfin,
+ * so it follows on its own.
+ */
+async function changeJellyfinLogin(oldEnv, changes) {
+  const user = 'HB_JELLYFIN_USER' in changes;
+  const pass = 'HB_JELLYFIN_PASS' in changes;
+  if (!user && !pass) return;
+  if (user && !String(changes.HB_JELLYFIN_USER).trim()) throw new Error('The Jellyfin username cannot be empty');
+  if (pass && String(changes.HB_JELLYFIN_PASS).length < 6) throw new Error('The Jellyfin password needs at least 6 characters');
+  const mine = (await docker.listContainers()).filter((c) => c.service === 'jellyfin');
+  if (!mine.length) return;
+  if (!mine.some((c) => c.rawState === 'running')) throw new Error('Start Jellyfin first, so the new login can be set in it');
+  const s = await jfSession(oldEnv);
+  if (pass) {
+    await jf(s.base, 'POST', `/Users/${s.userId}/Password`,
+      { token: s.token, body: { CurrentPw: jfLogin(oldEnv).pass, NewPw: String(changes.HB_JELLYFIN_PASS) } });
+  }
+  if (user) {
+    const me = await jf(s.base, 'GET', `/Users/${s.userId}`, { token: s.token });
+    await jf(s.base, 'POST', `/Users/${s.userId}`, { token: s.token, body: { ...me, Name: String(changes.HB_JELLYFIN_USER).trim() } });
+  }
+}
+
+async function seerrKey() {
+  const file = path.join(state.ROOT, 'modules', 'seerr', 'config', 'seerr', 'settings.json');
+  const json = JSON.parse(await fsp.readFile(file, 'utf8').catch(() => '{}'));
+  if (!json.main || !json.main.apiKey) throw new Error('seerr has not written its settings yet');
+  return json.main.apiKey;
+}
+
+async function sr(base, method, p, { key, cookie, body } = {}) {
+  const res = await fetch(base + p, {
+    method,
+    headers: {
+      ...(key ? { 'x-api-key': key } : {}),
+      ...(cookie ? { cookie } : {}),
+      'content-type': 'application/json',
+      accept: 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(60000),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`seerr ${method} ${p} answered ${res.status}: ${text.slice(0, 200)}`);
+  return { data: text ? JSON.parse(text) : null, cookie: res.headers.get('set-cookie') };
+}
+
+/**
+ * Seerr's wizard, done the way its first page does it: sign in with the
+ * Jellyfin admin (which makes that account Seerr's administrator), sync
+ * Jellyfin's libraries and switch them on, mark Seerr set up. Seerr v3 does
+ * the library sync as its own POST and enables each library with a PUT.
+ */
+const seerrSetup = {
+  id: 'seerr-setup',
+  needs: ['seerr', 'jellyfin'],
+  async run(env) {
+    const base = await addressOf('seerr');
+    const pub = (await sr(base, 'GET', '/api/v1/settings/public')).data;
+    if (pub.initialized) return 'already set up';
+    const { user, pass } = jfLogin(env);
+    const jfPort = 8096;
+    const login = await sr(base, 'POST', '/api/v1/auth/jellyfin', {
+      body: { username: user, password: pass, hostname: 'jellyfin', port: jfPort, useSsl: false, urlBase: '', email: `${user}@podhouse.local`, serverType: 2 },
+    });
+    const cookie = (/connect\.sid=[^;]+/.exec(login.cookie || '') || [])[0];
+    if (!cookie) throw new Error('seerr did not open a session for the Jellyfin admin');
+    const libs = (await sr(base, 'POST', '/api/v1/settings/jellyfin/library/sync', { cookie })).data || [];
+    for (const lib of libs) {
+      await sr(base, 'PUT', `/api/v1/settings/jellyfin/library/${lib.id}`, { cookie, body: { enabled: true } });
+    }
+    await sr(base, 'POST', '/api/v1/settings/initialize', { cookie });
+    return `signed in as ${user}, ${libs.length} libraries`;
+  },
+};
+
+/**
+ * Radarr and Sonarr as Seerr's request targets, so a request becomes a
+ * download. Quality: "HD - 720p/1080p" where the app has it, else its first
+ * profile; folder: the library folder this box files into.
+ */
+function seerrArr(arr, port) {
+  const envKey = arr === 'radarr' ? 'HB_MEDIA_MOVIES' : 'HB_MEDIA_TV';
+  const fallback = arr === 'radarr' ? 'media/movies' : 'media/tv';
+  return {
+    id: `seerr-${arr}`,
+    needs: ['seerr', arr],
+    stampExtra: (env) => libraryPath(env, envKey, fallback),
+    async run(env, prev) {
+      const base = await addressOf('seerr');
+      if (!(await sr(base, 'GET', '/api/v1/settings/public')).data.initialized) throw new Error('seerr is not set up yet');
+      const key = await seerrKey();
+      const target = await app(arr, 'v3');
+      const have = (await sr(base, 'GET', `/api/v1/settings/${arr}`, { key })).data || [];
+      const old = have.find((s) => s.hostname === arr) || have[0];
+      if (old && !prev) return 'already had one';
+      const conn = { hostname: arr, port, apiKey: target.key, useSsl: false, baseUrl: '' };
+      const test = (await sr(base, 'POST', `/api/v1/settings/${arr}/test`, { key, body: conn })).data;
+      const profiles = test.profiles || [];
+      const profile = profiles.find((p) => p.name === 'HD - 720p/1080p') || profiles[0];
+      if (!profile) throw new Error(`${arr} has no quality profiles`);
+      const body = {
+        ...conn,
+        name: arr === 'radarr' ? 'Radarr' : 'Sonarr',
+        activeProfileId: profile.id,
+        activeProfileName: profile.name,
+        activeDirectory: libraryPath(env, envKey, fallback),
+        is4k: false,
+        isDefault: true,
+        externalUrl: '',
+        syncEnabled: false,
+        preventSearch: false,
+        ...(arr === 'radarr' ? { minimumAvailability: 'released' } : { enableSeasonFolders: true, seriesType: 'standard', animeSeriesType: 'anime' }),
+      };
+      if (old) {
+        await sr(base, 'PUT', `/api/v1/settings/${arr}/${old.id}`, { key, body: { ...old, ...body } });
+        return 'updated';
+      }
+      await sr(base, 'POST', `/api/v1/settings/${arr}`, { key, body });
+      return `added (${profile.name})`;
+    },
+  };
+}
+
 const LINKS = [
   qbitPaths,
   rootFolder('sonarr', 'HB_MEDIA_TV', 'media/tv'),
@@ -426,6 +650,11 @@ const LINKS = [
   bazarrLink('sonarr', 8989),
   bazarrLink('radarr', 7878),
   bazarrLanguages,
+  jellyfinSetup,
+  jellyfinLibraries,
+  seerrSetup,
+  seerrArr('radarr', 7878),
+  seerrArr('sonarr', 8989),
 ];
 
 /**
@@ -486,4 +715,4 @@ function soon(onMade) {
   setTimeout(go, 15000).unref();
 }
 
-module.exports = { wire, soon, changeQbitLogin, MEDIA_IDS, LINKS };
+module.exports = { wire, soon, changeQbitLogin, changeJellyfinLogin, MEDIA_IDS, LINKS };

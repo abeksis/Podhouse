@@ -31,9 +31,19 @@ x-homebox:
       - jellyfin/cache
       - jellyfin/log
   tips:
-    - "Point libraries at /data/<Movies> and /data/<TV series> — the same folder names the media module writes to, under the same single /data mount"
+    - "Podhouse sets Jellyfin up for you: an admin account (Settings > Passwords shows it) and Movies and TV libraries on the same folders Sonarr and Radarr use."
     - "Without a GPU every transcode is CPU work. Direct-play formats your TV understands and this box stays quiet"
     - "If this box has an Intel iGPU, uncomment the /dev/dri device below and enable VAAPI in Playback settings"
+  env_vars:
+    HB_JELLYFIN_USER:
+      label: "Jellyfin admin username"
+      type: "text"
+      default: "admin"
+      config_editable: true
+    HB_JELLYFIN_PASS:
+      label: "Jellyfin admin password"
+      type: "secret"
+      config_editable: true
   services:
     jellyfin:
       friendly_name: "Jellyfin"
@@ -42,7 +52,7 @@ x-homebox:
       icon: "jellyfin.svg"
       port_map: 8096
       url_scheme: "http"
-      first_login: "The first visit runs a setup wizard where you create the admin account and add libraries."
+      first_login: "Podhouse creates the admin account for you: sign in with the Jellyfin admin username and password from Settings > Passwords."
       reset_login: "jellyfin"
 
 services:
