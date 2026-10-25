@@ -1751,6 +1751,18 @@ function renderMediaSet() {
   };
 
   const all = have.length === mods.length;
+  // Once every app is in, the path has done its job: one slim row, so the
+  // card does not keep half a screen above the library.
+  box.classList.toggle('is-compact', all);
+  if (all) {
+    box.innerHTML = `
+      <div class="ms-compact">
+        <span class="ms-icons">${mods.map((m) => `<span class="ms-art" title="${escapeHtml(m.title)}">${iconHtml(m.icon, m.title, m.theme)}</span>`).join('')}</span>
+        <span class="ms-compact-text"><b>Movies &amp; series at home</b> · all ${mods.length} installed and connected</span>
+        <button type="button" class="button is-small" id="ms-connections">Show connections</button>
+      </div>`;
+    return;
+  }
   const action = all
     ? '<button type="button" class="button" id="ms-connections">Show connections</button>'
     : `<button type="button" class="button is-primary" id="ms-go"${chosen.length ? '' : ' disabled'}>Install ${chosen.length} app${chosen.length === 1 ? '' : 's'}</button>`;
