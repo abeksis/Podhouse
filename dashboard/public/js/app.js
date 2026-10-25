@@ -1442,6 +1442,7 @@ function actionText(entry) {
 const CATEGORY_GLYPHS = {
   all: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
   installed: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 2.7 2.7L16.5 9"/>',
+  'media-set': '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="m10.5 7.5 4 2.5-4 2.5z"/>',
   core: '<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/>',
   media: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m10 9 5 3-5 3z"/>',
   photos: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-9 8"/>',
@@ -1462,6 +1463,8 @@ function renderCategories() {
   const tiles = [
     { id: 'all', label: 'All' },
     { id: 'installed', label: 'Installed' },
+    // The media apps as one set, installed together (renderMediaSet).
+    ...(mediaSetAvailable() ? [{ id: 'media-set', label: 'Movies & series at home' }] : []),
     ...state.categories.filter((c) => used.has(c.id)),
   ];
   $('#category-chips').innerHTML = tiles.map((c) => {
@@ -1469,7 +1472,9 @@ function renderCategories() {
       ? shown
       : c.id === 'installed'
         ? shown.filter((m) => m.installed)
-        : shown.filter((m) => m.category === c.id);
+        : c.id === 'media-set'
+          ? mediaSetModules()
+          : shown.filter((m) => m.category === c.id);
     const installed = mods.filter((m) => m.installed).length;
     const on = state.category === c.id;
     const count = c.id === 'installed'
@@ -1724,13 +1729,17 @@ function mediaSetModules() {
   return MEDIA_SET_IDS.map((id) => byId.get(id)).filter(Boolean);
 }
 
+/** All of the set's apps exist here, and the old all-in-one Media Stack is not installed. */
+function mediaSetAvailable() {
+  const legacy = state.modules.find((m) => m.id === 'media' && m.installed);
+  return !legacy && mediaSetModules().length === MEDIA_SET_IDS.length;
+}
+
 function renderMediaSet() {
   const box = $('#media-set');
   if (!box) return;
   const mods = mediaSetModules();
-  const legacy = state.modules.find((m) => m.id === 'media' && m.installed);
-  const show = !legacy && mods.length === MEDIA_SET_IDS.length
-    && !state.appQuery.trim() && ['all', 'media'].includes(state.category);
+  const show = mediaSetAvailable() && !state.appQuery.trim() && state.category === 'media-set';
   box.hidden = !show;
   if (!show) return;
 
@@ -1751,18 +1760,6 @@ function renderMediaSet() {
   };
 
   const all = have.length === mods.length;
-  // Once every app is in, the path has done its job: one slim row, so the
-  // card does not keep half a screen above the library.
-  box.classList.toggle('is-compact', all);
-  if (all) {
-    box.innerHTML = `
-      <div class="ms-compact">
-        <span class="ms-icons">${mods.map((m) => `<span class="ms-art" title="${escapeHtml(m.title)}">${iconHtml(m.icon, m.title, m.theme)}</span>`).join('')}</span>
-        <span class="ms-compact-text"><b>Movies &amp; series at home</b> · all ${mods.length} installed and connected</span>
-        <button type="button" class="button is-small" id="ms-connections">Show connections</button>
-      </div>`;
-    return;
-  }
   const action = all
     ? '<button type="button" class="button" id="ms-connections">Show connections</button>'
     : `<button type="button" class="button is-primary" id="ms-go"${chosen.length ? '' : ' disabled'}>Install ${chosen.length} app${chosen.length === 1 ? '' : 's'}</button>`;
@@ -1965,7 +1962,9 @@ function renderApps() {
   const list = state.modules
     .filter(offered)
     .filter((m) => state.category === 'all'
-      || (state.category === 'installed' ? m.installed : m.category === state.category))
+      || (state.category === 'installed' ? m.installed
+        : state.category === 'media-set' ? MEDIA_SET_IDS.includes(m.id)
+          : m.category === state.category))
     .filter((m) => matchesQuery(m, query))
     .sort(SORTS[state.appSort] || SORTS.name);
 

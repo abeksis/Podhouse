@@ -744,6 +744,9 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .category-tile-name { font-size: 0.88rem; font-weight: 600; }
 .category-tile-count { font-size: 0.7rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .category-tile-count b { color: var(--accent-text); font-weight: 600; }
+/* The media set's tile: wide enough for its name on one line. */
+.category-tile[data-category="media-set"] { flex-basis: 200px; }
+.category-tile[data-category="media-set"] .category-tile-name { white-space: nowrap; }
 .category-tile:hover { border-color: var(--line-strong); }
 .category-tile.is-on { border-color: var(--accent); background: var(--accent-soft); }
 .category-tile.is-on svg { stroke: var(--accent-text); }
@@ -1943,11 +1946,3 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .ms-yours p b { color: var(--text); display: block; }
 .ms-login { margin-top: 0.9rem; font-size: 0.86rem; color: var(--muted); }
 .ms-login code { color: var(--text); }
-/* the set, once all of it is installed: one row */
-.ms-card.is-compact { padding: 0.6rem 0.9rem; }
-.ms-compact { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-.ms-icons { display: flex; gap: 0.3rem; }
-.ms-icons .ms-art { width: 26px; height: 26px; border-radius: 7px; background: var(--plate); padding: 3px; display: grid; place-items: center; overflow: hidden; }
-.ms-icons .ms-art img { width: 100%; height: 100%; object-fit: contain; }
-.ms-compact-text { flex: 1; min-width: 12rem; color: var(--text-2); font-size: 0.9rem; }
-.ms-compact-text b { color: var(--text); }
