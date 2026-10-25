@@ -1703,20 +1703,21 @@ window.addEventListener('resize', () => fitTaglines($('#catalog-grid')));
  * queue below, so the review dialog and the progress log are the same ones;
  * what this adds is the "connecting" step after it, read from the server's
  * media wiring (lib/media-wire.js).
+
  *
- * FlareSolverr starts unticked: it is only useful once an indexer sits
- * behind Cloudflare, and it is one of the heavier apps here.
+ * FlareSolverr is not in the set: it only helps once an indexer sits behind
+ * Cloudflare, so it stays an ordinary app in the library below.
  */
 const MEDIA_SET = [
   { step: 'Ask', apps: [['seerr', 'Requests from home']] },
   { step: 'Keep track', apps: [['radarr', 'Films'], ['sonarr', 'Series']] },
-  { step: 'Search', apps: [['prowlarr', 'Your indexers'], ['flaresolverr', 'Only for Cloudflare sites']] },
+  { step: 'Search', apps: [['prowlarr', 'Your indexers']] },
   { step: 'Download', apps: [['qbittorrent', 'Downloads']] },
   { step: 'Watch', apps: [['jellyfin', 'On every screen']] },
 ];
 const MEDIA_EXTRAS = [['bazarr', 'Subtitles — Hebrew, then English']];
 const MEDIA_SET_IDS = [...MEDIA_SET.flatMap((s) => s.apps), ...MEDIA_EXTRAS].map(([id]) => id);
-const mediaSetOff = new Set(['flaresolverr']);
+const mediaSetOff = new Set();
 
 function mediaSetModules() {
   const byId = new Map(state.modules.map((m) => [m.id, m]));
@@ -1742,10 +1743,7 @@ function renderMediaSet() {
   const tile = ([id, role]) => {
     const m = byId.get(id);
     const cls = m.installed ? 'is-have' : (mediaSetOff.has(id) ? 'is-off' : 'is-on');
-    const tip = id === 'flaresolverr'
-      ? ' title="Some indexer sites check for a real browser first (Cloudflare). FlareSolverr is that browser, for Prowlarr. Only needed if one of your indexers asks for it."'
-      : '';
-    return `<button type="button" class="ms-app ${cls}" data-ms-app="${escapeHtml(id)}"${tip}${m.installed ? ' aria-disabled="true"' : ` aria-pressed="${cls === 'is-on'}"`}>
+    return `<button type="button" class="ms-app ${cls}" data-ms-app="${escapeHtml(id)}"${m.installed ? ' aria-disabled="true"' : ` aria-pressed="${cls === 'is-on'}"`}>
       <span class="ms-art">${iconHtml(m.icon, m.title, m.theme)}</span>
       <span><span class="ms-n">${escapeHtml(m.title)}</span><br><span class="ms-r">${escapeHtml(role)}</span></span>
       <span class="ms-ck"></span>
@@ -1774,7 +1772,7 @@ function renderMediaSet() {
     </div>
     <div class="ms-extras"><div class="ms-step-label">Alongside</div>${MEDIA_EXTRAS.map(tile).join('')}</div>
     <div class="ms-foot">
-      <p class="ms-note">${all ? 'All installed and connected.' : 'Click an app to leave it out, or to add FlareSolverr.'}${haveNote} Indexers and subtitle providers are not chosen for you.</p>
+      <p class="ms-note">${all ? 'All installed and connected.' : 'Click an app to leave it out.'}${haveNote} Indexers and subtitle providers are not chosen for you.</p>
       ${action}
     </div>`;
 }
