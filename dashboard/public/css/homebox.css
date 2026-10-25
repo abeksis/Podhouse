@@ -1929,6 +1929,9 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .ms-ok { color: var(--good); }
 .ms-bad { color: var(--bad); font-weight: 700; text-align: center; }
 .ms-why { color: var(--bad); font-size: 0.8rem; }
+.ms-details { margin-top: 0.8rem; }
+.ms-details summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+.ms-details .stream { max-height: 14rem; margin-top: 0.5rem; }
 .ms-spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent); animation: ms-spin 0.9s linear infinite; }
 @keyframes ms-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ms-spin { animation: none; } }

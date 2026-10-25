@@ -1777,49 +1777,100 @@ function renderMediaSet() {
     </div>`;
 }
 
-async function installMediaSet() {
-  const ids = mediaSetModules().filter((m) => !m.installed && !mediaSetOff.has(m.id)).map((m) => m.id);
-  if (!ids.length) return;
-  for (const id of ids) state.pending.set(id, true);
-  const ok = await applyPending();
-  if (ok === undefined) {
-    // Cancelled at the review: leave the rest of the queue as it was.
-    for (const id of ids) state.pending.delete(id);
-    renderApps();
-    renderApplyBar();
-    return;
-  }
-  if (!ok) return; // The progress dialog stays open with the log that says why.
-  document.querySelectorAll('.dialog.is-progress').forEach((d) => d.closest('.dialog-layer').remove());
-  loadModules(true);
-  openMediaConnect();
-}
-
 /**
- * The step after installing: each link the server makes, as it is made.
- * Polls /api/media/wiring, which also nudges the next pass, until every link
- * is done, then says what is still the user's to choose.
+ * The set's own window, from the first install to "ready": a row per app as
+ * it installs (compose's output folded under Details), then each connection
+ * as the server makes it, then what is left to the user. The ordinary
+ * progress dialog is a log; this is the step-by-step the card promises.
  */
-function openMediaConnect() {
+function mediaDialog() {
   const layer = document.createElement('div');
   layer.className = 'dialog-layer';
   layer.innerHTML = `
     <div class="dialog is-wide" role="dialog" aria-modal="true" aria-labelledby="ms-dlg-title">
       <h3 class="dialog-title" id="ms-dlg-title">Movies &amp; series at home</h3>
       <div class="dialog-body is-markup" id="ms-dlg-body"><p class="ms-sub">Asking the apps…</p></div>
+      <details class="ms-details" id="ms-dlg-details" hidden>
+        <summary>Details</summary>
+        <div id="ms-dlg-steps" hidden></div>
+        <pre class="stream" id="ms-dlg-log" tabindex="0"></pre>
+      </details>
       <div class="dialog-actions" id="ms-dlg-actions">
         <button type="button" class="button" data-ms-close>Close</button>
       </div>
     </div>`;
   document.body.appendChild(layer);
+  // Closing only hides the window: the installs and the connecting go on.
+  layer.addEventListener('click', (e) => { if (e.target.closest('[data-ms-close]')) layer.remove(); });
+  return layer;
+}
 
+async function installMediaSet() {
+  const ids = mediaSetModules().filter((m) => !m.installed && !mediaSetOff.has(m.id)).map((m) => m.id);
+  if (!ids.length) return;
+  // The same review as any batch: what will run, which ports, how much.
+  if (!(await installDisclosure(ids, []))) return;
+
+  const layer = mediaDialog();
+  const body = layer.querySelector('#ms-dlg-body');
+  const details = layer.querySelector('#ms-dlg-details');
+  details.hidden = false;
+  const byId = new Map(state.modules.map((m) => [m.id, m]));
+  const rows = ids.map((id) => ({ id, st: 'waiting' }));
+  const mark = { waiting: '<span class="muted">·</span>', busy: '<span class="ms-spin" aria-label="installing"></span>', done: '<span class="ms-ok">✓</span>', failed: '<span class="ms-bad">!</span>' };
+  const word = { waiting: 'waiting', busy: 'installing…', done: 'installed', failed: 'failed' };
+  const draw = () => {
+    const n = rows.filter((r) => r.st === 'done').length;
+    body.innerHTML = `<p class="ms-sub">Installing ${rows.length} app${rows.length === 1 ? '' : 's'}, one after another — ${n} of ${rows.length} done.</p>
+      <div class="ms-phase"><span class="is-now">Install</span><span>Connect</span><span>Ready</span></div>
+      <ul class="ms-links">${rows.map((r) => {
+        const m = byId.get(r.id);
+        return `<li>${mark[r.st]}<span class="ms-pair"><span class="ms-art">${iconHtml(m.icon, m.title, m.theme)}</span></span>
+          <span class="ms-what">${escapeHtml(m.title)}</span>
+          <span class="ms-st${r.st === 'done' ? ' ms-ok' : ''}${r.st === 'failed' ? ' ms-bad' : ''}">${word[r.st]}</span></li>`;
+      }).join('')}</ul>
+      <p class="ms-note" style="margin-top:0.75rem">The first install of each app downloads it, which can take a few minutes. It carries on on the server if you close this.</p>`;
+  };
+  draw();
+
+  // runActionStreamed writes through the shared progress handle; point it at
+  // this window's folded log instead of opening the plain progress dialog.
+  progress = { overlay: layer, log: layer.querySelector('#ms-dlg-log'), steps: layer.querySelector('#ms-dlg-steps'), stuck: false };
+  let ok = true;
+  for (const r of rows) {
+    r.st = 'busy';
+    draw();
+    r.st = (await runActionStreamed(r.id, 'install')) ? 'done' : 'failed';
+    if (r.st === 'failed') ok = false;
+    draw();
+  }
+  progress = null;
+  loadModules(true);
+
+  if (!ok) {
+    const failed = rows.filter((r) => r.st === 'failed').map((r) => byId.get(r.id).title);
+    body.insertAdjacentHTML('afterbegin', `<p class="ms-sub ms-bad">${escapeHtml(failed.join(', '))} did not install. Details below says why; the others carry on.</p>`);
+    details.open = true;
+  }
+  details.open = !ok;
+  openMediaConnect(layer);
+}
+
+/**
+ * The step after installing: each link the server makes, as it is made.
+ * Polls /api/media/wiring, which also nudges the next pass, until every link
+ * is done, then says what is still the user's to choose. Opened on its own by
+ * "Show connections", or carrying on in the install window.
+ */
+function openMediaConnect(layer = mediaDialog()) {
   let timer = null;
   const close = () => { clearTimeout(timer); layer.remove(); document.removeEventListener('keydown', onKey); };
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', onKey);
   layer.addEventListener('click', (e) => { if (e.target.closest('[data-ms-close]')) close(); });
 
-  const byId = new Map(state.modules.map((m) => [m.id, m]));
+  const byIdNow = () => new Map(state.modules.map((m) => [m.id, m]));
+  let byId = byIdNow();
   const art = (id) => {
     const m = byId.get(id);
     return m ? `<span class="ms-art">${iconHtml(m.icon, m.title, m.theme)}</span>` : '';
@@ -1827,6 +1878,7 @@ function openMediaConnect() {
   const pair = (needs) => needs.map(art).join('<span class="muted">→</span>');
 
   const render = (links) => {
+    byId = byIdNow();
     const body = layer.querySelector('#ms-dlg-body');
     const left = links.filter((l) => l.state === 'waiting');
     const stuck = links.filter((l) => l.state === 'stuck');
