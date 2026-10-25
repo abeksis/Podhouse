@@ -58,6 +58,7 @@ const ops = {
   update: ({ id }, onLine) => compose.update(id, { onLine }),
   pull: ({ id }, onLine) => compose.pull(id, { onLine }),
   runSetup: ({ id }, onLine) => compose.runSetup(id, { onLine }),
+  mediaFolders: ({ id }, onLine) => compose.mediaFolders(id, { onLine }),
 
   pullService: ({ id, service }, onLine) => compose.pullService(id, service, { onLine }),
   upService: ({ id, service }, onLine) => compose.upService(id, service, { onLine }),

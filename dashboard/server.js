@@ -712,6 +712,9 @@ async function applySaved(keys) {
       // No activity entry is written here on purpose: recreating a container
       // emits real Docker create/start events, and the activity feed is fed by
       // that stream. A hand-written note would show the same thing twice.
+      // A new library root (a NAS mounted at /mnt/...) or new folder names:
+      // make the folders there first, or Radarr starts on a missing root.
+      if (keys.some((k) => /^HB_(MEDIA_|DOWNLOADS)/.test(k))) await composeLib.mediaFolders(id).catch(() => {});
       await composeLib.start(id);
       restarting.push(id);
     } catch (err) {

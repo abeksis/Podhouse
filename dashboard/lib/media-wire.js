@@ -76,17 +76,29 @@ function downloadClient(arr, category) {
   };
 }
 
+const libraryPath = (env, envKey, fallback) => `/data/${(env[envKey] || fallback).replace(/^\/+|\/+$/g, '')}`;
+
 function rootFolder(arr, envKey, fallback) {
   return {
     id: `${arr}-rootfolder`,
     needs: [arr],
-    async run(env) {
+    // The folder is part of the stamp: change it under Configuration > Media
+    // (a NAS whose library says "Movies") and the link is due again.
+    stampExtra: (env) => libraryPath(env, envKey, fallback),
+    async run(env, prev) {
       const a = await app(arr, 'v3');
       const have = await api(a.base, a.key, 'GET', '/api/v3/rootfolder');
-      if (have.length) return 'already had one';
-      // The pool is mounted at /data in every media container; setup.sh made the folder.
-      const path = `/data/${(env[envKey] || fallback).replace(/^\/+|\/+$/g, '')}`;
+      const path = libraryPath(env, envKey, fallback);
+      if (have.some((r) => r.path.replace(/\/+$/, '') === path)) return 'already had it';
+      // First run on an app someone set up by hand: theirs, leave it.
+      if (!prev && have.length) return 'left the existing root folder';
       await api(a.base, a.key, 'POST', '/api/v3/rootfolder', { path });
+      // The one we added before goes only if it no longer exists (the library
+      // moved to a NAS): otherwise it is a red "Missing root folder" forever.
+      // One that still exists stays — films may be filed under it.
+      const old = prev && /^added (\/.+)$/.exec(prev.result || '');
+      const gone = old && have.find((r) => r.path.replace(/\/+$/, '') === old[1] && r.accessible === false);
+      if (gone) await api(a.base, a.key, 'DELETE', `/api/v3/rootfolder/${gone.id}`).catch(() => {});
       return `added ${path}`;
     },
   };
@@ -196,8 +208,9 @@ const LINKS = [
  * Sonarr starts empty with a new API key — by the CLI or the dashboard alike —
  * so a changed key makes its links due again. A hash, not the keys themselves.
  */
-async function stampOf(link) {
+async function stampOf(link, env) {
   const keys = await Promise.all(link.needs.filter((n) => ['sonarr', 'radarr', 'prowlarr'].includes(n)).map(arrApiKey));
+  if (link.stampExtra) keys.push(link.stampExtra(env));
   return crypto.createHash('sha256').update(keys.join(':')).digest('hex').slice(0, 12);
 }
 
@@ -221,9 +234,9 @@ async function wireOnce() {
   for (const link of LINKS) {
     if (!link.needs.every((n) => up.has(n))) continue;
     try {
-      const stamp = await stampOf(link);
+      const stamp = await stampOf(link, env);
       if (done[link.id] && done[link.id].stamp === stamp) continue;
-      const result = await link.run(env);
+      const result = await link.run(env, done[link.id]);
       done[link.id] = { at: new Date().toISOString(), result, stamp };
       await state.writeJson(STATE_FILE, done);
       made.push({ id: link.id, result });

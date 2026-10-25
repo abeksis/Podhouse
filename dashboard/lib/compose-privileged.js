@@ -150,6 +150,40 @@ async function runSetup(id, { onLine = null } = {}) {
   return run('bash', [script], { timeout: 120000, onLine, env: envFileVars() });
 }
 
+/**
+ * The pool folders a media app files into, created from INSIDE that app.
+ *
+ * setup.sh makes them too, but from the dashboard it runs in this worker,
+ * which mounts /opt/podhouse and nothing else. With the library on a NAS
+ * (/mnt/media_disk) its mkdir landed in the worker's own filesystem: no
+ * error, and Radarr then reported its root folder missing. A one-off
+ * container of the app itself has the app's own /data mount, NAS and all.
+ *
+ * Folder names come from .env and are checked to be plain relative paths;
+ * they reach `sh` as arguments, never as part of the script.
+ */
+const MEDIA_FOLDERS = {
+  qbittorrent: [['HB_DOWNLOADS', 'downloads'], ['HB_DOWNLOADS', 'downloads', '/incomplete']],
+  sonarr: [['HB_DOWNLOADS', 'downloads'], ['HB_MEDIA_TV', 'media/tv']],
+  radarr: [['HB_DOWNLOADS', 'downloads'], ['HB_MEDIA_MOVIES', 'media/movies']],
+};
+
+async function mediaFolders(id, { onLine = null } = {}) {
+  const wanted = MEDIA_FOLDERS[id];
+  if (!wanted) return null;
+  const env = envFileVars();
+  const dirs = wanted.map(([key, fallback, suffix = '']) => {
+    const name = (env[key] || fallback).replace(/^\/+|\/+$/g, '') + suffix;
+    if (!/^[\p{L}\p{N} ._-]+(\/[\p{L}\p{N} ._-]+)*$/u.test(name) || name.split('/').includes('..')) {
+      throw new ComposeError(`${key} is not a plain folder name: ${name}`);
+    }
+    return `/data/${name}`;
+  });
+  const owner = `${env.PUID || 1000}:${env.PGID || 1000}`;
+  return compose(id, ['run', '--rm', '--no-deps', '-T', '--entrypoint', 'sh', id, '-c',
+    'mkdir -p "$@" && chown "$0" "$@"', owner, ...dirs], { timeout: 120000, onLine });
+}
+
 /** Full install: seed, pull, start. Returns the combined transcript. */
 async function install(id, { onLine = null } = {}) {
   const log = [];
@@ -192,6 +226,11 @@ async function install(id, { onLine = null } = {}) {
   // silently runs old code. Compose says so in a warning nobody reads:
   // "Some service image(s) must be built from source". Harmless for the
   // image-only modules, which have nothing to build.
+  // After the pull: it runs the app's own image.
+  await mediaFolders(id, { onLine }).catch((err) => {
+    if (onLine) onLine(`==> Could not create the library folders: ${err.stderr || err.message}`, true);
+  });
+
   if (onLine) onLine(`==> Building and starting ${id}`, false);
   const up = await compose(id, ['up', '-d', '--build', '--remove-orphans'], { timeout: 900000, onLine });
   log.push(`# up\n${up.stdout}${up.stderr}`);
@@ -456,7 +495,7 @@ async function available() {
 }
 
 module.exports = {
-  install, start, stop, restart, down, purge, update, pull, available, runSetup,
+  install, start, stop, restart, down, purge, update, pull, available, runSetup, mediaFolders,
   pullService, upService, stopService, restartService, retag, selfRecreate, copyArchiveOut,
   // The argv-only runner itself, for lib/storage.js — it drives `docker run`
   // rather than `docker compose`, and reimplementing the line buffering and

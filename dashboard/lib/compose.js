@@ -47,6 +47,7 @@ const purge = byId('purge');
 const update = byId('update');
 const pull = byId('pull');
 const runSetup = byId('runSetup');
+const mediaFolders = byId('mediaFolders');
 
 const pullService = byService('pullService');
 const upService = byService('upService');
@@ -77,7 +78,7 @@ const copyArchiveOut = (options) => worker.call('copyArchiveOut', options || {})
 const available = () => worker.ping();
 
 module.exports = {
-  install, start, stop, restart, down, purge, update, pull, available, runSetup,
+  install, start, stop, restart, down, purge, update, pull, available, runSetup, mediaFolders,
   pullService, upService, stopService, restartService, retag, selfRecreate, copyArchiveOut,
   containerAction, CONTAINER_ACTIONS, ComposeError, ID_PATTERN,
 };
