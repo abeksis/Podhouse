@@ -754,7 +754,7 @@ async function wireOnce() {
 const lastError = new Map();
 let lastRun = 0;
 
-// What each link does, in the words the "Movies & series at home" dialog
+// What each link does, in the words the "Home Cinema" dialog
 // shows. A link with no entry here is plumbing nobody needs to watch.
 const LABELS = {
   'radarr-qbittorrent': 'Radarr sends downloads to qBittorrent',

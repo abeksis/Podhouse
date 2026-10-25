@@ -745,7 +745,7 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .category-tile-count { font-size: 0.7rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .category-tile-count b { color: var(--accent-text); font-weight: 600; }
 /* The media set's tile: wide enough for its name on one line. */
-.category-tile[data-category="media-set"] { flex-basis: 200px; }
+.category-tile[data-category="media-set"] { flex-basis: 130px; }
 .category-tile[data-category="media-set"] .category-tile-name { white-space: nowrap; }
 .category-tile:hover { border-color: var(--line-strong); }
 .category-tile.is-on { border-color: var(--accent); background: var(--accent-soft); }

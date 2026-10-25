@@ -1464,7 +1464,7 @@ function renderCategories() {
     { id: 'all', label: 'All' },
     { id: 'installed', label: 'Installed' },
     // The media apps as one set, installed together (renderMediaSet).
-    ...(mediaSetAvailable() ? [{ id: 'media-set', label: 'Movies & series at home' }] : []),
+    ...(mediaSetAvailable() ? [{ id: 'media-set', label: 'Home Cinema' }] : []),
     ...state.categories.filter((c) => used.has(c.id)),
   ];
   $('#category-chips').innerHTML = tiles.map((c) => {
@@ -1699,7 +1699,7 @@ function fitTaglines(root) {
 }
 window.addEventListener('resize', () => fitTaglines($('#catalog-grid')));
 
-/* ------------------------------------------- "Movies & series at home" */
+/* ------------------------------------------- "Home Cinema" */
 
 /**
  * The media apps as one set, laid out as the path a request takes: asked for
@@ -1771,7 +1771,7 @@ function renderMediaSet() {
     <div class="ms-head">
       <div>
         <div class="ms-kicker">A ready-made set</div>
-        <div class="ms-title">Movies &amp; series at home</div>
+        <div class="ms-title">Home Cinema</div>
         <p class="ms-sub">Ask for a film on your phone and it turns up on the TV. Podhouse installs these apps together and connects them to each other — you don't copy a single key between them.</p>
       </div>
       <div class="ms-total"><b>${escapeHtml(bytes(ram))}</b><span>${chosen.length + have.length} apps${total ? ` · of ${escapeHtml(bytes(total))} on this box` : ''}</span></div>
@@ -1797,7 +1797,7 @@ function mediaDialog() {
   layer.className = 'dialog-layer';
   layer.innerHTML = `
     <div class="dialog is-wide" role="dialog" aria-modal="true" aria-labelledby="ms-dlg-title">
-      <h3 class="dialog-title" id="ms-dlg-title">Movies &amp; series at home</h3>
+      <h3 class="dialog-title" id="ms-dlg-title">Home Cinema</h3>
       <div class="dialog-body is-markup" id="ms-dlg-body"><p class="ms-sub">Asking the apps…</p></div>
       <details class="ms-details" id="ms-dlg-details" hidden>
         <summary>Details</summary>
