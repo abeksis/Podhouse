@@ -279,7 +279,17 @@ async function changeQbitLogin(oldEnv, changes) {
   const prefs = {};
   if (user) prefs.web_ui_username = String(changes.HB_QBIT_USER).trim();
   if (pass) prefs.web_ui_password = String(changes.HB_QBIT_PASS);
-  await qbitSet(await qbitSession(oldEnv), prefs);
+  // .env and qBittorrent can already disagree (a password changed in its own
+  // web UI). If the NEW login is the one that opens it, the user is telling
+  // Settings the real password: save it, change nothing in qBittorrent.
+  const session = await qbitSession(oldEnv).catch(() => null);
+  if (!session) {
+    await qbitSession({ ...oldEnv, ...changes }).catch(() => {
+      throw new Error('Neither the saved nor the new login opens qBittorrent. Type the password qBittorrent actually has.');
+    });
+    return;
+  }
+  await qbitSet(session, prefs);
 }
 
 /**
@@ -524,7 +534,15 @@ async function changeJellyfinLogin(oldEnv, changes) {
   const mine = (await docker.listContainers()).filter((c) => c.service === 'jellyfin');
   if (!mine.length) return;
   if (!mine.some((c) => c.rawState === 'running')) throw new Error('Start Jellyfin first, so the new login can be set in it');
-  const s = await jfSession(oldEnv);
+  // A Jellyfin set up by hand has its own password, and .env a generated one
+  // it never heard of. Typing the real one here is the fix, not a change.
+  const s = await jfSession(oldEnv).catch(() => null);
+  if (!s) {
+    await jfSession({ ...oldEnv, ...changes }).catch(() => {
+      throw new Error('Neither the saved nor the new login opens Jellyfin. Type the password Jellyfin actually has.');
+    });
+    return;
+  }
   if (pass) {
     await jf(s.base, 'POST', `/Users/${s.userId}/Password`,
       { token: s.token, body: { CurrentPw: jfLogin(oldEnv).pass, NewPw: String(changes.HB_JELLYFIN_PASS) } });
