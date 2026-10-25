@@ -92,6 +92,9 @@ function rootFolder(arr, envKey, fallback) {
   };
 }
 
+// Prowlarr pushes indexers on its own schedule; after a link changes, push now.
+const syncIndexers = (p) => api(p.base, p.key, 'POST', '/api/v1/command', { name: 'ApplicationIndexerSync' }).catch(() => {});
+
 function prowlarrApp(arr, implementation) {
   return {
     id: `prowlarr-${arr}`,
@@ -107,6 +110,7 @@ function prowlarrApp(arr, implementation) {
         const field = old.fields.find((f) => f.name === 'apiKey');
         if (field) field.value = target.key;
         await api(p.base, p.key, 'PUT', `/api/v1/applications/${old.id}`, old);
+        await syncIndexers(p);
         return 'refreshed its API key';
       }
       const body = await fromSchema(p, '/api/v1/applications', implementation, implementation, {
@@ -116,6 +120,7 @@ function prowlarrApp(arr, implementation) {
       });
       body.syncLevel = 'fullSync';
       await api(p.base, p.key, 'POST', '/api/v1/applications', body);
+      await syncIndexers(p);
       return 'added';
     },
   };
