@@ -68,6 +68,9 @@ function downloadClient(arr, category) {
         [category.field]: category.value,
       });
       await api(a.base, a.key, 'POST', '/api/v3/downloadclient', body);
+      // Its health check runs on a timer and would say "No download client"
+      // for a while longer; ask it to look again now.
+      await api(a.base, a.key, 'POST', '/api/v3/command', { name: 'CheckHealth' }).catch(() => {});
       return 'added';
     },
   };
