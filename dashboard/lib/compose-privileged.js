@@ -163,7 +163,9 @@ async function runSetup(id, { onLine = null } = {}) {
  * they reach `sh` as arguments, never as part of the script.
  */
 const MEDIA_FOLDERS = {
-  qbittorrent: [['HB_DOWNLOADS', 'downloads'], ['HB_DOWNLOADS', 'downloads', '/incomplete']],
+  // Not downloads/incomplete: qBittorrent makes that itself, inside whichever
+  // spelling of the downloads folder this settles on.
+  qbittorrent: [['HB_DOWNLOADS', 'downloads']],
   sonarr: [['HB_DOWNLOADS', 'downloads'], ['HB_MEDIA_TV', 'media/tv']],
   radarr: [['HB_DOWNLOADS', 'downloads'], ['HB_MEDIA_MOVIES', 'media/movies']],
 };
@@ -180,10 +182,32 @@ async function mediaFolders(id, { onLine = null } = {}) {
     return `/data/${name}`;
   });
   const owner = `${env.PUID || 1000}:${env.PGID || 1000}`;
-  return compose(id, ['run', '--rm', '--no-deps', '-T', '--entrypoint', 'sh', id, '-c',
-    // A NAS that squashes root refuses the chown, and its own mapping already
-    // decides the owner; only a folder that could not be made is a failure.
-    'mkdir -p "$@" || exit 1; chown "$0" "$@" 2>/dev/null || true', owner, ...dirs], { timeout: 120000, onLine });
+  // A folder whose name differs only in case ("Movies" on a NAS that has
+  // "movies") is the user's folder, not a new one: Linux would happily make
+  // a second, empty one beside it. Print what each name resolves to.
+  // A NAS that squashes root refuses the chown, and its own mapping already
+  // decides the owner; only a folder that could not be made is a failure.
+  const script = 'for d; do '
+    + 'if [ ! -e "$d" ]; then '
+    + 'm=$(ls -1 "$(dirname "$d")" 2>/dev/null | grep -ixF -- "$(basename "$d")" | head -n 1); '
+    + 'if [ -n "$m" ]; then d="$(dirname "$d")/$m"; '
+    + 'else mkdir -p "$d" || exit 1; chown "$0" "$d" 2>/dev/null || true; fi; fi; '
+    + 'echo "=> $d"; done';
+  const result = await compose(id, ['run', '--rm', '--no-deps', '-T', '--entrypoint', 'sh', id, '-c',
+    script, owner, ...dirs], { timeout: 120000, onLine });
+
+  // Write the real names back, so Sonarr, Radarr and qBittorrent use them.
+  const found = [...result.stdout.matchAll(/^=> \/data\/(.+)$/gm)].map((m) => m[1]);
+  let text = fs.readFileSync(ENV_FILE, 'utf8');
+  wanted.forEach(([key, , suffix = ''], i) => {
+    const real = found[i] && found[i].slice(0, found[i].length - suffix.length);
+    const asked = dirs[i].slice('/data/'.length, dirs[i].length - suffix.length);
+    if (!real || real === asked || real.toLowerCase() !== asked.toLowerCase()) return;
+    text = text.replace(new RegExp(`^${key}=.*$`, 'm'), `${key}=${real}`);
+    if (onLine) onLine(`==> ${key}: using the existing folder "${real}"`, false);
+  });
+  if (text !== fs.readFileSync(ENV_FILE, 'utf8')) fs.writeFileSync(ENV_FILE, text);
+  return result;
 }
 
 /** Full install: seed, pull, start. Returns the combined transcript. */

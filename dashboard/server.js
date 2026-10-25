@@ -723,6 +723,9 @@ async function applySaved(keys) {
       failed.push({ id, error: (err.stderr || err.message || '').trim().split('\n').pop() });
     }
   }
+  // Root folders and the qBittorrent path follow the new names now, not on
+  // the next five-minute pass, which left Radarr red in the meantime.
+  if (restarting.length && keys.some((k) => /^HB_(MEDIA_|DOWNLOADS)/.test(k))) mediaWire.soon(noteWired);
   // The dashboard reads TZ and the paths too, so a setting it uses means it
   // has to be recreated like everything else — and "restart it yourself" is
   // the same trip through a terminal this settings page exists to remove.

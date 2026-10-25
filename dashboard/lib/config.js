@@ -247,6 +247,11 @@ async function save(changes) {
   // fields used to take — and it would quietly reintroduce the separate
   // mount that makes hardlinks impossible, so it is refused with the reason.
   const relative = await relativeKeys();
+  // " /mnt/media_disk" pasted with a space is a different path to every
+  // program that reads it. Paths only: a password may end in a space.
+  for (const key of Object.keys(changes)) {
+    if (relative.has(key) || key === 'HB_MEDIA_ROOT') changes[key] = changes[key].trim();
+  }
   for (const [key, value] of Object.entries(changes)) {
     if (relative.has(key) && (value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value))) {
       // No suggested value: which part of the path is the root and which is
