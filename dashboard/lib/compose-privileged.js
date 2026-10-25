@@ -237,13 +237,29 @@ async function install(id, { onLine = null } = {}) {
 
   // A failed pull is not fatal: an image already present locally still
   // starts, and a registry hiccup should not block bringing a module back up.
-  try {
-    if (onLine) onLine(`==> Pulling images for ${id}`, false);
-    const pull = await compose(id, ['pull'], { timeout: 900000, onLine });
-    log.push(`# pull\n${pull.stdout}${pull.stderr}`);
-  } catch (err) {
-    log.push(`# pull (continuing anyway)\n${err.stderr || err.message}`);
-    if (onLine) onLine('==> Pull failed — trying with the images already on this box', true);
+  //
+  // A registry that asks to slow down is different: lscr.io answered
+  // "error from registry: retry-after" while seven media apps were pulled in a
+  // row, compose carried on, `up` hit the same limit and Sonarr never
+  // installed. That is a wait-and-retry, not a failure. Compose sometimes
+  // prints the error and still exits 0, so the output is read as well.
+  const LIMITED = /toomanyrequests|retry-after|too many requests|\b429\b|rate.?limit/i;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      if (onLine) onLine(`==> Pulling images for ${id}`, false);
+      const pull = await compose(id, ['pull'], { timeout: 900000, onLine });
+      log.push(`# pull\n${pull.stdout}${pull.stderr}`);
+      if (!LIMITED.test(`${pull.stdout}${pull.stderr}`) || attempt === 4) break;
+    } catch (err) {
+      log.push(`# pull (attempt ${attempt})\n${err.stderr || err.message}`);
+      if (!LIMITED.test(`${err.stdout || ''}${err.stderr || ''}${err.message}`) || attempt === 4) {
+        if (onLine) onLine('==> Pull failed — trying with the images already on this box', true);
+        break;
+      }
+    }
+    const wait = 20 * attempt;
+    if (onLine) onLine(`==> The image registry asked to slow down — trying again in ${wait}s`, false);
+    await new Promise((resolve) => setTimeout(resolve, wait * 1000));
   }
 
   // --build matters for any module with a `build:` section — the dashboard is
