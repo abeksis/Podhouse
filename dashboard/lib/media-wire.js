@@ -740,7 +740,8 @@ async function wireOnce() {
       console.log(`[media-wire] ${link.id}: ${result}`);
       lastError.delete(link.id);
     } catch (err) {
-      lastError.set(link.id, err.message);
+      const prev = lastError.get(link.id);
+      lastError.set(link.id, { message: err.message, count: prev && prev.message === err.message ? prev.count + 1 : 1 });
       console.log(`[media-wire] ${link.id} not yet: ${err.message}`);
     }
   }
@@ -788,13 +789,22 @@ async function status() {
   if (!running && Date.now() - lastRun > 15000) wire().catch(() => {});
   return LINKS
     .filter((l) => LABELS[l.id] && l.needs.every((n) => present.has(n)))
-    .map((l) => ({
-      id: l.id,
-      needs: l.needs,
-      label: LABELS[l.id],
-      state: done[l.id] ? 'done' : 'waiting',
-      note: done[l.id] ? done[l.id].result : (lastError.get(l.id) || null),
-    }));
+    .map((l) => {
+      if (done[l.id]) return { id: l.id, needs: l.needs, label: LABELS[l.id], state: 'done', note: done[l.id].result };
+      const err = lastError.get(l.id);
+      // The same failure three passes running is not an app still starting.
+      const stuck = err && err.count >= 3;
+      return { id: l.id, needs: l.needs, label: LABELS[l.id], state: stuck ? 'stuck' : 'waiting', note: err ? plain(err.message) : null };
+    });
+}
+
+// The failures someone can act on, in words; anything else as the app said it.
+function plain(message) {
+  if (/qBittorrent did not accept|qBittorrent.*Authenticat|Unable to connect to qBittorrent/i.test(message)) {
+    return 'The qBittorrent login under Settings does not open qBittorrent';
+  }
+  if (/Jellyfin admin login in Settings/i.test(message)) return 'The Jellyfin login under Settings does not open Jellyfin';
+  return message.split(/\r?\n/)[0].slice(0, 160);
 }
 
 /**

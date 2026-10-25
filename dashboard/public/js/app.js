@@ -1830,18 +1830,29 @@ function openMediaConnect() {
 
   const render = (links) => {
     const body = layer.querySelector('#ms-dlg-body');
-    const left = links.filter((l) => l.state !== 'done');
+    const left = links.filter((l) => l.state === 'waiting');
+    const stuck = links.filter((l) => l.state === 'stuck');
     if (!links.length) {
       body.innerHTML = '<p class="ms-sub">None of the media apps are running yet.</p>';
       return false;
     }
+    const mark = { done: '<span class="ms-ok">✓</span>', stuck: '<span class="ms-bad">!</span>', waiting: '<span class="ms-spin" aria-label="waiting"></span>' };
+    const word = { done: 'done', stuck: 'needs you', waiting: 'waiting…' };
     const list = `<ul class="ms-links">${links.map((l) => `<li>
-        ${l.state === 'done' ? '<span class="ms-ok">✓</span>' : '<span class="ms-spin" aria-label="waiting"></span>'}
+        ${mark[l.state] || mark.waiting}
         <span class="ms-pair">${pair(l.needs)}</span>
-        <span class="ms-what">${escapeHtml(l.label)}</span>
-        <span class="ms-st${l.state === 'done' ? ' ms-ok' : ''}"${l.note ? ` title="${escapeHtml(l.note)}"` : ''}>${l.state === 'done' ? 'done' : 'waiting…'}</span>
+        <span class="ms-what">${escapeHtml(l.label)}${l.state === 'stuck' && l.note ? `<br><span class="ms-why">${escapeHtml(l.note)}</span>` : ''}</span>
+        <span class="ms-st${l.state === 'done' ? ' ms-ok' : ''}${l.state === 'stuck' ? ' ms-bad' : ''}"${l.note ? ` title="${escapeHtml(l.note)}"` : ''}>${word[l.state] || word.waiting}</span>
       </li>`).join('')}</ul>`;
 
+    if (stuck.length && !left.length) {
+      body.innerHTML = `<p class="ms-sub">${links.length - stuck.length} of ${links.length} connections made. ${stuck.length === 1 ? 'One needs' : `${stuck.length} need`} you — the reason is under ${stuck.length === 1 ? 'it' : 'each'}.</p>
+        <div class="ms-phase"><span class="is-done">✓ Install</span><span class="is-now">Connect</span><span>Ready</span></div>
+        ${list}
+        <p class="ms-note" style="margin-top:0.75rem">Fix it and this carries on by itself: Podhouse keeps trying every few minutes.</p>`;
+      timer = setTimeout(poll, 15000);
+      return true;
+    }
     if (left.length) {
       body.innerHTML = `<p class="ms-sub">The apps are in. Now they are being introduced to each other — ${links.length - left.length} of ${links.length} done.</p>
         <div class="ms-phase"><span class="is-done">✓ Install</span><span class="is-now">Connect</span><span>Ready</span></div>

@@ -1927,6 +1927,8 @@ a.stat:hover { border-color: var(--accent-line); text-decoration: none; }
 .ms-what { color: var(--text-2); }
 .ms-st { font-size: 0.78rem; color: var(--muted); max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-ok { color: var(--good); }
+.ms-bad { color: var(--bad); font-weight: 700; text-align: center; }
+.ms-why { color: var(--bad); font-size: 0.8rem; }
 .ms-spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent); animation: ms-spin 0.9s linear infinite; }
 @keyframes ms-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ms-spin { animation: none; } }
