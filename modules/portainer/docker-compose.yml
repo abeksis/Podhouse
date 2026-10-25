@@ -45,7 +45,7 @@ x-homebox:
 
 services:
   portainer:
-    image: portainer/portainer-ce:2.45.0
+    image: portainer/portainer-ce:2.45.3
     # Seeding the admin password from a file means the setup screen is never
     # left open for whoever reaches the box first.
     command: ["--admin-password-file", "/run/secrets/portainer_admin_password"]

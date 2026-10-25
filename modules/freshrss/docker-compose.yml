@@ -38,7 +38,7 @@ x-homebox:
 
 services:
   freshrss:
-    image: freshrss/freshrss:1.29.1
+    image: freshrss/freshrss:1.30.4
     container_name: freshrss
     environment:
       - TZ=${TZ:-UTC}

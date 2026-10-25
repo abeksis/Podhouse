@@ -56,7 +56,7 @@ x-homebox:
 services:
 
   bazarr:
-    image: lscr.io/linuxserver/bazarr:v1.6.0-ls362
+    image: lscr.io/linuxserver/bazarr:v1.6.2-ls369
     security_opt:
       - no-new-privileges:true
     cap_drop:

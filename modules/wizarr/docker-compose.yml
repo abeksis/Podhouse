@@ -43,7 +43,7 @@ x-homebox:
 
 services:
   wizarr:
-    image: ghcr.io/wizarrrr/wizarr:v2026.7.1
+    image: ghcr.io/wizarrrr/wizarr:v2026.10.1
     container_name: wizarr
     environment:
       - TZ=${TZ:-UTC}

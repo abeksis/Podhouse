@@ -50,7 +50,7 @@ x-homebox:
 
 services:
   ghost:
-    image: ghost:6.57.1-alpine
+    image: ghost:6.72.0-alpine
     security_opt:
       - no-new-privileges:true
     cap_drop:

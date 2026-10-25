@@ -31,7 +31,7 @@ x-homebox:
 
 services:
   terraria:
-    image: ryshe/terraria:vanilla-1.4.5.6
+    image: ryshe/terraria:vanilla-1.4.5.8
     security_opt:
       - no-new-privileges:true
     cap_drop:

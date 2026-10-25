@@ -38,7 +38,7 @@ x-homebox:
 
 services:
   seerr:
-    image: ghcr.io/seerr-team/seerr:v3.4.1
+    image: ghcr.io/seerr-team/seerr:v3.5.1
     init: true
     container_name: seerr
     user: "${PUID:-1000}:${PGID:-1000}"

@@ -56,7 +56,7 @@ services:
   # database schema moves between minor releases and its migrations are
   # one-way, so a bump here is a decision, not a convenience.
   headscale:
-    image: headscale/headscale:0.29.3
+    image: headscale/headscale:0.29.6
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -125,7 +125,7 @@ services:
   # static site that expects to be served from /web. One nginx in front makes
   # them one origin, which is what a Tailscale client and a browser both need.
   headscale-proxy:
-    image: nginx:1.31.3-alpine
+    image: nginx:1.31.8-alpine
     security_opt:
       - no-new-privileges:true
     cap_drop:

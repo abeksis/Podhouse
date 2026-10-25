@@ -48,7 +48,7 @@ x-homebox:
 
 services:
   tailscale:
-    image: tailscale/tailscale:v1.102.3
+    image: tailscale/tailscale:v1.104.2
     security_opt:
       - no-new-privileges:true
     container_name: tailscale

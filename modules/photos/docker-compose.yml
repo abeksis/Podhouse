@@ -57,7 +57,7 @@ x-homebox:
 
 services:
   immich-server:
-    image: ghcr.io/immich-app/immich-server:v3.1.0
+    image: ghcr.io/immich-app/immich-server:v3.3.5
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -105,7 +105,7 @@ services:
     restart: always
 
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning:v3.1.0
+    image: ghcr.io/immich-app/immich-machine-learning:v3.3.5
     security_opt:
       - no-new-privileges:true
     cap_drop:

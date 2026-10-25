@@ -57,7 +57,7 @@ x-homebox:
 
 services:
   matrix-synapse:
-    image: matrixdotorg/synapse:v1.156.0
+    image: matrixdotorg/synapse:v1.163.2
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -97,7 +97,7 @@ services:
     restart: always
 
   matrix:
-    image: vectorim/element-web:v1.12.26
+    image: vectorim/element-web:v1.12.32
     container_name: element
     environment:
       - TZ=${TZ:-UTC}

@@ -35,7 +35,7 @@ x-homebox:
 
 services:
   games:
-    image: arcadiatechnology/crafty-4:4.10.8
+    image: arcadiatechnology/crafty-4:4.11.0
     security_opt:
       - no-new-privileges:true
     cap_drop:

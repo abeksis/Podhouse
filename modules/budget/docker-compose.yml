@@ -37,7 +37,7 @@ x-homebox:
 
 services:
   budget:
-    image: actualbudget/actual-server:26.7.0
+    image: actualbudget/actual-server:26.10.0
     container_name: budget
     environment:
       - TZ=${TZ:-UTC}

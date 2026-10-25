@@ -37,7 +37,7 @@ x-homebox:
 
 services:
   syncthing:
-    image: lscr.io/linuxserver/syncthing:2.1.2
+    image: lscr.io/linuxserver/syncthing:2.1.7
     security_opt:
       - no-new-privileges:true
     cap_drop:

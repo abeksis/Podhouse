@@ -41,7 +41,7 @@ x-homebox:
 
 services:
   backup:
-    image: linuxserver/duplicati:2.3.0
+    image: linuxserver/duplicati:2.4.0
     security_opt:
       - no-new-privileges:true
     cap_drop:

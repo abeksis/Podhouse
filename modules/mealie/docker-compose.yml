@@ -42,7 +42,7 @@ x-homebox:
 
 services:
   mealie:
-    image: ghcr.io/mealie-recipes/mealie:v3.20.1
+    image: ghcr.io/mealie-recipes/mealie:v3.29.0
     container_name: mealie
     environment:
       - TZ=${TZ:-UTC}

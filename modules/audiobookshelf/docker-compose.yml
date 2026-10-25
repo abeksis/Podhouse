@@ -38,7 +38,7 @@ x-homebox:
 
 services:
   audiobookshelf:
-    image: ghcr.io/advplyr/audiobookshelf:2.35.1
+    image: ghcr.io/advplyr/audiobookshelf:2.37.2
     container_name: audiobookshelf
     environment:
       - TZ=${TZ:-UTC}

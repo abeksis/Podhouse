@@ -51,7 +51,7 @@ x-homebox:
 
 services:
   bookstack:
-    image: linuxserver/bookstack:26.05.20260608
+    image: linuxserver/bookstack:26.09.20260929
     security_opt:
       - no-new-privileges:true
     cap_drop:

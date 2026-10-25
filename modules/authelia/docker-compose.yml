@@ -67,7 +67,7 @@ x-homebox:
 
 services:
   authelia:
-    image: authelia/authelia:4.39.20
+    image: authelia/authelia:4.39.28
     container_name: authelia
     environment:
       - TZ=${TZ:-UTC}

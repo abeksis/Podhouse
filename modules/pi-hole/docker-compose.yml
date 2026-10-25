@@ -47,7 +47,7 @@ x-homebox:
 
 services:
   pihole:
-    image: pihole/pihole:2026.07.2
+    image: pihole/pihole:2026.10.0
     security_opt:
       - no-new-privileges:true
     cap_drop:

@@ -46,7 +46,7 @@ x-homebox:
 
 services:
   cloudflared:
-    image: cloudflare/cloudflared:2026.8.3
+    image: cloudflare/cloudflared:2026.10.3
     container_name: cloudflared
     command: tunnel --no-autoupdate run
     environment:

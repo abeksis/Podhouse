@@ -30,7 +30,7 @@ x-homebox:
 
 services:
   factorio:
-    image: factoriotools/factorio:stable-2.0.77
+    image: factoriotools/factorio:stable-2.1.23
     security_opt:
       - no-new-privileges:true
     cap_drop:

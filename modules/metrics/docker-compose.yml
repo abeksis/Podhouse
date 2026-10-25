@@ -62,7 +62,7 @@ x-homebox:
 
 services:
   beszel:
-    image: henrygd/beszel:0.19.0
+    image: henrygd/beszel:0.21.1
     container_name: beszel
     ports:
       - "8090:8090"
@@ -98,7 +98,7 @@ services:
     restart: always
 
   beszel-agent:
-    image: henrygd/beszel-agent:0.19.0
+    image: henrygd/beszel-agent:0.21.1
     container_name: beszel-agent
     # Host networking is the point of an agent: from inside a bridge network
     # it would report the container's CPU and the container's filesystem,

@@ -42,7 +42,7 @@ x-homebox:
 services:
 
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:v3.5.0
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     security_opt:
       - no-new-privileges:true
     cap_drop:

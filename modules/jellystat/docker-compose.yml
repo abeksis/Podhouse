@@ -53,7 +53,7 @@ x-homebox:
 
 services:
   jellystat:
-    image: cyfershepard/jellystat:1.1.11
+    image: cyfershepard/jellystat:1.1.12
     container_name: jellystat
     environment:
       - TZ=${TZ:-UTC}

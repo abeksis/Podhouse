@@ -65,7 +65,7 @@ x-homebox:
 
 services:
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:5.2.3_v2.0.14-ls475
+    image: lscr.io/linuxserver/qbittorrent:5.3.0_v2.1.2-ls485
     security_opt:
       - no-new-privileges:true
     cap_drop:

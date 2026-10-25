@@ -40,7 +40,7 @@ x-homebox:
 
 services:
   localai:
-    image: ghcr.io/open-webui/open-webui:v0.10.2
+    image: ghcr.io/open-webui/open-webui:v0.12.4
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -83,7 +83,7 @@ services:
     restart: always
 
   ollama:
-    image: ollama/ollama:0.33.3
+    image: ollama/ollama:0.40.11
     security_opt:
       - no-new-privileges:true
     cap_drop:

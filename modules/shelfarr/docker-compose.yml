@@ -43,7 +43,7 @@ x-homebox:
 
 services:
   shelfarr:
-    image: ghcr.io/pedro-revez-silva/shelfarr:2026.08.31.1
+    image: ghcr.io/pedro-revez-silva/shelfarr:2026.10.19.1
     security_opt:
       - no-new-privileges:true
     cap_drop:

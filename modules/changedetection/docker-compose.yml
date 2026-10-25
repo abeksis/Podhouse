@@ -45,7 +45,7 @@ x-homebox:
 
 services:
   changedetection:
-    image: ghcr.io/dgtlmoon/changedetection.io:0.55.8
+    image: ghcr.io/dgtlmoon/changedetection.io:0.60.9
     security_opt:
       - no-new-privileges:true
     cap_drop:

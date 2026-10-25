@@ -26,7 +26,7 @@ HB_ROOT="${HB_ROOT:-/opt/podhouse}"
 CONFIG_DIR="$HB_ROOT/modules/authelia/config/authelia"
 CONFIG="$CONFIG_DIR/configuration.yml"
 USERS="$CONFIG_DIR/users_database.yml"
-IMAGE="authelia/authelia:4.39.20"
+IMAGE="authelia/authelia:4.39.28"
 
 mkdir -p "$CONFIG_DIR"
 

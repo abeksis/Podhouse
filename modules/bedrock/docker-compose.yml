@@ -46,7 +46,7 @@ x-homebox:
 
 services:
   bedrock:
-    image: itzg/minecraft-bedrock-server:2026.8.2
+    image: itzg/minecraft-bedrock-server:2026.10.2
     security_opt:
       - no-new-privileges:true
     cap_drop:

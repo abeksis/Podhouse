@@ -39,7 +39,7 @@ x-homebox:
 
 services:
   plex:
-    image: lscr.io/linuxserver/plex:1.43.3
+    image: lscr.io/linuxserver/plex:1.43.5
     security_opt:
       - no-new-privileges:true
     cap_drop:

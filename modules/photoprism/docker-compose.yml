@@ -52,7 +52,7 @@ x-homebox:
 services:
   photoprism:
     # PhotoPrism tags by date; this is the current one.
-    image: photoprism/photoprism:260728
+    image: photoprism/photoprism:261007
     security_opt:
       - no-new-privileges:true
     cap_drop:

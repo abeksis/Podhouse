@@ -82,7 +82,7 @@ the mechanism cannot arrive through itself. After that, the button.
 
 Separately, the dashboard's **Updates** tab handles a case a pinned version
 does not protect you from. Every module here pins an exact tag on purpose
-(`pihole/pihole:2026.07.2`, `jc21/nginx-proxy-manager:2.15.1`, …) so that
+(`pihole/pihole:2026.10.0`, `jc21/nginx-proxy-manager:2.16.0`, …) so that
 nothing jumps a major version unattended — but a pinned tag is not frozen
 bytes. Publishers re-push the same tag when a base layer gets a CVE fix, so
 the tag you pinned points at a new digest, and `docker compose pull` will

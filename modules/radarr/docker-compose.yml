@@ -62,7 +62,7 @@ x-homebox:
 services:
 
   radarr:
-    image: lscr.io/linuxserver/radarr:6.3.0.10514-ls315
+    image: lscr.io/linuxserver/radarr:6.4.4.10685-ls324
     security_opt:
       - no-new-privileges:true
     cap_drop:

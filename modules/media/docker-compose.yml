@@ -108,7 +108,7 @@ x-homebox:
 
 services:
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:5.2.3_v2.0.14-ls475
+    image: lscr.io/linuxserver/qbittorrent:5.3.0_v2.1.2-ls485
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -162,7 +162,7 @@ services:
     restart: always
 
   radarr:
-    image: lscr.io/linuxserver/radarr:6.3.0.10514-ls315
+    image: lscr.io/linuxserver/radarr:6.4.4.10685-ls324
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -201,7 +201,7 @@ services:
     restart: always
 
   sonarr:
-    image: lscr.io/linuxserver/sonarr:4.0.19.2979-ls323
+    image: lscr.io/linuxserver/sonarr:4.0.20.3014-ls329
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -240,7 +240,7 @@ services:
     restart: always
 
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr:2.5.2.5491-ls158
+    image: lscr.io/linuxserver/prowlarr:2.6.5.5623-ls165
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -277,7 +277,7 @@ services:
     restart: always
 
   bazarr:
-    image: lscr.io/linuxserver/bazarr:v1.6.0-ls362
+    image: lscr.io/linuxserver/bazarr:v1.6.2-ls369
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -316,7 +316,7 @@ services:
     restart: always
 
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:v3.5.0
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     security_opt:
       - no-new-privileges:true
     cap_drop:

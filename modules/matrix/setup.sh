@@ -21,7 +21,7 @@ HB_ROOT="${HB_ROOT:-/opt/podhouse}"
 CONFIG_DIR="$HB_ROOT/modules/matrix/config"
 SYNAPSE_DIR="$CONFIG_DIR/synapse"
 ELEMENT_CONFIG="$CONFIG_DIR/element/config.json"
-IMAGE="matrixdotorg/synapse:v1.156.0"
+IMAGE="matrixdotorg/synapse:v1.163.2"
 
 mkdir -p "$SYNAPSE_DIR" "$CONFIG_DIR/element"
 

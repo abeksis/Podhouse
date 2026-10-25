@@ -50,7 +50,7 @@ x-homebox:
 
 services:
   speedtest:
-    image: lscr.io/linuxserver/speedtest-tracker:1.14.5
+    image: lscr.io/linuxserver/speedtest-tracker:1.15.1
     security_opt:
       - no-new-privileges:true
     cap_drop:

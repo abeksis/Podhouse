@@ -37,7 +37,7 @@ x-homebox:
 
 services:
   uptime-kuma:
-    image: louislam/uptime-kuma:2.5.3
+    image: louislam/uptime-kuma:2.5.7
     container_name: uptime-kuma
     ports:
       - "3001:3001"

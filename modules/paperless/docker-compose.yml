@@ -61,7 +61,7 @@ x-homebox:
 
 services:
   paperless:
-    image: ghcr.io/paperless-ngx/paperless-ngx:3.1.1
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.3.4
     security_opt:
       - no-new-privileges:true
     cap_drop:

@@ -34,7 +34,7 @@ x-homebox:
 
 services:
   webapp:
-    image: nginx:1.30-alpine
+    image: nginx:1.31-alpine
     container_name: webapp
     environment:
       - TZ=${TZ:-UTC}

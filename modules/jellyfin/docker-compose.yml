@@ -57,7 +57,7 @@ x-homebox:
 
 services:
   jellyfin:
-    image: lscr.io/linuxserver/jellyfin:12.0ubu2604-ls48
+    image: lscr.io/linuxserver/jellyfin:12.3ubu2604-ls56
     security_opt:
       - no-new-privileges:true
     cap_drop:
