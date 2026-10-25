@@ -36,6 +36,7 @@ const auth = require('./lib/auth');
 const updates = require('./lib/updates');
 const platform = require('./lib/platform');
 const insights = require('./lib/insights');
+const mediaWire = require('./lib/media-wire');
 const weather = require('./lib/weather');
 const storage = require('./lib/storage');
 const reset = require('./lib/reset');
@@ -786,6 +787,8 @@ const ACTIONS = {
   purge: composeLib.purge,
 };
 
+const noteWired = ({ id }) => activity.note({ name: id, action: 'connected', level: 'info', module: id.split('-')[0] });
+
 async function runAction(id, action, onLine = null) {
   const fn = ACTIONS[action];
   if (!fn) return { status: 400, body: { error: `unknown action: ${action}` } };
@@ -817,6 +820,7 @@ async function runAction(id, action, onLine = null) {
     const result = await fn(id, { onLine });
     const output = typeof result === 'string' ? result : `${result.stdout || ''}${result.stderr || ''}`;
     activity.note({ name: id, action, level: 'info', module: id });
+    if (action === 'install' && mediaWire.MEDIA_IDS.has(id)) mediaWire.soon(noteWired);
     return { status: 200, body: { ok: true, id, action, seconds: Math.round((Date.now() - started) / 1000), output } };
   } catch (err) {
     activity.note({ name: id, action: `${action} failed`, level: 'error', module: id });
@@ -1619,6 +1623,8 @@ async function main() {
     console.warn(`[homebox] backup recovery failed: ${err.message}`);
   });
   backup.startScheduler();
+  // Media apps installed from the CLI, or that came up slowly, get wired here.
+  setInterval(() => mediaWire.wire().then((made) => made.forEach(noteWired)).catch(() => {}), 5 * 60000).unref();
   if (await docker.reachable()) {
     activity.start();
     stats.start(async () => {

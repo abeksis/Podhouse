@@ -31,8 +31,8 @@ x-homebox:
     color: "#e5a00d"
     bg: "#e5a00d1f"
   tips:
-    - "Set Prowlarr up first: add Radarr and Sonarr under Settings > Apps (http://radarr:7878, http://sonarr:8989) and it pushes every indexer into them, so you never paste the same tracker twice."
-    - "For indexers behind Cloudflare, add FlareSolverr as a proxy at http://flaresolverr:8191."
+    - "Podhouse adds Sonarr and Radarr under Settings > Apps for you, so the one thing left is adding indexers — which ones is your call. Each indexer you add reaches both."
+    - "With FlareSolverr installed it is added as a proxy too; give an indexer behind Cloudflare the tag flaresolverr to route it through."
   env_vars:
     PUID:
       label: "User ID for file ownership"

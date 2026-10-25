@@ -27,3 +27,27 @@ done
 # whole NAS library is not a side effect an installer gets to have.
 chown -R "$PUID:$PGID" "$HB_ROOT/modules/prowlarr/config" 2>/dev/null || true
 echo "prowlarr: ready"
+
+# ---------------------------------------------------------------------------
+# Open without a login on a home network, like the rest of the box.
+#
+# Left alone, a fresh Prowlarr opens on an "Authentication Required" dialog that
+# makes you invent an account before you can see anything. On a FRESH install
+# (no config.xml yet) on a box with a private address, write the two settings
+# that skip it: External = no sign-in page of its own, and not for local
+# addresses. Podhouse's own links use the API key, which this never gates.
+#
+# A box with a public address keeps the dialog: there "no login" would mean
+# no login for the whole internet. An existing config.xml — an account the
+# user already made — is never touched.
+# ---------------------------------------------------------------------------
+CFG_XML="$CONFIG/config.xml"
+case "${HB_HOST_ADDRESS:-}" in
+  10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*) private=1 ;;
+  *) private=0 ;;
+esac
+if [ ! -f "$CFG_XML" ] && [ "$private" = 1 ]; then
+  printf '<Config>\n  <AuthenticationMethod>External</AuthenticationMethod>\n  <AuthenticationRequired>DisabledForLocalAddresses</AuthenticationRequired>\n</Config>\n' > "$CFG_XML"
+  chown "$PUID:$PGID" "$CFG_XML" 2>/dev/null || true
+  echo "prowlarr: no login on the home network (set one in Prowlarr > Settings > General)"
+fi

@@ -561,4 +561,4 @@ async function poster(serviceName, id) {
   return body;
 }
 
-module.exports = { snapshot, invalidate, TTL, radarrRow, poster };
+module.exports = { snapshot, invalidate, TTL, radarrRow, poster, arrApiKey, addressOf, readEnv };

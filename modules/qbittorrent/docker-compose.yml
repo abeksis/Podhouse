@@ -30,7 +30,7 @@ x-homebox:
     color: "#2f67ba"
     bg: "#2f67ba1f"
   tips:
-    - "Set the save path to /data/<Downloads>, using the folder name from Settings > Configuration > Media (by default /data/downloads)."
+    - "Podhouse points the save path at /data/downloads on first start, where Sonarr and Radarr can import from. A path you set yourself is left alone."
     - "Every one of these apps mounts the pool at the same path (/data), which is what lets downloads become hardlinks instead of copies. Change one mapping and your disk usage quietly doubles."
   env_vars:
     PUID:

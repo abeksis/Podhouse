@@ -36,8 +36,7 @@ x-homebox:
       - sonarr/MediaCover
       - sonarr/logs
   tips:
-    - "In Sonarr set the root folder to /data/<TV series>, using the folder name from Settings > Configuration > Media (by default /data/media/tv)."
-    - "Add qBittorrent as its download client at http://qbittorrent:8080, and let Prowlarr push the indexers in."
+    - "Podhouse connects Sonarr by itself: root folder /data/media/tv, qBittorrent as the download client, and Prowlarr when it is installed. Each link is made once — change it in Sonarr and it stays changed."
     - "Every one of these apps mounts the pool at the same path (/data), which is what lets downloads become hardlinks instead of copies. Change one mapping and your disk usage quietly doubles."
   env_vars:
     PUID:

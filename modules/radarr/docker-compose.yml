@@ -36,8 +36,7 @@ x-homebox:
       - radarr/MediaCover
       - radarr/logs
   tips:
-    - "In Radarr set the root folder to /data/<Movies>, using the folder name from Settings > Configuration > Media (by default /data/media/movies)."
-    - "Add qBittorrent as its download client at http://qbittorrent:8080, and let Prowlarr push the indexers in."
+    - "Podhouse connects Radarr by itself: root folder /data/media/movies, qBittorrent as the download client, and Prowlarr when it is installed. Each link is made once — change it in Radarr and it stays changed."
     - "Every one of these apps mounts the pool at the same path (/data), which is what lets downloads become hardlinks instead of copies. Change one mapping and your disk usage quietly doubles."
   env_vars:
     PUID:
