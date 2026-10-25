@@ -800,7 +800,7 @@ async function status() {
 
 // The failures someone can act on, in words; anything else as the app said it.
 function plain(message) {
-  if (/qBittorrent did not accept|qBittorrent.*Authenticat|Unable to connect to qBittorrent/i.test(message)) {
+  if (/qBittorrent did not accept|downloadclient[\s\S]*(Authenticat|Unable to connect to qBittorrent)/i.test(message)) {
     return 'The qBittorrent login under Settings does not open qBittorrent';
   }
   if (/Jellyfin admin login in Settings/i.test(message)) return 'The Jellyfin login under Settings does not open Jellyfin';
