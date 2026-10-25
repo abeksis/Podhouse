@@ -693,8 +693,20 @@ const LINKS = [
  * Sonarr starts empty with a new API key — by the CLI or the dashboard alike —
  * so a changed key makes its links due again. A hash, not the keys themselves.
  */
+// What identifies one install of each app: a purge and reinstall changes it.
+// Without Seerr, Jellyfin and Bazarr here, a reinstalled Seerr kept the old
+// "set up" record and was never set up again.
+const IDENTITY = {
+  sonarr: () => arrApiKey('sonarr'),
+  radarr: () => arrApiKey('radarr'),
+  prowlarr: () => arrApiKey('prowlarr'),
+  bazarr: async () => (await bazarrApp()).key,
+  seerr: seerrKey,
+  jellyfin: async () => (await jf(await addressOf('jellyfin'), 'GET', '/System/Info/Public')).Id,
+};
+
 async function stampOf(link, env) {
-  const keys = await Promise.all(link.needs.filter((n) => ['sonarr', 'radarr', 'prowlarr'].includes(n)).map(arrApiKey));
+  const keys = await Promise.all(link.needs.filter((n) => IDENTITY[n]).map((n) => IDENTITY[n]()));
   if (link.stampExtra) keys.push(link.stampExtra(env));
   return crypto.createHash('sha256').update(keys.join(':')).digest('hex').slice(0, 12);
 }
