@@ -167,7 +167,10 @@ const flaresolverr = {
 const qbitPaths = {
   id: 'qbittorrent-paths',
   needs: ['qbittorrent'],
-  async run(env) {
+  // Downloads renamed under Configuration > Media (a NAS that says "torrents"):
+  // due again, and the path this set before moves with it.
+  stampExtra: (env) => libraryPath(env, 'HB_DOWNLOADS', 'downloads'),
+  async run(env, prev) {
     const base = await addressOf('qbittorrent');
     const login = await fetch(`${base}/api/v2/auth/login`, {
       method: 'POST',
@@ -180,8 +183,11 @@ const qbitPaths = {
     if (!sid) throw new Error(`qBittorrent login refused (${login.status})`);
     const headers = { cookie: sid[0], referer: base };
     const prefs = await (await fetch(`${base}/api/v2/app/preferences`, { headers })).json();
-    if (!String(prefs.save_path).startsWith('/config')) return `left ${prefs.save_path}`;
-    const dl = `/data/${(env.HB_DOWNLOADS || 'downloads').replace(/^\/+|\/+$/g, '')}`;
+    const dl = libraryPath(env, 'HB_DOWNLOADS', 'downloads');
+    const ours = prev && /^save path (\/.+)$/.exec(prev.result || '');
+    const current = String(prefs.save_path).replace(/\/+$/, '');
+    if (current === dl) return `save path ${dl}`;
+    if (!current.startsWith('/config') && !(ours && ours[1] === current)) return `left ${current}`;
     const res = await fetch(`${base}/api/v2/app/setPreferences`, {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
