@@ -56,10 +56,21 @@ function downloadClient(arr, category) {
   return {
     id: `${arr}-qbittorrent`,
     needs: [arr, 'qbittorrent'],
-    async run(env) {
+    // A new qBittorrent login under Settings makes the link due again.
+    stampExtra: (env) => `${env.HB_QBIT_USER || 'admin'}:${env.HB_QBIT_PASS || ''}`,
+    async run(env, prev) {
       const a = await app(arr, 'v3');
       const have = await api(a.base, a.key, 'GET', '/api/v3/downloadclient');
-      if (have.some((c) => c.implementation === 'QBittorrent')) return 'already had one';
+      const old = have.find((c) => c.implementation === 'QBittorrent');
+      if (old && !prev) return 'already had one';
+      if (old) {
+        for (const f of old.fields) {
+          if (f.name === 'username') f.value = env.HB_QBIT_USER || 'admin';
+          if (f.name === 'password') f.value = env.HB_QBIT_PASS || '';
+        }
+        await api(a.base, a.key, 'PUT', `/api/v3/downloadclient/${old.id}`, old);
+        return 'updated its qBittorrent login';
+      }
       const body = await fromSchema(a, '/api/v3/downloadclient', 'QBittorrent', 'qBittorrent', {
         host: 'qbittorrent',
         port: 8080,
@@ -158,6 +169,52 @@ const flaresolverr = {
   },
 };
 
+async function qbitSession(env) {
+  const base = await addressOf('qbittorrent');
+  const login = await fetch(`${base}/api/v2/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', referer: base },
+    body: new URLSearchParams({ username: env.HB_QBIT_USER || 'admin', password: env.HB_QBIT_PASS || '' }),
+    signal: AbortSignal.timeout(20000),
+  });
+  // "SID" before qBittorrent 5.2, "QBT_SID_<port>" since.
+  const sid = /\b(?:QBT_)?SID\w*=[^;]+/.exec(login.headers.get('set-cookie') || '');
+  if (!sid) throw new Error(`qBittorrent did not accept the saved login (${login.status})`);
+  return { base, headers: { cookie: sid[0], referer: base } };
+}
+
+async function qbitSet({ base, headers }, prefs) {
+  const res = await fetch(`${base}/api/v2/app/setPreferences`, {
+    method: 'POST',
+    headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ json: JSON.stringify(prefs) }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error(`qBittorrent refused the change (${res.status})`);
+}
+
+/**
+ * The qBittorrent login under Settings is only .env until qBittorrent is told.
+ * Called BEFORE the new values are saved, while the old ones still open it.
+ * Not installed: nothing to tell. Installed but stopped: refuse, or .env and
+ * qBittorrent would disagree and Sonarr/Radarr would lose their downloads.
+ */
+async function changeQbitLogin(oldEnv, changes) {
+  const user = 'HB_QBIT_USER' in changes;
+  const pass = 'HB_QBIT_PASS' in changes;
+  if (!user && !pass) return;
+  if (user && !String(changes.HB_QBIT_USER).trim()) throw new Error('The qBittorrent username cannot be empty');
+  // qBittorrent itself rejects shorter ones.
+  if (pass && String(changes.HB_QBIT_PASS).length < 6) throw new Error('The qBittorrent password needs at least 6 characters');
+  const mine = (await docker.listContainers()).filter((c) => c.service === 'qbittorrent');
+  if (!mine.length) return;
+  if (!mine.some((c) => c.rawState === 'running')) throw new Error('Start qBittorrent first, so the new login can be set in it');
+  const prefs = {};
+  if (user) prefs.web_ui_username = String(changes.HB_QBIT_USER).trim();
+  if (pass) prefs.web_ui_password = String(changes.HB_QBIT_PASS);
+  await qbitSet(await qbitSession(oldEnv), prefs);
+}
+
 /**
  * qBittorrent ships saving into /config/Downloads, which no other app can see:
  * Sonarr/Radarr then report "directory does not appear to exist" and nothing
@@ -171,29 +228,14 @@ const qbitPaths = {
   // due again, and the path this set before moves with it.
   stampExtra: (env) => libraryPath(env, 'HB_DOWNLOADS', 'downloads'),
   async run(env, prev) {
-    const base = await addressOf('qbittorrent');
-    const login = await fetch(`${base}/api/v2/auth/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', referer: base },
-      body: new URLSearchParams({ username: env.HB_QBIT_USER || 'admin', password: env.HB_QBIT_PASS || '' }),
-      signal: AbortSignal.timeout(20000),
-    });
-    // "SID" before qBittorrent 5.2, "QBT_SID_<port>" since.
-    const sid = /\b(?:QBT_)?SID\w*=[^;]+/.exec(login.headers.get('set-cookie') || '');
-    if (!sid) throw new Error(`qBittorrent login refused (${login.status})`);
-    const headers = { cookie: sid[0], referer: base };
+    const { base, headers } = await qbitSession(env);
     const prefs = await (await fetch(`${base}/api/v2/app/preferences`, { headers })).json();
     const dl = libraryPath(env, 'HB_DOWNLOADS', 'downloads');
     const ours = prev && /^save path (\/.+)$/.exec(prev.result || '');
     const current = String(prefs.save_path).replace(/\/+$/, '');
     if (current === dl) return `save path ${dl}`;
     if (!current.startsWith('/config') && !(ours && ours[1] === current)) return `left ${current}`;
-    const res = await fetch(`${base}/api/v2/app/setPreferences`, {
-      method: 'POST',
-      headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ json: JSON.stringify({ save_path: dl, temp_path: `${dl}/incomplete`, temp_path_enabled: true }) }),
-    });
-    if (!res.ok) throw new Error(`setPreferences answered ${res.status}`);
+    await qbitSet({ base, headers }, { save_path: dl, temp_path: `${dl}/incomplete`, temp_path_enabled: true });
     return `save path ${dl}`;
   },
 };
@@ -267,4 +309,4 @@ function soon(onMade) {
   setTimeout(go, 15000).unref();
 }
 
-module.exports = { wire, soon, MEDIA_IDS, LINKS };
+module.exports = { wire, soon, changeQbitLogin, MEDIA_IDS, LINKS };

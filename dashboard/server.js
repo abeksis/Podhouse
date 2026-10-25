@@ -1495,7 +1495,11 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET') return sendJson(res, 200, await config.schema());
       if (req.method === 'POST') {
         try {
-          const saved = await config.save((await readBody(req)).changes);
+          const changes = (await readBody(req)).changes || {};
+          // Told before saving: the old login is the one that still opens it.
+          await mediaWire.changeQbitLogin(insights.readEnv(), changes);
+          const saved = await config.save(changes);
+          if ('HB_QBIT_USER' in changes || 'HB_QBIT_PASS' in changes) mediaWire.soon(noteWired);
           return sendJson(res, 200, { ok: true, ...saved, ...(await applySaved(saved.applied)) });
         } catch (err) {
           return sendJson(res, 400, { ok: false, error: err.message });
