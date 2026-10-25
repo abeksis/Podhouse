@@ -127,6 +127,8 @@ function prowlarrApp(arr, implementation) {
       const target = await app(arr, 'v3');
       const have = await api(p.base, p.key, 'GET', '/api/v1/applications');
       const old = have.find((x) => x.implementation === implementation);
+      // First run on a box wired by hand: theirs, leave it.
+      if (old && !prev) return 'already had one';
       if (old) {
         // Due again means Sonarr/Radarr was reinstalled with a new key, and the
         // old link would 401 forever. Prowlarr masks the stored key, so no compare.
