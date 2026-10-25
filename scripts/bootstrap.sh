@@ -115,27 +115,20 @@ else
   BOLD=''; DIM=''; RED=''; GREEN=''; YELLOW=''; RESET=''
 fi
 step() { printf '\n%s[Podhouse]%s %s%s%s\n' "$GREEN" "$RESET" "$BOLD" "$*" "$RESET"; }
-warn() { printf '%s[Podhouse]%s %s%s%s\n' "$YELLOW" "$RESET" "$YELLOW" "$*" "$RESET"; }
-die()  { printf '%s[Podhouse]%s %s%s%s\n' "$RED" "$RESET" "$RED" "$*" "$RESET" >&2; exit 1; }
+warn() { printf '  %s!%s %s%s%s\n' "$YELLOW" "$RESET" "$YELLOW" "$*" "$RESET"; }
+die()  { printf '  %s%s%s\n' "$RED" "$*" "$RESET" >&2; exit 1; }
+# The download is step 1 of the numbered list install.sh carries on with
+# (HB_STEP_FIRST at the end of this file); same marks, same columns.
+STEPS_TOTAL=7
 
-cat <<'BANNER'
-
-  ____           _ _                          
- |  _ \ ___   __| | |__   ___  _   _ ___  ___ 
- | |_) / _ \ / _` | '_ \ / _ \| | | / __|/ _ \
- |  __/ (_) | (_| | | | | (_) | |_| \__ \  __/
- |_|   \___/ \__,_|_| |_|\___/ \__,_|___/\___|
-
- Your own apps, on your own box. No account, no cloud in between.
-BANNER
+# One line, not an ASCII banner: the release and the machine it lands on.
+printf '\n %sPodhouse%s %s · installing on %s\n' "$BOLD" "$RESET" "$HB_REF" "$(hostname 2>/dev/null || echo this machine)"
 # The repository is named only when it is not the default one (a fork, a
-# test copy) — that is when it tells the person something. Otherwise the
-# release is what matters, not the owner's GitHub name.
-if [ "$HB_REPO" = abeksis/Podhouse ]; then
-  printf ' %srelease:%s %s\n' "$DIM" "$RESET" "$HB_REF"
-else
-  printf ' %ssource:%s %s@%s\n' "$DIM" "$RESET" "$HB_REPO" "$HB_REF"
+# test copy) — that is when it tells the person something.
+if [ "$HB_REPO" != abeksis/Podhouse ]; then
+  printf ' %sfrom %s%s\n' "$DIM" "$HB_REPO" "$RESET"
 fi
+printf '\n'
 if [ "$HB_REF_ASKED" -eq 0 ] && [ "$HB_REF" = main ]; then
   warn "no release found (manifest unreachable, no tags) — installing the development branch"
 fi
@@ -196,8 +189,7 @@ fi
 # HB_TARBALL is still honoured for a network with no route to GitHub; that
 # path has no .git, and says so at the end.
 if [ "$HB_TARBALL_ASKED" -eq 1 ]; then
-  step "Downloading Podhouse"
-  printf '  %s\n' "$HB_TARBALL"
+  [ -t 1 ] && printf '  %s·%s %s1/%d%s  Download…' "$DIM" "$RESET" "$DIM" "$STEPS_TOTAL" "$RESET"
   TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' EXIT
   curl -fsSL --connect-timeout 15 --max-time 300 "$HB_TARBALL" -o "$TMP/homebox.tar.gz" \
@@ -210,7 +202,7 @@ if [ "$HB_TARBALL_ASKED" -eq 1 ]; then
   tar -xzf "$TMP/homebox.tar.gz" -C "$HB_ROOT" --strip-components=1
   FROM_TARBALL=1
 else
-  step "Downloading Podhouse $HB_REF"
+  [ -t 1 ] && printf '  %s·%s %s1/%d%s  Download…' "$DIM" "$RESET" "$DIM" "$STEPS_TOTAL" "$RESET"
   # --depth 1: nobody needs the history of a box they are installing, and it
   # turns a clone into about a second. `git pull` still works on a shallow
   # clone, which is the whole point of doing it this way.
@@ -225,13 +217,13 @@ else
     || die "could not clone https://github.com/${HB_REPO}.git ($HB_REF)
 Check the repository and branch exist and are reachable from here."
   FROM_TARBALL=0
-  printf '  %s\n' "$(cd "$HB_ROOT" && git log -1 --format='%h %s' 2>/dev/null || echo cloned)"
 fi
 
 [ -f "$HB_ROOT/install.sh" ] || die "what arrived has no install.sh — nothing was installed"
 chmod +x "$HB_ROOT/homebox" "$HB_ROOT/install.sh" "$HB_ROOT"/scripts/*.sh 2>/dev/null || true
 chown -R "$HB_USER:$HB_USER" "$HB_ROOT"
-printf '  %s v%s\n' "$HB_ROOT" "$(cat "$HB_ROOT/VERSION" 2>/dev/null || echo '?')"
+[ -t 1 ] && printf '\r\033[K'
+printf '  %s✓%s %s1/%d%s  %-18s %sPodhouse v%s%s\n' "$GREEN" "$RESET" "$DIM" "$STEPS_TOTAL" "$RESET" "Download" "$DIM" "$(cat "$HB_ROOT/VERSION" 2>/dev/null || echo '?')" "$RESET"
 if [ "${FROM_TARBALL:-0}" -eq 1 ]; then
   warn "installed from a tarball, so there is no git checkout here."
   warn "This box CANNOT update itself — no Updates button, no \`homebox self-update\`."
@@ -257,5 +249,4 @@ if [ -n "${HB_FETCH_ONLY:-}" ]; then
   exit 0
 fi
 
-step "Handing over to the installer"
-HB_ROOT="$HB_ROOT" HB_USER="$HB_USER" bash "$HB_ROOT/install.sh"
+HB_ROOT="$HB_ROOT" HB_USER="$HB_USER" HB_STEP_FIRST=2 bash "$HB_ROOT/install.sh"

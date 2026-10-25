@@ -57,10 +57,40 @@ fi
 # One prefix on every line this script writes, so its own words stay
 # distinguishable from the output of apt, docker and compose running underneath.
 say()  { printf '%s[Podhouse]%s %s\n' "$GREEN" "$RESET" "$*"; }
-step() { printf '\n%s[Podhouse]%s %s%s%s\n' "$GREEN" "$RESET" "$BOLD" "$*" "$RESET"; }
-warn() { printf '%s[Podhouse]%s %s%s%s\n' "$YELLOW" "$RESET" "$YELLOW" "$*" "$RESET"; }
-die()  { printf '%s[Podhouse]%s %s%s%s\n' "$RED" "$RESET" "$RED" "$*" "$RESET" >&2; exit 1; }
 rule() { printf '%s============================================================%s\n' "$DIM" "$RESET"; }
+
+# The install as a numbered list: `begin "Docker"` opens a step, `step_done
+# "29.8.0, already here"` ticks it. On a terminal the open step shows as
+# "· 2/6 Docker…" and is rewritten in place with its ✓; in a log there is
+# no in-place, so only the ticked line is written. scripts/bootstrap.sh does
+# the download first and passes HB_STEP_FIRST so the numbers carry on.
+STEP_FIRST="${HB_STEP_FIRST:-1}"
+STEP_N=$((STEP_FIRST - 1))
+STEP_TOTAL=$((STEP_FIRST + 5))
+STEP_OPEN=""
+STEP_TTY=0
+[ -t 1 ] && STEP_TTY=1
+begin() {
+  STEP_N=$((STEP_N + 1))
+  STEP_OPEN="$1"
+  if [ "$STEP_TTY" = 1 ]; then printf '  %s·%s %s%d/%d%s  %s…' "$DIM" "$RESET" "$DIM" "$STEP_N" "$STEP_TOTAL" "$RESET" "$1"; fi
+}
+step_done() {
+  if [ "$STEP_TTY" = 1 ]; then printf '\r\033[K'; fi
+  printf '  %s✓%s %s%d/%d%s  %-18s %s%s%s\n' "$GREEN" "$RESET" "$DIM" "$STEP_N" "$STEP_TOTAL" "$RESET" "$STEP_OPEN" "$DIM" "${1:-}" "$RESET"
+  STEP_OPEN=""
+}
+# A message in the middle of an open step starts on a line of its own.
+mid_step() { if [ -n "$STEP_OPEN" ] && [ "$STEP_TTY" = 1 ]; then printf '\n'; fi; }
+warn() { mid_step; printf '  %s!%s %s%s%s\n' "$YELLOW" "$RESET" "$YELLOW" "$*" "$RESET"; }
+die()  {
+  if [ -n "$STEP_OPEN" ]; then
+    if [ "$STEP_TTY" = 1 ]; then printf '\r\033[K'; fi
+    printf '  %s✗%s %d/%d  %s\n' "$RED" "$RESET" "$STEP_N" "$STEP_TOTAL" "$STEP_OPEN" >&2
+  fi
+  printf '  %s%s%s\n' "$RED" "$*" "$RESET" >&2
+  exit 1
+}
 
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
@@ -111,20 +141,16 @@ else
   PF_MODE='fresh install'
 fi
 
-echo
-rule
-printf '  %sPREFLIGHT%s  what I found on this machine\n' "$BOLD" "$RESET"
-rule
-printf '  %-13s %s\n' "System:"     "$PF_SYS"
-printf '  %-13s %s\n' "Hardware:"   "$PF_HW"
-printf '  %-13s %s, %s\n' "Resources:" "$PF_CPU" "$PF_MEM"
-printf '  %-13s %s free at %s\n' "Disk:" "$PF_DISK" "$PF_PARENT"
-printf '  %-13s %s\n' "Install to:" "$HB_ROOT"
-printf '  %-13s %s\n' "Runs as:"    "$HB_USER"
-printf '  %-13s %s\n' "Timezone:"   "$PF_TZ"
-printf '  %-13s %s\n' "Clock:"      "$PF_CLOCK"
-printf '  %-13s %s\n' "Mode:"       "$PF_MODE"
-rule
+# What used to be a ten-line PREFLIGHT box is the first step's detail; the
+# rest of it (install path, user, timezone, clock) is in the summary card at
+# the end, or a warning if something about it needs attention.
+[ "$STEP_FIRST" = 1 ] && printf '\n %sPodhouse%s %s · installing on %s\n\n' "$BOLD" "$RESET" \
+  "$(cat "$HB_ROOT/VERSION" 2>/dev/null || echo)" "$(hostname 2>/dev/null || echo this machine)"
+begin "This machine"
+step_done "${PRETTY_NAME:-unknown} · $PF_CPU · $PF_MEM · $PF_DISK free$([ "$PF_MODE" = 'fresh install' ] || echo ' · repair, secrets kept')"
+case "$PF_CLOCK" in
+  NOT*) warn "the clock is $PF_CLOCK" ;;
+esac
 
 case "${ID:-}" in
   debian|ubuntu) ;;
@@ -141,7 +167,6 @@ fi
 # --------------------------------------------------------------- 2. docker
 
 install_docker() {
-  step "Installing Docker"
   $SUDO apt-get update -qq
   $SUDO apt-get install -y -qq ca-certificates curl gnupg >/dev/null
 
@@ -169,12 +194,12 @@ install_docker() {
     docker-buildx-plugin docker-compose-plugin >/dev/null
 }
 
+begin "Docker"
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-  step "Docker already present"
-  printf '  %s\n' "$(docker --version)"
-  printf '  %s\n' "$(docker compose version)"
+  DOCKER_NOTE="already here"
 else
   install_docker
+  DOCKER_NOTE="installed"
 fi
 
 $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
@@ -190,7 +215,6 @@ docker info >/dev/null 2>&1 || $SUDO docker info >/dev/null 2>&1 || die "docker 
 case " $(id -nG "$HB_USER") " in
   *" docker "*) ;;
   *)
-    step "Adding $HB_USER to the docker group"
     $SUDO usermod -aG docker "$HB_USER"
     warn "log out and back in (or run: newgrp docker) before docker works without sudo"
     ;;
@@ -201,14 +225,15 @@ esac
 # The CLI reads module metadata through the same parser the dashboard uses,
 # which is JavaScript. Node on the host keeps the two from ever disagreeing.
 if ! command -v node >/dev/null 2>&1; then
-  step "Installing Node.js (for the homebox CLI)"
   $SUDO apt-get install -y -qq nodejs >/dev/null
+  DOCKER_NOTE="$DOCKER_NOTE · Node.js installed"
 fi
-printf '  node      %s\n' "$(node --version 2>/dev/null || echo MISSING)"
+command -v node >/dev/null 2>&1 || die "Node.js could not be installed, and the homebox CLI needs it"
+step_done "$(docker --version 2>/dev/null | sed -E 's/^Docker version ([^,]+).*/\1/'), $DOCKER_NOTE"
 
 # ----------------------------------------------------------------- 4. tree
 
-step "Laying out $HB_ROOT"
+begin "Files"
 $SUDO mkdir -p \
   "$HB_ROOT"/{modules,dashboard,scripts,state,docs,backups} \
   "$HB_ROOT"/data/{media/movies,media/tv,music,books,photos,downloads} \
@@ -228,7 +253,7 @@ $SUDO mkdir -p \
 # and the container reports unhealthy while still accepting connections, which
 # is about the most confusing shape that failure could take.
 $SUDO find "$HB_ROOT" -path "$HB_ROOT/modules/*/config" -prune -o -exec chown "$HB_USER:$HB_USER" {} + 2>/dev/null || true
-printf '  %s\n' "$HB_ROOT"
+
 
 # ------------------------------------------------------------------ 5. env
 
@@ -291,11 +316,13 @@ env_force() {
 # does nothing - the key is never replaced by a release, because a key a
 # release can rewrite is not a pinned key.
 if [ -s "$HB_ROOT/releases/signers/podhouse.pub" ] && [ ! -s "$HB_ROOT/state/release-signer.pub" ]; then
-  step "Pinning the release signing key"
+  :
   $SUDO install -m 644 "$HB_ROOT/releases/signers/podhouse.pub" "$HB_ROOT/state/release-signer.pub"
 fi
 
-step "Generating $ENV_FILE"
+step_done "$HB_ROOT"
+
+begin "Passwords"
 if [ ! -f "$ENV_FILE" ]; then
   : > "$ENV_FILE"
   chmod 600 "$ENV_FILE"
@@ -449,10 +476,7 @@ added="$(HOMEBOX_ROOT="$HB_ROOT" node -e '
 # install on the ordinary case of having nothing to generate.
 # One line, not one per key: a list of 30 variable names is noise to someone
 # installing, and `homebox secrets <app>` prints any of them when needed.
-if [ -n "$added" ]; then
-  printf '  %s passwords and keys generated for the apps %s(homebox secrets <app> prints one)%s\n' \
-    "$(printf '%s\n' $added | wc -l)" "$DIM" "$RESET"
-fi
+if [ -n "$added" ]; then PW_NOTE="$(printf '%s\n' $added | wc -l) generated"; else PW_NOTE="all kept"; fi
 
 # set_env never overwrites, so a value the user has since changed stands.
 while IFS= read -r pair; do
@@ -499,6 +523,7 @@ if [ -d "$HB_ROOT/migrations" ]; then
     ' "$HB_ROOT" >/dev/null 2>&1 || true
   fi
 fi
+step_done "$PW_NOTE"
 
 # -------------------------------------------------------------- 6. networks
 
@@ -506,14 +531,9 @@ fi
 # need sudo even though the group membership was just granted.
 dk() { if docker version >/dev/null 2>&1; then docker "$@"; else $SUDO docker "$@"; fi; }
 
-step "Creating networks"
+begin "Starting"
 for net in homebox_proxy homebox_internal; do
-  if dk network inspect "$net" >/dev/null 2>&1; then
-    printf '  %s %sexists%s\n' "$net" "$DIM" "$RESET"
-  else
-    dk network create "$net" >/dev/null
-    printf '  %s created\n' "$net"
-  fi
+  dk network inspect "$net" >/dev/null 2>&1 || dk network create "$net" >/dev/null
 done
 
 # ------------------------------------------------------------ 7. first boot
@@ -525,13 +545,12 @@ done
 #
 # Docker's own lines (Pulling, Creating, Started for every container) go to
 # a log and are shown only when something fails — then they are the point.
-step "Starting core and dashboard"
+
 INSTALL_LOG="$HB_ROOT/state/install.log"
 for mod in core dashboard; do
-  if "$HB_ROOT/homebox" install "$mod" >>"$INSTALL_LOG" 2>&1; then
-    printf '  %s %sstarted%s\n' "$mod" "$DIM" "$RESET"
-  else
-    tail -n 40 "$INSTALL_LOG" | sed 's/^/  /'
+  if ! "$HB_ROOT/homebox" install "$mod" >>"$INSTALL_LOG" 2>&1; then
+    mid_step
+    tail -n 40 "$INSTALL_LOG" | sed 's/^/    /'
     die "$mod did not start — the lines above are from $INSTALL_LOG"
   fi
 done
@@ -566,45 +585,51 @@ fi
 # modules/*/config is deliberately skipped: those directories belong to the
 # apps, several of which run as their own uid and will not start if something
 # reassigns their data underneath them.
-step "Handing $HB_ROOT back to $HB_USER"
+step_done "core and dashboard"
+
+begin "Finishing"
 $SUDO find "$HB_ROOT" -path "$HB_ROOT/modules/*/config" -prune -o -exec chown "$HB_USER:$HB_USER" {} + 2>/dev/null || true
 if [ -f "$HB_ROOT/state/auth.json" ]; then
   $SUDO chmod 600 "$HB_ROOT/state/auth.json"
 fi
-printf '  %s
-' "$(stat -c '%U:%G' "$HB_ROOT" 2>/dev/null || echo '?')"
+step_done "owned by $HB_USER"
 
+# ------------------------------------------------------------ summary card
+#
+# Everything someone needs next, in one box, last on screen: where the
+# dashboard is and the one-time claim code. What was worth keeping from the
+# old PREFLIGHT box (where it lives, as whom) sits underneath; the CLI help is
+# one `homebox help` away instead of three lines here.
 ADDRESS="$(hostname -I 2>/dev/null | awk '{print $1}')"
-cat <<EOF
+URL="http://${ADDRESS:-localhost}:8443"
+TOOK="$((SECONDS / 60))m $((SECONDS % 60))s"
+VERSION_NOW="$(cat "$HB_ROOT/VERSION" 2>/dev/null || echo)"
 
-${GREEN}${BOLD}Podhouse is up.${RESET}
-
-  Dashboard   http://${ADDRESS:-localhost}:8443
-  Modules     $HB_ROOT/modules
-  Secrets     $ENV_FILE  ${DIM}(mode 600 — homebox secrets <module> prints one)${RESET}
-
-  ${BOLD}homebox list${RESET}              what is available
-  ${BOLD}homebox install monitoring${RESET}  install an app
-  ${BOLD}homebox status${RESET}            what is running
-
-EOF
-
+card_rows=("Podhouse ${VERSION_NOW} is running" "" "Dashboard    $URL")
 if [ -n "$BOOTSTRAP" ]; then
-  rule
-  printf '  %sCLAIM THIS BOX%s
-' "$BOLD" "$RESET"
-  rule
-  printf '  The dashboard asks for this once, to prove the person opening it
-'
-  printf '  is the person who installed it:
-
-'
-  printf '      %s%s%s
-
-' "$GREEN$BOLD" "$BOOTSTRAP" "$RESET"
-  printf '  Then you pick a password. Lost it? %shomebox bootstrap-token%s
-' "$BOLD" "$RESET"
-  rule
-  printf '
-'
+  card_rows+=("Claim code   $BOOTSTRAP" "             paste it in the dashboard, once")
 fi
+card_rows+=("" "Installed    $HB_ROOT · as $HB_USER" "Took         $TOOK")
+
+# Widths in characters, not bytes: "·" is two bytes and would shift the border.
+card_len() { printf '%s' "$1" | wc -m; }
+width=0
+for row in "${card_rows[@]}"; do
+  len="$(card_len "$row")"
+  [ "$len" -gt "$width" ] && width=$len
+done
+border="$(printf '%*s' $((width + 4)) '' | sed 's/ /─/g')"
+printf '\n %s╭%s╮%s\n' "$DIM" "$border" "$RESET"
+for i in "${!card_rows[@]}"; do
+  row="${card_rows[$i]}"
+  pad=$((width - $(card_len "$row")))
+  case "$row" in
+    "Podhouse "*" is running") text="${GREEN}${BOLD}${row}${RESET}" ;;
+    "Dashboard    "*)          text="Dashboard    ${BOLD}${URL}${RESET}" ;;
+    "Claim code   "*)          text="Claim code   ${GREEN}${BOLD}${BOOTSTRAP}${RESET}" ;;
+    "             "*|"Installed"*|"Took"*) text="${DIM}${row}${RESET}" ;;
+    *)                         text="$row" ;;
+  esac
+  printf ' %s│%s  %s%*s  %s│%s\n' "$DIM" "$RESET" "$text" "$pad" '' "$DIM" "$RESET"
+done
+printf ' %s╰%s╯%s\n\n' "$DIM" "$border" "$RESET"
