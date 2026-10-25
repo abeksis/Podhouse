@@ -1927,6 +1927,9 @@ function openMediaConnect(layer = mediaDialog()) {
       <div class="ms-phase"><span class="is-done">✓ Install</span><span class="is-done">✓ Connect</span><span class="is-now">Ready</span></div>
       ${yours.length ? `<div class="ms-yours">${yours.join('')}</div>` : ''}
       ${jf ? '<p class="ms-login">Sign in to Jellyfin and Seerr with the Jellyfin admin account — Settings › Passwords has it. Everyone else at home gets their own Jellyfin account.</p>' : ''}`;
+    // Ready: the install log has said what it had to.
+    const details = layer.querySelector('#ms-dlg-details');
+    if (details && !details.open) details.hidden = true;
     const actions = layer.querySelector('#ms-dlg-actions');
     const seerr = appUrl('seerr');
     actions.innerHTML = `<button type="button" class="button" data-ms-close>Close</button>${seerr ? `<a class="button is-primary" href="${escapeHtml(seerr)}" target="_blank" rel="noopener noreferrer">Open Seerr</a>` : ''}`;
