@@ -137,7 +137,9 @@ function importLibrary(arr, envKey, fallback) {
   return {
     id: `${arr}-import`,
     needs: [arr],
-    stampExtra: (env) => libraryPath(env, envKey, fallback),
+    // The library root too: /data/tv is the same name inside the container
+    // whether it is an empty local folder or a NAS full of series.
+    stampExtra: (env) => `${env.HB_MEDIA_ROOT || ''}:${libraryPath(env, envKey, fallback)}`,
     async run(env, prev) {
       const a = await app(arr, 'v3');
       const have = await api(a.base, a.key, 'GET', `/api/v3/${kind}`);
