@@ -31,7 +31,8 @@ x-homebox:
     color: "#6b3fa0"
     bg: "#6b3fa01f"
   tips:
-    - "Connect it to Radarr (http://radarr:7878) and Sonarr (http://sonarr:8989) with their API keys, from Settings in each."
+    - "Podhouse connects Bazarr to Sonarr and Radarr by itself, and gives it a languages profile: Hebrew, with English while no Hebrew is found."
+    - "Where subtitles come from is your choice: pick a provider in Bazarr > Settings > Providers, or it finds nothing to download."
   env_vars:
     PUID:
       label: "User ID for file ownership"
