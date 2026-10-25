@@ -91,6 +91,38 @@ function downloadClient(arr, category) {
 
 const libraryPath = (env, envKey, fallback) => `/data/${(env[envKey] || fallback).replace(/^\/+|\/+$/g, '')}`;
 
+/**
+ * The settings Podhouse's own box runs with, over the apps' defaults:
+ * files renamed to the tidy format on import, a proper or repack never
+ * re-downloading a file already there, and Sonarr importing an episode
+ * whose title is not out yet instead of holding it. Applied to a fresh app
+ * (empty library) once; one with a library is someone's and left alone.
+ */
+const ARR_SETTINGS = {
+  radarr: { naming: { renameMovies: true }, mediamanagement: { downloadPropersAndRepacks: 'doNotUpgrade' } },
+  sonarr: {
+    naming: { renameEpisodes: true },
+    mediamanagement: { downloadPropersAndRepacks: 'doNotUpgrade', episodeTitleRequired: 'never' },
+  },
+};
+
+function arrSettings(arr) {
+  return {
+    id: `${arr}-settings`,
+    needs: [arr],
+    async run(env, prev) {
+      const a = await app(arr, 'v3');
+      const library = await api(a.base, a.key, 'GET', `/api/v3/${arr === 'radarr' ? 'movie' : 'series'}`);
+      if (library.length && !prev) return 'library already in use';
+      for (const [section, values] of Object.entries(ARR_SETTINGS[arr])) {
+        const current = await api(a.base, a.key, 'GET', `/api/v3/config/${section}`);
+        await api(a.base, a.key, 'PUT', `/api/v3/config/${section}`, { ...current, ...values });
+      }
+      return 'renaming on, propers and repacks not re-downloaded';
+    },
+  };
+}
+
 function rootFolder(arr, envKey, fallback) {
   return {
     id: `${arr}-rootfolder`,
@@ -669,6 +701,9 @@ function seerrArr(arr, port) {
 
 const LINKS = [
   qbitPaths,
+  // Before the import, so the settings are in place before the library is.
+  arrSettings('sonarr'),
+  arrSettings('radarr'),
   rootFolder('sonarr', 'HB_MEDIA_TV', 'media/tv'),
   rootFolder('radarr', 'HB_MEDIA_MOVIES', 'media/movies'),
   importLibrary('sonarr', 'HB_MEDIA_TV', 'media/tv'),
@@ -760,6 +795,8 @@ const LABELS = {
   'radarr-qbittorrent': 'Radarr sends downloads to qBittorrent',
   'sonarr-qbittorrent': 'Sonarr sends downloads to qBittorrent',
   'qbittorrent-paths': 'qBittorrent saves where Radarr and Sonarr look',
+  'radarr-settings': 'Radarr renames films tidily',
+  'sonarr-settings': 'Sonarr renames episodes tidily',
   'radarr-rootfolder': 'Radarr files films in the library',
   'sonarr-rootfolder': 'Sonarr files series in the library',
   'radarr-import': 'Films already there are added to Radarr',
