@@ -53,7 +53,11 @@ case "${HB_HOST_ADDRESS:-}" in
   *) private=0 ;;
 esac
 if [ ! -f "$CFG_XML" ] && [ "$private" = 1 ]; then
-  printf '<Config>\n  <AuthenticationMethod>External</AuthenticationMethod>\n  <AuthenticationRequired>DisabledForLocalAddresses</AuthenticationRequired>\n</Config>\n' > "$CFG_XML"
+  # The API key goes in too. Given a config.xml without one, the app makes it
+  # up lazily, and a racing rewrite of the file can drop it — media wiring then
+  # waits for a key that never comes.
+  key=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+  printf '<Config>\n  <ApiKey>%s</ApiKey>\n  <AuthenticationMethod>External</AuthenticationMethod>\n  <AuthenticationRequired>DisabledForLocalAddresses</AuthenticationRequired>\n</Config>\n' "$key" > "$CFG_XML"
   chown "$PUID:$PGID" "$CFG_XML" 2>/dev/null || true
   echo "radarr: no login on the home network (set one in Radarr > Settings > General)"
 fi
