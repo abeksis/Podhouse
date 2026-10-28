@@ -59,7 +59,9 @@ function downloadClient(arr, category) {
     id: `${arr}-qbittorrent`,
     needs: [arr, 'qbittorrent'],
     // A new qBittorrent login under Settings makes the link due again.
-    stampExtra: (env) => `${env.HB_QBIT_USER || 'admin'}:${env.HB_QBIT_PASS || ''}`,
+    // The category too: 0.36.10 renamed tv-sonarr/radarr to tv/movies, the
+    // folders under torrents, so links made before are due once more.
+    stampExtra: (env) => `${env.HB_QBIT_USER || 'admin'}:${env.HB_QBIT_PASS || ''}:${category.value}`,
     async run(env, prev) {
       const a = await app(arr, 'v3');
       const have = await api(a.base, a.key, 'GET', '/api/v3/downloadclient');
@@ -69,9 +71,11 @@ function downloadClient(arr, category) {
         for (const f of old.fields) {
           if (f.name === 'username') f.value = env.HB_QBIT_USER || 'admin';
           if (f.name === 'password') f.value = env.HB_QBIT_PASS || '';
+          // Only the name Podhouse gave it; one someone chose stays.
+          if (f.name === category.field && f.value === category.was) f.value = category.value;
         }
         await api(a.base, a.key, 'PUT', `/api/v3/downloadclient/${old.id}`, old);
-        return 'updated its qBittorrent login';
+        return 'updated its qBittorrent settings';
       }
       const body = await fromSchema(a, '/api/v3/downloadclient', 'QBittorrent', 'qBittorrent', {
         host: 'qbittorrent',
@@ -334,17 +338,22 @@ const qbitPaths = {
   id: 'qbittorrent-paths',
   needs: ['qbittorrent'],
   // Downloads renamed under Configuration > Media (a NAS that says "torrents"):
-  // due again, and the path this set before moves with it.
-  stampExtra: (env) => libraryPath(env, 'HB_DOWNLOADS', 'downloads'),
+  // due again, and the path this set before moves with it. ":auto" made boxes
+  // from before 0.36.10 due once more for the Automatic mode below.
+  stampExtra: (env) => `${libraryPath(env, 'HB_DOWNLOADS', 'downloads')}:auto`,
   async run(env, prev) {
     const { base, headers } = await qbitSession(env);
     const prefs = await (await fetch(`${base}/api/v2/app/preferences`, { headers })).json();
     const dl = libraryPath(env, 'HB_DOWNLOADS', 'downloads');
     const ours = prev && /^save path (\/.+)$/.exec(prev.result || '');
     const current = String(prefs.save_path).replace(/\/+$/, '');
-    if (current === dl) return `save path ${dl}`;
-    if (!current.startsWith('/config') && !(ours && ours[1] === current)) return `left ${current}`;
-    await qbitSet({ base, headers }, { save_path: dl, temp_path: `${dl}/incomplete`, temp_path_enabled: true });
+    if (current !== dl && !current.startsWith('/config') && !(ours && ours[1] === current)) return `left ${current}`;
+    // Automatic mode: a torrent with a category saves into <downloads>/<category>
+    // (torrents/tv, torrents/movies). Manual, qBittorrent's default, ignores the
+    // category and drops everything in the top folder.
+    await qbitSet({ base, headers }, {
+      save_path: dl, temp_path: `${dl}/incomplete`, temp_path_enabled: true, auto_tmm_enabled: true,
+    });
     return `save path ${dl}`;
   },
 };
@@ -708,8 +717,8 @@ const LINKS = [
   rootFolder('radarr', 'HB_MEDIA_MOVIES', 'media/movies'),
   importLibrary('sonarr', 'HB_MEDIA_TV', 'media/tv'),
   importLibrary('radarr', 'HB_MEDIA_MOVIES', 'media/movies'),
-  downloadClient('sonarr', { field: 'tvCategory', value: 'tv-sonarr' }),
-  downloadClient('radarr', { field: 'movieCategory', value: 'radarr' }),
+  downloadClient('sonarr', { field: 'tvCategory', value: 'tv', was: 'tv-sonarr' }),
+  downloadClient('radarr', { field: 'movieCategory', value: 'movies', was: 'radarr' }),
   prowlarrApp('sonarr', 'Sonarr'),
   prowlarrApp('radarr', 'Radarr'),
   flaresolverr,
