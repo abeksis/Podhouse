@@ -5008,9 +5008,22 @@ function marqueeView(data) {
   }
 
   const next = (moving.length ? rows : rows.slice(1));
-  const chips = next.slice(0, 5).map((r) => `
-    <span><i aria-hidden="true">${r.source === 'radarr' ? '🎬' : '📺'}</i><b>${escapeHtml(r.title)}</b> ${escapeHtml((r.detail || '').split(' · ')[0])} <em>${escapeHtml(whenText(r.date))}</em></span>`).join('');
-  const more = Math.max(0, next.length - 5);
+  // One box per day, like a TV guide: two things out on the same day share a
+  // box. Films and episodes mix — the list is already one, sorted by date.
+  // A poster that fails to load is removed, leaving the title written behind it.
+  const days = [];
+  for (const r of next.slice(0, 11)) {
+    const when = whenText(r.date);
+    const last = days[days.length - 1];
+    if (last && last.when === when) last.rows.push(r); else days.push({ when, rows: [r] });
+  }
+  const chips = days.map((d) => `
+    <div class="mq-day"><small>${escapeHtml(d.when)}</small><div>${d.rows.map((r) => `
+      <figure title="${escapeHtml(`${r.title} ${r.detail || ''}`.trim())}">
+        <div class="mq-poster"><span>${escapeHtml(r.title)}</span>${r.art ? `<img src="api/insights/art?service=${encodeURIComponent(r.source)}&id=${encodeURIComponent(r.art)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</div>
+        <figcaption>${r.source === 'radarr' ? `🎬 ${escapeHtml(r.title)}` : escapeHtml((r.detail || '').split(' · ')[0])}</figcaption>
+      </figure>`).join('')}</div></div>`).join('');
+  const more = Math.max(0, next.length - 11);
 
   // The four answers the card used to leave out.
   const figs = [];
@@ -5037,7 +5050,7 @@ function marqueeView(data) {
          alt="" loading="lazy" onerror="this.closest('.mq-art').remove()"></div>`
     : '';
 
-  return `<div class="mq${poster ? ' has-art' : ''}">
+  return `<div class="mq-top"><div class="mq${poster ? ' has-art' : ''}">
       ${poster}
       <div class="mq-text">
         <p class="mq-kicker">${escapeHtml(kicker)}</p>
@@ -5046,7 +5059,7 @@ function marqueeView(data) {
         ${url ? `<a class="button is-small mq-open" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open ${escapeHtml(open === 'qbittorrent' ? 'qBittorrent' : appName(open))}</a>` : ''}
       </div>
     </div>
-    ${chips ? `<p class="mq-label">Next up</p><div class="mq-rest">${chips}${more ? `<span>+${more} more</span>` : ''}</div>` : ''}
+    ${chips ? `<div class="mq-next"><p class="mq-label">Next up</p><div class="mq-rest">${chips}${more ? `<span class="mq-more">+${more} more</span>` : ''}</div></div>` : ''}</div>
     ${figs.length ? `<div class="mq-figs">${figs.map(([k, v, s]) => `<div><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b><small>${escapeHtml(s)}</small></div>`).join('')}</div>` : ''}`;
 }
 

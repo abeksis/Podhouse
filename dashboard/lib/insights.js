@@ -486,7 +486,7 @@ async function snapshot() {
         arrCalendar('radarr', containers, UPCOMING_DAYS).catch(() => []),
         arrCalendar('sonarr', containers, UPCOMING_DAYS).catch(() => []),
       ]);
-      return [...r, ...s].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 8);
+      return [...r, ...s].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 12);
     })),
   ]);
 
